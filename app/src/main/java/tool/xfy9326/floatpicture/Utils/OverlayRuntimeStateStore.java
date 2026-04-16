@@ -1,0 +1,104 @@
+package tool.xfy9326.floatpicture.Utils;
+
+import android.content.Context;
+import android.graphics.Point;
+
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import tool.xfy9326.floatpicture.Methods.IOMethods;
+
+public final class OverlayRuntimeStateStore {
+    private static final String STATE_FILE_NAME = "OverlayRuntimeState.json";
+    private static final String KEY_TRUSTED_OVERLAY_ACTIVE = "trusted_overlay_active";
+    private static final String KEY_WINDOW_POSITIONS = "window_positions";
+    private static final String KEY_POSITION_X = "x";
+    private static final String KEY_POSITION_Y = "y";
+
+    private OverlayRuntimeStateStore() {
+    }
+
+    public static synchronized void setTrustedOverlayActive(Context context, boolean active) {
+        JSONObject state = readState();
+        try {
+            state.put(KEY_TRUSTED_OVERLAY_ACTIVE, active);
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+        writeState(state);
+    }
+
+    public static synchronized boolean isTrustedOverlayActive(Context context) {
+        return readState().optBoolean(KEY_TRUSTED_OVERLAY_ACTIVE, false);
+    }
+
+    public static synchronized void saveWindowPosition(Context context, String pictureId, int positionX, int positionY) {
+        if (pictureId == null || pictureId.isEmpty()) {
+            return;
+        }
+        JSONObject state = readState();
+        JSONObject positions = state.optJSONObject(KEY_WINDOW_POSITIONS);
+        if (positions == null) {
+            positions = new JSONObject();
+        }
+        JSONObject position = new JSONObject();
+        try {
+            position.put(KEY_POSITION_X, positionX);
+            position.put(KEY_POSITION_Y, positionY);
+            positions.put(pictureId, position);
+            state.put(KEY_WINDOW_POSITIONS, positions);
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+        writeState(state);
+    }
+
+    public static synchronized Point getWindowPosition(Context context, String pictureId, int defaultX, int defaultY) {
+        JSONObject positions = readState().optJSONObject(KEY_WINDOW_POSITIONS);
+        if (positions == null || pictureId == null || pictureId.isEmpty()) {
+            return new Point(defaultX, defaultY);
+        }
+        JSONObject position = positions.optJSONObject(pictureId);
+        if (position == null) {
+            return new Point(defaultX, defaultY);
+        }
+        return new Point(position.optInt(KEY_POSITION_X, defaultX), position.optInt(KEY_POSITION_Y, defaultY));
+    }
+
+    public static synchronized void clearWindowPosition(Context context, String pictureId) {
+        if (pictureId == null || pictureId.isEmpty()) {
+            return;
+        }
+        JSONObject state = readState();
+        JSONObject positions = state.optJSONObject(KEY_WINDOW_POSITIONS);
+        if (positions == null || !positions.has(pictureId)) {
+            return;
+        }
+        positions.remove(pictureId);
+        try {
+            state.put(KEY_WINDOW_POSITIONS, positions);
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+        writeState(state);
+    }
+
+    private static JSONObject readState() {
+        String content = IOMethods.readFile(Config.getDataDir() + STATE_FILE_NAME);
+        if (content != null) {
+            String normalized = content.trim();
+            if (!normalized.isEmpty()) {
+                try {
+                    return new JSONObject(normalized);
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+        return new JSONObject();
+    }
+
+    private static void writeState(JSONObject state) {
+        IOMethods.writeFile(state.toString(), Config.getDataDir() + STATE_FILE_NAME);
+    }
+}

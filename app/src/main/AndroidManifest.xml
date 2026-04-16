@@ -73,6 +73,7 @@
         <service
             android:name=".Services.NotificationService"
             android:exported="false"
+            android:process=":overlay"
             android:foregroundServiceType="specialUse"
             tools:ignore="InnerclassSeparator">
             <property
@@ -84,6 +85,7 @@
             android:name=".Services.TrustedOverlayAccessibilityService"
             android:exported="false"
             android:label="@string/accessibility_overlay_service_label"
+            android:process=":overlay"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />

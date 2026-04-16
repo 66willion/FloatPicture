@@ -15,8 +15,12 @@
     <string name="settings_theme_mode">Theme mode</string>
     <string name="main_add_overlay">Add overlay</string>
     <string name="main_release_memory">Free memory</string>
+    <string name="main_pure_overlay_on">Pure overlay mode on</string>
+    <string name="main_pure_overlay_off">Pure overlay mode off</string>
     <string name="main_trusted_overlay_on">Trusted On</string>
     <string name="main_trusted_overlay_off">Trusted Off</string>
+    <string name="main_pure_overlay_requires_visible_window">Show at least one overlay window before enabling pure overlay mode.</string>
+    <string name="action_warn_double_click_close_management">Double click to close management UI.</string>
     <string name="action_release_memory_result">Memory cleanup finished: %1$d window cache / abnormal overlay item(s), %2$d temp file(s).</string>
     <string name="picture_settings_open_failed">Unable to open this picture.</string>
     <string name="picture_settings_replace_success">Picture replaced. Current settings were kept. Tap Save to apply it.</string>

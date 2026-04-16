@@ -3,8 +3,10 @@ package tool.xfy9326.floatpicture.Activities;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.content.BroadcastReceiver;
 import android.content.res.ColorStateList;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.os.Build;
 import android.os.Bundle;
 import android.net.Uri;
@@ -24,7 +26,6 @@ import androidx.core.view.GravityCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.recyclerview.widget.DefaultItemAnimator;
 
-import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.navigation.NavigationView;
 import com.google.android.material.snackbar.Snackbar;
@@ -33,6 +34,7 @@ import tool.xfy9326.floatpicture.MainApplication;
 import tool.xfy9326.floatpicture.Methods.ApplicationMethods;
 import tool.xfy9326.floatpicture.Methods.IOMethods;
 import tool.xfy9326.floatpicture.Methods.ManageMethods;
+import tool.xfy9326.floatpicture.Methods.OverlayRuntimeController;
 import tool.xfy9326.floatpicture.Methods.PermissionMethods;
 import tool.xfy9326.floatpicture.R;
 import tool.xfy9326.floatpicture.Services.TrustedOverlayAccessibilityService;
@@ -42,10 +44,13 @@ import tool.xfy9326.floatpicture.View.ManageListAdapter;
 
 public class MainActivity extends AppCompatActivity {
     private static final int MAIN_LIST_VIEW_CACHE_SIZE = 2;
+    private static final long PURE_OVERLAY_BUTTON_REENABLE_DELAY_MS = 300L;
 
     private ManageListAdapter manageListAdapter;
     private AdvancedRecyclerView recyclerView;
-    private ExtendedFloatingActionButton trustedOverlayButton;
+    private FloatingActionButton pureOverlayButton;
+    private FloatingActionButton trustedOverlayButton;
+    private boolean pureOverlayToggleInProgress = false;
     private long BackClickTime;
     private ActivityResultLauncher<String> picturePickerLauncher;
     private ActivityResultLauncher<Intent> addPictureSettingsLauncher;
@@ -54,16 +59,31 @@ public class MainActivity extends AppCompatActivity {
     private ActivityResultLauncher<Intent> trustedOverlaySettingsLauncher;
     private ActivityResultLauncher<String> notificationPermissionLauncher;
     private final Runnable trustedOverlayStateUpdater = this::updateTrustedOverlayButtonState;
+    private final BroadcastReceiver overlayRuntimeStateReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(android.content.Context context, Intent intent) {
+            refreshManageListData();
+            updatePureOverlayButtonState();
+            refreshTrustedOverlayButtonState();
+        }
+    };
+    private boolean overlayRuntimeReceiverRegistered = false;
 
     public static void SnackShow(Activity mActivity, int resourceId) {
         CoordinatorLayout coordinatorLayout = mActivity.findViewById(R.id.main_layout_content);
-        Snackbar.make(coordinatorLayout, mActivity.getString(resourceId), Snackbar.LENGTH_SHORT).show();
+        View anchorView = mActivity.findViewById(R.id.main_layout_actions);
+        Snackbar snackbar = Snackbar.make(coordinatorLayout, mActivity.getString(resourceId), Snackbar.LENGTH_SHORT);
+        if (anchorView != null) {
+            snackbar.setAnchorView(anchorView);
+        }
+        snackbar.show();
     }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        deactivatePureOverlayModeIfNeeded();
         registerLaunchers();
         initBackPressedCallback();
         init(savedInstanceState);
@@ -75,7 +95,22 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        deactivatePureOverlayModeIfNeeded();
+        refreshManageListData();
+        updatePureOverlayButtonState();
         refreshTrustedOverlayButtonState();
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        registerOverlayRuntimeReceiver();
+    }
+
+    @Override
+    protected void onStop() {
+        unregisterOverlayRuntimeReceiver();
+        super.onStop();
     }
 
     @Override
@@ -92,10 +127,7 @@ public class MainActivity extends AppCompatActivity {
             PermissionMethods.askOverlayPermission(this, this::launchOverlayPermissionRequest);
         }
         ViewSet();
-        MainApplication mainApplication = (MainApplication) getApplicationContext();
-        if ((mainApplication.isAppInit() || savedInstanceState == null) && PermissionMethods.hasOverlayPermission(this)) {
-            ManageMethods.RunWin(this);
-            mainApplication.setAppInit(true);
+        if (PermissionMethods.hasOverlayPermission(this)) {
             IOMethods.setNoMedia();
         }
     }
@@ -124,6 +156,11 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        pureOverlayButton = findViewById(R.id.main_button_pure_overlay);
+        pureOverlayButton.bringToFront();
+        pureOverlayButton.setOnClickListener(view -> togglePureOverlayMode());
+        updatePureOverlayButtonState();
+
         trustedOverlayButton = findViewById(R.id.main_button_trusted_overlay);
         trustedOverlayButton.bringToFront();
         trustedOverlayButton.setOnClickListener(view ->
@@ -131,7 +168,7 @@ public class MainActivity extends AppCompatActivity {
         );
         refreshTrustedOverlayButtonState();
 
-        ExtendedFloatingActionButton releaseMemoryButton = findViewById(R.id.main_button_release_memory);
+        FloatingActionButton releaseMemoryButton = findViewById(R.id.main_button_release_memory);
         releaseMemoryButton.bringToFront();
         releaseMemoryButton.setOnClickListener(view -> {
             view.setEnabled(false);
@@ -144,16 +181,20 @@ public class MainActivity extends AppCompatActivity {
                         return;
                     }
                     CoordinatorLayout coordinatorLayout = findViewById(R.id.main_layout_content);
-                    Snackbar.make(
-                                    coordinatorLayout,
-                                            getString(
-                                            R.string.action_release_memory_result,
-                                            result.getReleasedWindowCount(),
-                                            result.getDeletedTempFileCount()
-                                    ),
-                                    Snackbar.LENGTH_SHORT
-                            )
-                            .show();
+                    View anchorView = findViewById(R.id.main_layout_actions);
+                    Snackbar snackbar = Snackbar.make(
+                            coordinatorLayout,
+                            getString(
+                                    R.string.action_release_memory_result,
+                                    result.getReleasedWindowCount(),
+                                    result.getDeletedTempFileCount()
+                            ),
+                            Snackbar.LENGTH_SHORT
+                    );
+                    if (anchorView != null) {
+                        snackbar.setAnchorView(anchorView);
+                    }
+                    snackbar.show();
                 });
             }).start();
         });
@@ -258,7 +299,7 @@ public class MainActivity extends AppCompatActivity {
             manageListAdapter.notifyDataSetChanged();
         }
         SnackShow(this, R.string.action_add_window);
-        ManageMethods.updateNotificationCount(this);
+        OverlayRuntimeController.refreshNotification(this);
     }
 
     private void onEditPictureSettingsResult(ActivityResult result) {
@@ -266,9 +307,11 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         int position = result.getData().getIntExtra(Config.INTENT_PICTURE_EDIT_POSITION, -1);
+        manageListAdapter.updateData();
         if (position >= 0) {
-            manageListAdapter.updateData();
             manageListAdapter.notifyItemChanged(position);
+        } else {
+            manageListAdapter.notifyDataSetChanged();
         }
     }
 
@@ -304,15 +347,72 @@ public class MainActivity extends AppCompatActivity {
         if (trustedOverlayButton == null) {
             return;
         }
-        boolean trustedOverlayEnabled = TrustedOverlayAccessibilityService.isActive();
+        boolean trustedOverlayEnabled = TrustedOverlayAccessibilityService.isActive(this);
         int backgroundColor = ContextCompat.getColor(
                 this,
                 trustedOverlayEnabled ? R.color.colorTrustedOverlayOn : R.color.colorTrustedOverlayOff
         );
-        trustedOverlayButton.setText(trustedOverlayEnabled ? R.string.main_trusted_overlay_on : R.string.main_trusted_overlay_off);
         trustedOverlayButton.setContentDescription(getString(trustedOverlayEnabled ? R.string.main_trusted_overlay_on : R.string.main_trusted_overlay_off));
-        trustedOverlayButton.setIconResource(trustedOverlayEnabled ? R.drawable.ic_visible : R.drawable.ic_invisible);
+        trustedOverlayButton.setImageResource(trustedOverlayEnabled ? R.drawable.ic_visible : R.drawable.ic_invisible);
         trustedOverlayButton.setBackgroundTintList(ColorStateList.valueOf(backgroundColor));
+    }
+
+    private void deactivatePureOverlayModeIfNeeded() {
+        if (ApplicationMethods.isPureOverlayModeEnabled(this)) {
+            ApplicationMethods.setPureOverlayModeEnabled(this, false);
+        }
+    }
+
+    private void togglePureOverlayMode() {
+        if (pureOverlayToggleInProgress) {
+            return;
+        }
+        boolean enabled = ApplicationMethods.isPureOverlayModeEnabled(this);
+        if (enabled) {
+            pureOverlayToggleInProgress = true;
+            pureOverlayButton.setEnabled(false);
+            ApplicationMethods.setPureOverlayModeEnabled(this, false);
+            updatePureOverlayButtonState();
+            pureOverlayButton.postDelayed(() -> {
+                pureOverlayToggleInProgress = false;
+                if (!isFinishing() && !isDestroyed()) {
+                    pureOverlayButton.setEnabled(true);
+                }
+            }, PURE_OVERLAY_BUTTON_REENABLE_DELAY_MS);
+            return;
+        }
+        if (!PermissionMethods.hasOverlayPermission(this)) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                PermissionMethods.askOverlayPermission(this, this::launchOverlayPermissionRequest);
+            }
+            return;
+        }
+        if (!ManageMethods.hasVisibleWindowsConfigured(this)) {
+            SnackShow(this, R.string.main_pure_overlay_requires_visible_window);
+            return;
+        }
+        pureOverlayToggleInProgress = true;
+        pureOverlayButton.setEnabled(false);
+        ApplicationMethods.setPureOverlayModeEnabled(this, true);
+        ApplicationMethods.startNotificationControl(this);
+        updatePureOverlayButtonState();
+        pureOverlayButton.post(() -> {
+            pureOverlayToggleInProgress = false;
+            ApplicationMethods.CloseMainUi(this);
+        });
+    }
+
+    private void updatePureOverlayButtonState() {
+        if (pureOverlayButton == null) {
+            return;
+        }
+        boolean pureOverlayEnabled = ApplicationMethods.isPureOverlayModeEnabled(this);
+        int backgroundColor = ContextCompat.getColor(
+                this,
+                pureOverlayEnabled ? R.color.colorPureOverlayOn : R.color.colorPureOverlayOff
+        );
+        pureOverlayButton.setContentDescription(getString(pureOverlayEnabled ? R.string.main_pure_overlay_on : R.string.main_pure_overlay_off));
+        pureOverlayButton.setBackgroundTintList(ColorStateList.valueOf(backgroundColor));
     }
 
     private void handleBackPressed() {
@@ -323,12 +423,36 @@ public class MainActivity extends AppCompatActivity {
         }
         long BackNowClickTime = System.currentTimeMillis();
         if ((BackNowClickTime - BackClickTime) < 2200) {
-            MainApplication mainApplication = (MainApplication) getApplicationContext();
-            mainApplication.setAppInit(false);
             ApplicationMethods.DoubleClickCloseSnackBar(this, true);
         } else {
             ApplicationMethods.DoubleClickCloseSnackBar(this, false);
             BackClickTime = System.currentTimeMillis();
         }
+    }
+
+    @SuppressLint("NotifyDataSetChanged")
+    private void refreshManageListData() {
+        if (manageListAdapter == null) {
+            return;
+        }
+        manageListAdapter.updateData();
+        manageListAdapter.notifyDataSetChanged();
+    }
+
+    private void registerOverlayRuntimeReceiver() {
+        if (overlayRuntimeReceiverRegistered) {
+            return;
+        }
+        IntentFilter intentFilter = new IntentFilter(OverlayRuntimeController.ACTION_RUNTIME_STATE_CHANGED);
+        ContextCompat.registerReceiver(this, overlayRuntimeStateReceiver, intentFilter, ContextCompat.RECEIVER_NOT_EXPORTED);
+        overlayRuntimeReceiverRegistered = true;
+    }
+
+    private void unregisterOverlayRuntimeReceiver() {
+        if (!overlayRuntimeReceiverRegistered) {
+            return;
+        }
+        unregisterReceiver(overlayRuntimeStateReceiver);
+        overlayRuntimeReceiverRegistered = false;
     }
 }

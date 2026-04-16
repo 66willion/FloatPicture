@@ -85,7 +85,7 @@ public class GlobalSettingsFragment extends PreferenceFragmentCompat {
             return;
         }
         boolean authorized = TrustedOverlayAccessibilityService.isAuthorized(requireContext());
-        boolean active = TrustedOverlayAccessibilityService.isActive();
+        boolean active = TrustedOverlayAccessibilityService.isActive(requireContext());
         preference.setChecked(authorized);
         if (!authorized) {
             preference.setSummary(R.string.settings_global_trusted_overlay_accessibility_sum);

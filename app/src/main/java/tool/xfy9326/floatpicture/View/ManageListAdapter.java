@@ -18,7 +18,7 @@ import java.util.Map;
 import tool.xfy9326.floatpicture.Activities.MainActivity;
 import tool.xfy9326.floatpicture.Activities.PictureSettingsActivity;
 import tool.xfy9326.floatpicture.Methods.ImageMethods;
-import tool.xfy9326.floatpicture.Methods.ManageMethods;
+import tool.xfy9326.floatpicture.Methods.OverlayRuntimeController;
 import tool.xfy9326.floatpicture.R;
 import tool.xfy9326.floatpicture.Utils.Config;
 import tool.xfy9326.floatpicture.Utils.PictureData;
@@ -43,6 +43,7 @@ public class ManageListAdapter extends AdvancedRecyclerView.Adapter<ManageListVi
     }
 
     public void updateData() {
+        PictureData.invalidateCache();
         pictureInfo = pictureData.getListArray();
         if (PictureId_Array == null) {
             PictureId_Array = new ArrayList<>();
@@ -96,14 +97,9 @@ public class ManageListAdapter extends AdvancedRecyclerView.Adapter<ManageListVi
         android.widget.CompoundButton.OnCheckedChangeListener visibilityChangeListener = new android.widget.CompoundButton.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(android.widget.CompoundButton compoundButton, boolean b) {
-                ManageMethods.setWindowVisible(mActivity, pictureData, mPictureId, b);
-                boolean actualVisible = pictureData.getBoolean(Config.DATA_PICTURE_SHOW_ENABLED, Config.DATA_DEFAULT_PICTURE_SHOW_ENABLED);
-                if (switch_Picture_Show.isChecked() != actualVisible) {
-                    switch_Picture_Show.setOnCheckedChangeListener(null);
-                    switch_Picture_Show.setChecked(actualVisible);
-                    switch_Picture_Show.setOnCheckedChangeListener(this);
-                }
-                bindStatusChips(holder, actualVisible, touchAndMove, overLayout);
+                OverlayRuntimeController.setWindowVisible(mActivity, mPictureId, b);
+                // 实际状态由 overlay 进程写盘并广播回来；这里先反映用户操作，随后列表刷新会校正为真实状态。
+                bindStatusChips(holder, b, touchAndMove, overLayout);
             }
         };
         switch_Picture_Show.setOnCheckedChangeListener(visibilityChangeListener);
@@ -125,13 +121,11 @@ public class ManageListAdapter extends AdvancedRecyclerView.Adapter<ManageListVi
         });
 
         holder.button_Picture_Delete.setOnClickListener(v -> {
-            if (!ManageMethods.DeleteWin(mActivity, mPictureId)) {
-                int currentPosition = holder.getAdapterPosition();
-                if (currentPosition != androidx.recyclerview.widget.RecyclerView.NO_POSITION) {
-                    notifyItemChanged(currentPosition);
-                }
-                return;
-            }
+            PictureData deletePictureData = new PictureData();
+            deletePictureData.setDataControl(mPictureId);
+            deletePictureData.remove();
+            ImageMethods.clearAllTemp(mActivity, mPictureId);
+            OverlayRuntimeController.deletePicture(mActivity, mPictureId);
             updateData();
             holder.switch_Picture_Show.setOnCheckedChangeListener(null);
             holder.button_Picture_Edit.setOnClickListener(null);
@@ -142,7 +136,7 @@ public class ManageListAdapter extends AdvancedRecyclerView.Adapter<ManageListVi
                 notifyItemRangeChanged(position1, getItemCount() - position1);
             }
             MainActivity.SnackShow(mActivity, R.string.action_delete_window);
-            ManageMethods.updateNotificationCount(mActivity);
+            OverlayRuntimeController.refreshNotification(mActivity);
         });
     }
 

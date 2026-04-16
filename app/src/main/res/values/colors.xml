@@ -27,6 +27,8 @@
     <color name="colorStatusNeutralText">#475467</color>
     <color name="colorStatusDangerBackground">#FDECEC</color>
     <color name="colorStatusDangerText">#B42318</color>
+    <color name="colorPureOverlayOn">#0F766E</color>
+    <color name="colorPureOverlayOff">#475467</color>
     <color name="colorTrustedOverlayOn">#15803D</color>
     <color name="colorTrustedOverlayOff">#B91C1C</color>
 </resources>

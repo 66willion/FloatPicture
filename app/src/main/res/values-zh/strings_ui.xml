@@ -15,8 +15,12 @@
     <string name="settings_theme_mode">主题模式</string>
     <string name="main_add_overlay">新增悬浮窗</string>
     <string name="main_release_memory">释放内存</string>
+    <string name="main_pure_overlay_on">纯悬浮开</string>
+    <string name="main_pure_overlay_off">纯悬浮关</string>
     <string name="main_trusted_overlay_on">Trusted 开</string>
     <string name="main_trusted_overlay_off">Trusted 关</string>
+    <string name="main_pure_overlay_requires_visible_window">至少先显示一个悬浮图片，再开启纯悬浮模式。</string>
+    <string name="action_warn_double_click_close_management">双击以关闭管理界面</string>
     <string name="action_release_memory_result">内存清理完成：已清理%1$d个窗口缓存/异常悬浮项，清理%2$d个无用临时文件。</string>
     <string name="picture_settings_open_failed">无法打开这张图片。</string>
     <string name="picture_settings_replace_success">图片已替换，当前参数已保留，记得点击右上角保存。</string>

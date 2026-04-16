@@ -15,7 +15,6 @@ import androidx.appcompat.app.AlertDialog;
 
 import java.lang.ref.WeakReference;
 
-import tool.xfy9326.floatpicture.MainApplication;
 import tool.xfy9326.floatpicture.R;
 
 public class PermissionMethods {
@@ -55,8 +54,7 @@ public class PermissionMethods {
             if (!hasOverlayPermission(ctx)) {
                 Toast.makeText(ctx, R.string.permission_warn_overlay_intent, Toast.LENGTH_SHORT).show();
             } else {
-                ManageMethods.RunWin(ctx);
-                ((MainApplication) ctx.getApplicationContext()).setAppInit(true);
+                OverlayRuntimeController.startRuntime(ctx);
                 IOMethods.setNoMedia();
             }
         }, 600);

@@ -460,7 +460,7 @@ public class WindowsMethods {
     private static boolean shouldUseTrustedOverlay(Context context) {
         return Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1
                 && TrustedOverlayAccessibilityService.isAuthorized(context)
-                && TrustedOverlayAccessibilityService.isActive();
+                && TrustedOverlayAccessibilityService.isActive(context);
     }
 
     private static boolean isTrustedOverlayType(int windowType) {

@@ -11,7 +11,8 @@ import android.view.accessibility.AccessibilityEvent;
 
 import androidx.annotation.Nullable;
 
-import tool.xfy9326.floatpicture.Methods.ManageMethods;
+import tool.xfy9326.floatpicture.Methods.OverlayRuntimeController;
+import tool.xfy9326.floatpicture.Utils.OverlayRuntimeStateStore;
 
 public class TrustedOverlayAccessibilityService extends AccessibilityService {
     private static volatile TrustedOverlayAccessibilityService instance;
@@ -48,8 +49,8 @@ public class TrustedOverlayAccessibilityService extends AccessibilityService {
         return false;
     }
 
-    public static boolean isActive() {
-        return instance != null;
+    public static boolean isActive(Context context) {
+        return instance != null || OverlayRuntimeStateStore.isTrustedOverlayActive(context);
     }
 
     public static Context getWindowContext(Context fallbackContext) {
@@ -66,7 +67,9 @@ public class TrustedOverlayAccessibilityService extends AccessibilityService {
     protected void onServiceConnected() {
         super.onServiceConnected();
         instance = this;
-        ManageMethods.recreateVisibleWindows(getApplicationContext());
+        OverlayRuntimeStateStore.setTrustedOverlayActive(getApplicationContext(), true);
+        OverlayRuntimeController.notifyRuntimeStateChanged(getApplicationContext());
+        OverlayRuntimeController.recreateVisibleWindows(getApplicationContext());
     }
 
     @Override
@@ -74,7 +77,9 @@ public class TrustedOverlayAccessibilityService extends AccessibilityService {
         boolean wasActive = instance == this;
         if (wasActive) {
             instance = null;
-            ManageMethods.recreateVisibleWindows(getApplicationContext());
+            OverlayRuntimeStateStore.setTrustedOverlayActive(getApplicationContext(), false);
+            OverlayRuntimeController.notifyRuntimeStateChanged(getApplicationContext());
+            OverlayRuntimeController.recreateVisibleWindows(getApplicationContext());
         }
         return super.onUnbind(intent);
     }
@@ -84,7 +89,9 @@ public class TrustedOverlayAccessibilityService extends AccessibilityService {
         boolean wasActive = instance == this;
         if (wasActive) {
             instance = null;
-            ManageMethods.recreateVisibleWindows(getApplicationContext());
+            OverlayRuntimeStateStore.setTrustedOverlayActive(getApplicationContext(), false);
+            OverlayRuntimeController.notifyRuntimeStateChanged(getApplicationContext());
+            OverlayRuntimeController.recreateVisibleWindows(getApplicationContext());
         }
         super.onDestroy();
     }

@@ -9,6 +9,7 @@ import androidx.appcompat.widget.AppCompatImageView;
 
 import tool.xfy9326.floatpicture.Methods.WindowsMethods;
 import tool.xfy9326.floatpicture.Utils.Config;
+import tool.xfy9326.floatpicture.Utils.OverlayRuntimeStateStore;
 
 public class FloatImageView extends AppCompatImageView {
     private String PictureId = "";
@@ -87,6 +88,7 @@ public class FloatImageView extends AppCompatImageView {
                 case MotionEvent.ACTION_UP -> {
                     getNowPosition();
                     updatePosition();
+                    OverlayRuntimeStateStore.saveWindowPosition(getContext(), PictureId, (int) mNowPositionX, (int) mNowPositionY);
                     mTouchStartX = mTouchStartY = 0;
                 }
             }

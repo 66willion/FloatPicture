@@ -51,6 +51,7 @@ public class Config {
     public final static String PREFERENCE_NEW_PICTURE_QUALITY = "new_picture_quality";
     public final static String PREFERENCE_TOUCHABLE_POSITION_EDIT = "touchable_position_edit";
     public final static String PREFERENCE_TRUSTED_OVERLAY_ACCESSIBILITY = "trusted_overlay_accessibility";
+    public final static String PREFERENCE_PURE_OVERLAY_MODE = "pure_overlay_mode";
     public final static String PREFERENCE_THEME_MODE = "theme_mode";
 
     public final static String LICENSE_PATH_APPLICATION = "LICENSE";

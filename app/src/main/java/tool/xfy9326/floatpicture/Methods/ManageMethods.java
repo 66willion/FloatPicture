@@ -15,6 +15,7 @@ import java.util.Map;
 import tool.xfy9326.floatpicture.MainApplication;
 import tool.xfy9326.floatpicture.Services.NotificationService;
 import tool.xfy9326.floatpicture.Utils.Config;
+import tool.xfy9326.floatpicture.Utils.OverlayRuntimeStateStore;
 import tool.xfy9326.floatpicture.Utils.PictureData;
 import tool.xfy9326.floatpicture.View.FloatImageView;
 
@@ -77,7 +78,7 @@ public class ManageMethods {
         return true;
     }
 
-    static void CloseAllWindows(Context mContext) {
+    public static void CloseAllWindows(Context mContext) {
         MainApplication mainApplication = (MainApplication) mContext.getApplicationContext();
         Map<String, View> hashMap = new LinkedHashMap<>(mainApplication.getRegister());
         if (!hashMap.isEmpty()) {
@@ -184,6 +185,21 @@ public class ManageMethods {
         return list != null ? list.size() : 0;
     }
 
+    public static boolean hasVisibleWindowsConfigured(Context context) {
+        PictureData pictureData = new PictureData();
+        LinkedHashMap<String, String> linkedHashMap = pictureData.getListArray();
+        if (linkedHashMap == null || linkedHashMap.isEmpty()) {
+            return false;
+        }
+        for (Map.Entry<?, ?> entry : linkedHashMap.entrySet()) {
+            pictureData.setDataControl(entry.getKey().toString());
+            if (pictureData.getBoolean(Config.DATA_PICTURE_SHOW_ENABLED, Config.DATA_DEFAULT_PICTURE_SHOW_ENABLED)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public static void setAllWindowsVisible(Context context, boolean visible) {
         String id;
         PictureData pictureData = new PictureData();
@@ -196,6 +212,24 @@ public class ManageMethods {
             id = o.getKey().toString();
             setWindowVisible(context, pictureData, id, visible);
         }
+    }
+
+    public static void syncWindowFromDisk(Context context, String id) {
+        PictureData pictureData = new PictureData();
+        LinkedHashMap<String, String> linkedHashMap = pictureData.getListArray();
+        if (linkedHashMap == null || !linkedHashMap.containsKey(id)) {
+            releaseWindowById(context, id, true);
+            updateGlobalVisibleState(context);
+            return;
+        }
+        pictureData.setDataControl(id);
+        boolean visible = pictureData.getBoolean(Config.DATA_PICTURE_SHOW_ENABLED, Config.DATA_DEFAULT_PICTURE_SHOW_ENABLED);
+        if (visible) {
+            showWindowById(context, id);
+        } else {
+            hideWindowById(context, id);
+        }
+        updateGlobalVisibleState(context);
     }
 
     public static void setWindowVisible(Context context, PictureData pictureData, String id, boolean visible) {
@@ -228,16 +262,27 @@ public class ManageMethods {
     private static void showWindowById(Context mContext, String id) {
         PictureData pictureData = new PictureData();
         pictureData.setDataControl(id);
-        FloatImageView floatImageView = ensureWindowView(mContext, pictureData, id);
-        if (floatImageView.isAttachedToWindow()) {
-            return;
-        }
         int positionX = pictureData.getInt(Config.DATA_PICTURE_POSITION_X, Config.DATA_DEFAULT_PICTURE_POSITION_X);
         int positionY = pictureData.getInt(Config.DATA_PICTURE_POSITION_Y, Config.DATA_DEFAULT_PICTURE_POSITION_Y);
+        float defaultZoom = pictureData.getFloat(Config.DATA_PICTURE_DEFAULT_ZOOM, ImageMethods.getDefaultZoom(mContext, id, false));
+        float zoom = pictureData.getFloat(Config.DATA_PICTURE_ZOOM, defaultZoom);
+        float pictureDegree = pictureData.getFloat(Config.DATA_PICTURE_DEGREE, Config.DATA_DEFAULT_PICTURE_DEGREE);
+        FloatImageView floatImageView = ImageMethods.getFloatImageViewById(mContext, id);
+        Bitmap displayBitmap = ImageMethods.getDisplayBitmap(mContext, id, zoom, pictureDegree);
+        if (floatImageView == null) {
+            float pictureAlpha = pictureData.getFloat(Config.DATA_PICTURE_ALPHA, Config.DATA_DEFAULT_PICTURE_ALPHA);
+            boolean touchAndMove = pictureData.getBoolean(Config.DATA_PICTURE_TOUCH_AND_MOVE, Config.DATA_DEFAULT_PICTURE_TOUCH_AND_MOVE);
+            boolean overLayout = pictureData.getBoolean(Config.DATA_ALLOW_PICTURE_OVER_LAYOUT, Config.DATA_DEFAULT_ALLOW_PICTURE_OVER_LAYOUT);
+            floatImageView = ImageMethods.createPictureView(mContext, displayBitmap, touchAndMove, overLayout, pictureAlpha);
+            ImageMethods.saveFloatImageViewById(mContext, id, floatImageView);
+        } else {
+            ImageMethods.setPictureBitmap(floatImageView, displayBitmap);
+        }
         float pictureAlpha = pictureData.getFloat(Config.DATA_PICTURE_ALPHA, Config.DATA_DEFAULT_PICTURE_ALPHA);
         boolean touch_and_move = pictureData.getBoolean(Config.DATA_PICTURE_TOUCH_AND_MOVE, Config.DATA_DEFAULT_PICTURE_TOUCH_AND_MOVE);
         boolean over_layout = pictureData.getBoolean(Config.DATA_ALLOW_PICTURE_OVER_LAYOUT, Config.DATA_DEFAULT_ALLOW_PICTURE_OVER_LAYOUT);
         syncWindowViewState(floatImageView, touch_and_move, over_layout, pictureAlpha);
+        OverlayRuntimeStateStore.saveWindowPosition(mContext, id, positionX, positionY);
         // createWindow 内部会自动调用 syncAllWindows 重新平衡所有窗口的联合透明度
         WindowsMethods.createWindow(getWindowManager(mContext), floatImageView, touch_and_move, over_layout, pictureAlpha, positionX, positionY);
     }

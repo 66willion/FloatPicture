@@ -79,32 +79,44 @@
             android:gravity="center_vertical|end"
             android:orientation="horizontal">
 
-            <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/main_button_pure_overlay"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="12dp"
+                android:contentDescription="@string/main_pure_overlay_off"
+                android:focusable="true"
+                app:backgroundTint="@color/colorPureOverlayOff"
+                app:elevation="8dp"
+                app:fabSize="normal"
+                app:pressedTranslationZ="12dp"
+                app:srcCompat="@drawable/ic_pure_overlay"
+                app:tint="@color/white" />
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
                 android:id="@+id/main_button_trusted_overlay"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginEnd="12dp"
                 android:contentDescription="@string/main_trusted_overlay_off"
-                android:text="@string/main_trusted_overlay_off"
-                android:textAllCaps="false"
-                android:textColor="@color/white"
                 app:backgroundTint="@color/colorTrustedOverlayOff"
                 app:elevation="8dp"
-                app:icon="@drawable/ic_invisible"
-                app:iconTint="@color/white" />
+                app:fabSize="normal"
+                app:pressedTranslationZ="12dp"
+                app:srcCompat="@drawable/ic_invisible"
+                app:tint="@color/white" />
 
-            <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
                 android:id="@+id/main_button_release_memory"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:contentDescription="@string/main_release_memory"
-                android:text="@string/main_release_memory"
-                android:textAllCaps="false"
-                android:textColor="@color/white"
                 app:backgroundTint="@color/colorPrimary"
                 app:elevation="8dp"
-                app:icon="@drawable/ic_memory_clean"
-                app:iconTint="@color/white" />
+                app:fabSize="normal"
+                app:pressedTranslationZ="12dp"
+                app:srcCompat="@drawable/ic_memory_clean"
+                app:tint="@color/white" />
 
         </LinearLayout>
 

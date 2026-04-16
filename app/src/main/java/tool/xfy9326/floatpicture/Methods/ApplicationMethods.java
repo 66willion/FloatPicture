@@ -22,7 +22,6 @@ import java.util.LinkedHashMap;
 import java.util.Set;
 
 import tool.xfy9326.floatpicture.R;
-import tool.xfy9326.floatpicture.Services.NotificationService;
 import tool.xfy9326.floatpicture.Utils.Config;
 import tool.xfy9326.floatpicture.Utils.PictureData;
 
@@ -48,15 +47,25 @@ public class ApplicationMethods {
     }
 
     public static void startNotificationControl(Context context) {
-        if (PreferenceManager.getDefaultSharedPreferences(context).getBoolean(Config.PREFERENCE_SHOW_NOTIFICATION_CONTROL, true)) {
-            NotificationService.start(context);
+        if (PermissionMethods.hasOverlayPermission(context)) {
+            OverlayRuntimeController.startRuntime(context);
         }
     }
 
+    public static boolean isPureOverlayModeEnabled(Context context) {
+        return PreferenceManager.getDefaultSharedPreferences(context)
+                .getBoolean(Config.PREFERENCE_PURE_OVERLAY_MODE, false);
+    }
+
+    public static boolean setPureOverlayModeEnabled(Context context, boolean enabled) {
+        return PreferenceManager.getDefaultSharedPreferences(context)
+                .edit()
+                .putBoolean(Config.PREFERENCE_PURE_OVERLAY_MODE, enabled)
+                .commit();
+    }
+
     private static void closeNotificationControl(Context context) {
-        if (PreferenceManager.getDefaultSharedPreferences(context).getBoolean(Config.PREFERENCE_SHOW_NOTIFICATION_CONTROL, true)) {
-            context.stopService(NotificationService.createIntent(context, Config.INTENT_ACTION_NOTIFICATION_START));
-        }
+        OverlayRuntimeController.shutdownRuntime(context);
     }
 
     public static String getApplicationVersion(Context mContext) {
@@ -85,9 +94,20 @@ public class ApplicationMethods {
     }
 
     public static void CloseApplication(Activity mActivity) {
-        ManageMethods.CloseAllWindows(mActivity);
         closeNotificationControl(mActivity);
         mActivity.finish();
+    }
+
+    public static void CloseMainUi(Activity mActivity) {
+        mActivity.finishAndRemoveTask();
+    }
+
+    public static void CloseMainUiOrApplication(Activity mActivity) {
+        if (isPureOverlayModeEnabled(mActivity)) {
+            CloseMainUi(mActivity);
+        } else {
+            CloseApplication(mActivity);
+        }
     }
 
     public static void disableNavigationViewScrollbars(NavigationView navigationView) {
@@ -98,10 +118,17 @@ public class ApplicationMethods {
 
     public static void DoubleClickCloseSnackBar(final Activity mActivity, boolean isDoubleClick) {
         if (isDoubleClick && waitDoubleClick) {
-            CloseApplication(mActivity);
+            CloseMainUiOrApplication(mActivity);
         } else {
             CoordinatorLayout coordinatorLayout = mActivity.findViewById(R.id.main_layout_content);
-            Snackbar snackbar = Snackbar.make(coordinatorLayout, R.string.action_warn_double_click_close_application, Snackbar.LENGTH_SHORT);
+            View anchorView = mActivity.findViewById(R.id.main_layout_actions);
+            int messageResId = isPureOverlayModeEnabled(mActivity)
+                    ? R.string.action_warn_double_click_close_management
+                    : R.string.action_warn_double_click_close_application;
+            Snackbar snackbar = Snackbar.make(coordinatorLayout, messageResId, Snackbar.LENGTH_SHORT);
+            if (anchorView != null) {
+                snackbar.setAnchorView(anchorView);
+            }
             snackbar.setAction(R.string.action_back_to_launcher, v -> mActivity.moveTaskToBack(true));
             snackbar.setActionTextColor(ContextCompat.getColor(mActivity, R.color.colorPrimary));
             snackbar.addCallback(new BaseTransientBottomBar.BaseCallback<>() {
@@ -121,7 +148,7 @@ public class ApplicationMethods {
     }
 
     public static MemoryReleaseResult releaseMemory(Context context) {
-        int releasedWindowCount = ManageMethods.releaseInactiveWindowMemory(context);
+        int releasedWindowCount = OverlayRuntimeController.releaseMemory(context);
         int deletedTempFileCount = clearUselessTempSync(context);
         Runtime runtime = Runtime.getRuntime();
         runtime.gc();

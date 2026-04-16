@@ -1,5 +1,21 @@
 apply plugin: 'com.android.application'
 
+def releaseSigningProperties = new Properties()
+def releaseSigningFile = rootProject.file("signing/release-signing.properties")
+if (releaseSigningFile.exists()) {
+    releaseSigningFile.withInputStream { releaseSigningProperties.load(it) }
+}
+
+def resolveSigningValue = { String envName, String propertyName ->
+    def envValue = System.getenv(envName)
+    return (envValue != null && !envValue.trim().isEmpty()) ? envValue : releaseSigningProperties.getProperty(propertyName)
+}
+
+def releaseStoreFilePath = resolveSigningValue("FLOATPICTURE_RELEASE_STORE_FILE", "storeFile")
+def releaseStorePassword = resolveSigningValue("FLOATPICTURE_RELEASE_STORE_PASSWORD", "storePassword")
+def releaseKeyAlias = resolveSigningValue("FLOATPICTURE_RELEASE_KEY_ALIAS", "keyAlias")
+def releaseKeyPassword = resolveSigningValue("FLOATPICTURE_RELEASE_KEY_PASSWORD", "keyPassword")
+
 android {
     namespace = "tool.xfy9326.floatpicture"
     compileSdk = 35
@@ -38,10 +54,23 @@ android {
         buildConfig = true
     }
 
+    signingConfigs {
+        release {
+            if (!releaseStoreFilePath || !releaseStorePassword || !releaseKeyAlias || !releaseKeyPassword) {
+                throw new GradleException("Missing release signing configuration. Check signing/release-signing.properties or FLOATPICTURE_RELEASE_* environment variables.")
+            }
+            storeFile rootProject.file(releaseStoreFilePath)
+            storePassword releaseStorePassword
+            keyAlias releaseKeyAlias
+            keyPassword releaseKeyPassword
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled = true
             shrinkResources = true
+            signingConfig signingConfigs.release
 
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
 

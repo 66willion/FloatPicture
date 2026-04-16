@@ -26,6 +26,8 @@
     <string name="settings_picture_resize_size">大小:</string>
     <string name="settings_picture_resize_sum">等比例缩放窗口与图片</string>
     <string name="settings_picture_resize_warn">请输入一个正确的图片大小！</string>
+    <string name="settings_picture_replace">替换图片</string>
+    <string name="settings_picture_replace_sum">保留当前参数，直接替换这个项目使用的图片</string>
     <string name="settings_window">窗口设置</string>
     <string name="action_warn_edit_hided_window">你不能编辑一个已经隐藏的窗口！</string>
     <string name="action_delete_window">成功删除窗口！</string>

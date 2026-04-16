@@ -48,6 +48,14 @@ public class ImageMethods {
         return new File(Config.getOriginalPictureDir() + id);
     }
 
+    private static File getPendingOriginalPictureFile(String id) {
+        return new File(Config.getOriginalPictureDir() + id + ".pending");
+    }
+
+    private static File getStagedPendingOriginalPictureFile(String id) {
+        return new File(Config.getOriginalPictureDir() + id + ".pending.new");
+    }
+
     private static File getLegacyPictureFile(String id) {
         return new File(Config.getPictureDir() + id);
     }
@@ -86,6 +94,123 @@ public class ImageMethods {
             e.printStackTrace();
         }
         return null;
+    }
+
+    public static boolean stageReplacementImage(Context context, String id, Uri uri) {
+        try {
+            return IOMethods.copyUriToFile(context, uri, getStagedPendingOriginalPictureFile(id).getAbsolutePath());
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    public static Bitmap getStagedReplacementBitmap(String id) {
+        File stagedFile = getStagedPendingOriginalPictureFile(id);
+        if (!stagedFile.exists()) {
+            return null;
+        }
+        return decodeSourceBitmap(stagedFile, 0, 0, false);
+    }
+
+    public static boolean applyStagedReplacementImage(String id) {
+        File stagedFile = getStagedPendingOriginalPictureFile(id);
+        if (!stagedFile.exists()) {
+            return false;
+        }
+        File pendingFile = getPendingOriginalPictureFile(id);
+        File pendingBackupFile = new File(Config.getOriginalPictureDir() + id + ".pending.backup");
+        deleteFileIfExists(pendingBackupFile);
+        boolean pendingBackedUp = false;
+        if (pendingFile.exists()) {
+            if (pendingFile.renameTo(pendingBackupFile)) {
+                pendingBackedUp = true;
+            } else {
+                if (!IOMethods.copyFile(pendingFile, pendingBackupFile)) {
+                    return false;
+                }
+                pendingBackedUp = true;
+                deleteFileIfExists(pendingFile);
+                if (pendingFile.exists()) {
+                    deleteFileIfExists(pendingBackupFile);
+                    return false;
+                }
+            }
+        }
+        boolean replaced = stagedFile.renameTo(pendingFile) || IOMethods.copyFile(stagedFile, pendingFile);
+        if (!replaced || !pendingFile.exists()) {
+            deleteFileIfExists(pendingFile);
+            if (pendingBackedUp) {
+                if (!pendingBackupFile.renameTo(pendingFile)) {
+                    IOMethods.copyFile(pendingBackupFile, pendingFile);
+                }
+            }
+            return false;
+        }
+        deleteFileIfExists(stagedFile);
+        deleteFileIfExists(pendingBackupFile);
+        return pendingFile.exists();
+    }
+
+    public static boolean hasPendingReplacementImage(String id) {
+        return getPendingOriginalPictureFile(id).exists();
+    }
+
+    public static Bitmap getPendingEditSourceBitmap(String id) {
+        File pendingFile = getPendingOriginalPictureFile(id);
+        if (!pendingFile.exists()) {
+            return null;
+        }
+        return decodeSourceBitmap(pendingFile, 0, 0, false);
+    }
+
+    public static boolean commitPendingReplacementImage(String id) {
+        File pendingFile = getPendingOriginalPictureFile(id);
+        if (!pendingFile.exists()) {
+            return true;
+        }
+        File originalFile = getOriginalPictureFile(id);
+        File backupFile = new File(Config.getOriginalPictureDir() + id + ".backup");
+        deleteFileIfExists(backupFile);
+        boolean originalBackedUp = false;
+        if (originalFile.exists()) {
+            if (originalFile.renameTo(backupFile)) {
+                originalBackedUp = true;
+            } else {
+                if (!IOMethods.copyFile(originalFile, backupFile)) {
+                    return false;
+                }
+                originalBackedUp = true;
+                deleteFileIfExists(originalFile);
+                if (originalFile.exists()) {
+                    deleteFileIfExists(backupFile);
+                    return false;
+                }
+            }
+        }
+        boolean replaced = pendingFile.renameTo(originalFile) || IOMethods.copyFile(pendingFile, originalFile);
+        if (!replaced || !originalFile.exists()) {
+            deleteFileIfExists(originalFile);
+            if (originalBackedUp) {
+                if (!backupFile.renameTo(originalFile)) {
+                    IOMethods.copyFile(backupFile, originalFile);
+                }
+            }
+            return false;
+        }
+        deleteFileIfExists(getLegacyPictureFile(id));
+        deleteFileIfExists(getDisplayPictureFile(id));
+        deleteFileIfExists(pendingFile);
+        deleteFileIfExists(backupFile);
+        return originalFile.exists() && !pendingFile.exists();
+    }
+
+    public static void clearPendingReplacementImage(String id) {
+        deleteFileIfExists(getPendingOriginalPictureFile(id));
+    }
+
+    public static void clearStagedReplacementImage(String id) {
+        deleteFileIfExists(getStagedPendingOriginalPictureFile(id));
     }
 
     public static void saveFloatImageViewById(Context mContext, String id, FloatImageView FloatImageView) {
@@ -285,6 +410,8 @@ public class ImageMethods {
             releasePictureView(floatImageView);
         }
         mainApplication.unregisterView(id);
+        deleteFileIfExists(getStagedPendingOriginalPictureFile(id));
+        deleteFileIfExists(getPendingOriginalPictureFile(id));
         deleteFileIfExists(getOriginalPictureFile(id));
         deleteFileIfExists(getLegacyPictureFile(id));
         deleteFileIfExists(getDisplayPictureFile(id));

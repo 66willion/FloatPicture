@@ -20,6 +20,8 @@
     <string name="settings_picture_resize_sum">Scaling the size of window and picture.</string>
     <string name="settings_picture_resize_warn">Please input a correct picture size!</string>
     <string name="settings_picture_resize_size">Size:</string>
+    <string name="settings_picture_replace">Replace picture</string>
+    <string name="settings_picture_replace_sum">Replace the image for this item while keeping current settings.</string>
     <string name="settings_window">Window Settings</string>
     <string name="settings_picture_position_sum">Move the window</string>
     <string name="settings_picture_position">Set window position.</string>

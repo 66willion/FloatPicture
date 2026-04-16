@@ -5,6 +5,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.Point;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.text.InputType;
@@ -18,6 +19,8 @@ import android.widget.Toast;
 
 import android.util.Log;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
@@ -43,11 +46,13 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
     private boolean Edit_Mode;
     private boolean Window_Created;
     private boolean onUseEditPicture = false;
+    private boolean changesSaved = false;
     private LayoutInflater inflater;
     private PictureData pictureData;
     private String PictureId;
     private String PictureName;
     private WindowManager windowManager;
+    private ActivityResultLauncher<String> replacePictureLauncher;
     private volatile FloatImageView floatImageView;
     private Bitmap bitmap;
     private Bitmap bitmap_Edit;
@@ -74,9 +79,11 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         super.onCreate(savedInstanceState);
         Window_Created = false;
         Edit_Mode = false;
+        changesSaved = false;
         pictureData = new PictureData();
         inflater = LayoutInflater.from(requireActivity());
         windowManager = WindowsMethods.getWindowManager(requireActivity());
+        replacePictureLauncher = registerForActivityResult(new ActivityResultContracts.GetContent(), this::onReplacementPictureSelected);
     }
 
     @Override
@@ -96,6 +103,13 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
     @Override
     public void onDestroy() {
         fragmentClosing = true;
+        boolean finishing = getActivity() != null && getActivity().isFinishing();
+        if (PictureId != null) {
+            ImageMethods.clearStagedReplacementImage(PictureId);
+        }
+        if (Edit_Mode && finishing && !changesSaved && PictureId != null) {
+            ImageMethods.clearPendingReplacementImage(PictureId);
+        }
         super.onDestroy();
     }
 
@@ -116,6 +130,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         Intent intent = Objects.requireNonNull(requireActivity().getIntent());
         Edit_Mode = intent.getBooleanExtra(Config.INTENT_PICTURE_EDIT_MODE, false);
         wasHidden = intent.getBooleanExtra(Config.INTENT_PICTURE_WAS_HIDDEN, false);
+        updateReplacePicturePreferenceVisibility();
         AlertDialog.Builder loading = new AlertDialog.Builder(requireActivity());
         loading.setCancelable(false);
         View mView = inflater.inflate(R.layout.dialog_loading, requireActivity().findViewById(R.id.layout_dialog_loading));
@@ -143,7 +158,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                     picture_alpha = pictureData.getFloat(Config.DATA_PICTURE_ALPHA, Config.DATA_DEFAULT_PICTURE_ALPHA);
                     touch_and_move = pictureData.getBoolean(Config.DATA_PICTURE_TOUCH_AND_MOVE, Config.DATA_DEFAULT_PICTURE_TOUCH_AND_MOVE);
                     allow_picture_over_layout = pictureData.getBoolean(Config.DATA_ALLOW_PICTURE_OVER_LAYOUT, Config.DATA_DEFAULT_ALLOW_PICTURE_OVER_LAYOUT);
-                    bitmap = ImageMethods.getEditSourceBitmap(requireContext(), PictureId);
+                    bitmap = loadCurrentSourceBitmap();
                     if (bitmap == null) {
                         finishWithError(alertDialog);
                         return;
@@ -152,7 +167,9 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                     zoom = pictureData.getFloat(Config.DATA_PICTURE_ZOOM, default_zoom);
                     floatImageView = ImageMethods.getFloatImageViewById(requireContext(), PictureId);
                     if (floatImageView == null) {
-                        Bitmap displayBitmap = ImageMethods.getDisplayBitmap(requireContext(), PictureId, zoom, picture_degree);
+                        Bitmap displayBitmap = ImageMethods.hasPendingReplacementImage(PictureId)
+                                ? ImageMethods.createAndSaveDisplayBitmap(PictureId, bitmap, zoom, picture_degree)
+                                : ImageMethods.getDisplayBitmap(requireContext(), PictureId, zoom, picture_degree);
                         floatImageView = ImageMethods.createPictureView(requireContext(), displayBitmap, touch_and_move, allow_picture_over_layout, picture_alpha);
                         registerWorkingFloatImageView();
                     }
@@ -193,6 +210,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                         return;
                     }
                     bindPreferenceValues();
+                    updateReplacePicturePreferenceVisibility();
                     if (!Edit_Mode && floatImageView != null) {
                         // 新增模式：直接创建并显示悬浮窗
                         WindowsMethods.createWindow(windowManager, floatImageView, touch_and_move, allow_picture_over_layout, picture_alpha, position_x, position_y);
@@ -213,6 +231,12 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
     private void PreferenceSet() {
         requirePreference(Config.PREFERENCE_PICTURE_NAME).setOnPreferenceClickListener(preference -> {
             setPictureName();
+            return true;
+        });
+        Preference replacePreference = requirePreference(Config.PREFERENCE_PICTURE_REPLACE);
+        replacePreference.setVisible(false);
+        replacePreference.setOnPreferenceClickListener(preference -> {
+            replacePicture();
             return true;
         });
         requirePreference(Config.PREFERENCE_PICTURE_RESIZE).setOnPreferenceClickListener(preference -> {
@@ -258,11 +282,29 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         requireSwitchPreference(Config.PREFERENCE_ALLOW_PICTURE_OVER_LAYOUT).setChecked(allow_picture_over_layout);
     }
 
+    private void updateReplacePicturePreferenceVisibility() {
+        Preference replacePreference = findPreference(Config.PREFERENCE_PICTURE_REPLACE);
+        if (replacePreference != null) {
+            replacePreference.setVisible(Edit_Mode);
+        }
+    }
+
+    @Nullable
+    private Bitmap loadCurrentSourceBitmap() {
+        if (Edit_Mode && PictureId != null) {
+            Bitmap pendingBitmap = ImageMethods.getPendingEditSourceBitmap(PictureId);
+            if (pendingBitmap != null) {
+                return pendingBitmap;
+            }
+        }
+        return ImageMethods.getEditSourceBitmap(requireContext(), PictureId);
+    }
+
     private boolean ensureSourceBitmapLoaded() {
         if (bitmap != null && !bitmap.isRecycled()) {
             return true;
         }
-        bitmap = ImageMethods.getEditSourceBitmap(requireContext(), PictureId);
+        bitmap = loadCurrentSourceBitmap();
         if (bitmap == null || bitmap.isRecycled()) {
             bitmap = null;
             Toast.makeText(requireContext(), R.string.picture_settings_open_failed, Toast.LENGTH_SHORT).show();
@@ -356,6 +398,91 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         });
         dialog.setView(mView);
         dialog.show();
+    }
+
+    private void replacePicture() {
+        if (!Edit_Mode || PictureId == null || replacePictureLauncher == null) {
+            return;
+        }
+        replacePictureLauncher.launch("image/*");
+    }
+
+    private void onReplacementPictureSelected(@Nullable Uri uri) {
+        if (uri == null || !Edit_Mode || PictureId == null || shouldAbortFragmentWork()) {
+            return;
+        }
+        final Context appContext = requireContext().getApplicationContext();
+        AlertDialog.Builder loading = new AlertDialog.Builder(requireActivity());
+        loading.setCancelable(false);
+        View loadingView = inflater.inflate(R.layout.dialog_loading, requireActivity().findViewById(R.id.layout_dialog_loading));
+        loading.setView(loadingView);
+        final AlertDialog alertDialog = loading.show();
+        new Thread(() -> {
+            if (!ImageMethods.stageReplacementImage(appContext, PictureId, uri)) {
+                notifyReplacePictureFailed(alertDialog);
+                return;
+            }
+            Bitmap replacementBitmap = ImageMethods.getStagedReplacementBitmap(PictureId);
+            if (replacementBitmap == null) {
+                notifyReplacePictureFailed(alertDialog);
+                return;
+            }
+            float replacementDefaultZoom = ImageMethods.getDefaultZoom(appContext, replacementBitmap, false);
+            Bitmap displayBitmap = ImageMethods.createAndSaveDisplayBitmap(PictureId, replacementBitmap, zoom, picture_degree);
+            if (displayBitmap == null) {
+                ImageMethods.recycleBitmap(replacementBitmap);
+                notifyReplacePictureFailed(alertDialog);
+                return;
+            }
+            if (!ImageMethods.applyStagedReplacementImage(PictureId)) {
+                ImageMethods.recycleBitmap(replacementBitmap);
+                ImageMethods.recycleBitmap(displayBitmap);
+                notifyReplacePictureFailed(alertDialog);
+                return;
+            }
+            if (shouldAbortFragmentWork()) {
+                ImageMethods.recycleBitmap(replacementBitmap);
+                ImageMethods.recycleBitmap(displayBitmap);
+                requireActivity().runOnUiThread(() -> dismissDialogIfShowing(alertDialog));
+                return;
+            }
+            requireActivity().runOnUiThread(() -> {
+                if (shouldAbortFragmentWork()) {
+                    ImageMethods.recycleBitmap(replacementBitmap);
+                    ImageMethods.recycleBitmap(displayBitmap);
+                    dismissDialogIfShowing(alertDialog);
+                    return;
+                }
+                dismissDialogIfShowing(alertDialog);
+                releaseSourceBitmap();
+                bitmap = replacementBitmap;
+                default_zoom = replacementDefaultZoom;
+                if (floatImageView == null) {
+                    floatImageView = ImageMethods.createPictureView(requireContext(), displayBitmap, touch_and_move, allow_picture_over_layout, picture_alpha);
+                    registerWorkingFloatImageView();
+                } else {
+                    ImageMethods.setPictureBitmap(floatImageView, displayBitmap);
+                }
+                showWorkingWindowPreview(picture_alpha);
+                Toast.makeText(requireContext(), R.string.picture_settings_replace_success, Toast.LENGTH_SHORT).show();
+            });
+        }).start();
+    }
+
+    private void notifyReplacePictureFailed(AlertDialog alertDialog) {
+        if (PictureId != null) {
+            ImageMethods.clearStagedReplacementImage(PictureId);
+        }
+        if (!isAdded()) {
+            return;
+        }
+        requireActivity().runOnUiThread(() -> {
+            if (!isAdded() || getActivity() == null) {
+                return;
+            }
+            dismissDialogIfShowing(alertDialog);
+            Toast.makeText(requireContext(), R.string.picture_settings_replace_failed, Toast.LENGTH_SHORT).show();
+        });
     }
 
     private void setPictureSize() {
@@ -865,7 +992,16 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         if (!onUseEditPicture) {
             return;
         }
-        Bitmap displayBitmap = ImageMethods.createAndSaveDisplayBitmap(PictureId, zoom, picture_degree);
+        Bitmap displayBitmap;
+        if (Edit_Mode && PictureId != null && ImageMethods.hasPendingReplacementImage(PictureId)) {
+            if (!ensureSourceBitmapLoaded()) {
+                releaseEditResources();
+                return;
+            }
+            displayBitmap = ImageMethods.createAndSaveDisplayBitmap(PictureId, bitmap, zoom, picture_degree);
+        } else {
+            displayBitmap = ImageMethods.createAndSaveDisplayBitmap(PictureId, zoom, picture_degree);
+        }
         releaseEditResources(true);
         if (displayBitmap != null) {
             ImageMethods.setPictureBitmap(floatImageView, displayBitmap);
@@ -881,7 +1017,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         showWorkingWindowPreview(picture_alpha);
     }
 
-    public void saveAllData(Runnable onComplete) {
+    public void saveAllData(@Nullable Runnable onComplete, @Nullable Runnable onFailed) {
         // 若编辑前窗口是隐藏的，保存后仍保持隐藏（用户只修改设置，不改变显示状态）
         pictureData.put(Config.DATA_PICTURE_SHOW_ENABLED, !wasHidden);
         pictureData.put(Config.DATA_PICTURE_ZOOM, zoom);
@@ -908,6 +1044,21 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         final boolean snapshotOverLayout = allow_picture_over_layout;
         final boolean snapshotWasHidden = wasHidden;
         new Thread(() -> {
+            if (!ImageMethods.commitPendingReplacementImage(snapshotPictureId)) {
+                if (!isAdded() || getActivity() == null) {
+                    return;
+                }
+                requireActivity().runOnUiThread(() -> {
+                    if (!isAdded() || getActivity() == null) {
+                        return;
+                    }
+                    Toast.makeText(requireContext(), R.string.picture_settings_save_failed, Toast.LENGTH_SHORT).show();
+                    if (onFailed != null) {
+                        onFailed.run();
+                    }
+                });
+                return;
+            }
             // JSON 序列化写磁盘（阻塞 IO）
             pictureData.commit(snapshotPictureName);
             // Bitmap 缩放 + PNG 压缩写磁盘（CPU + IO 密集）
@@ -946,6 +1097,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                     restoreWorkingWindowVisibility(snapshotAlpha);
                 }
                 releaseEditResources(true);
+                changesSaved = true;
                 if (onComplete != null) {
                     onComplete.run();
                 }
@@ -999,6 +1151,8 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                 // updateWindow 走单窗口路径（alpha 上限 0.8），若存在其他可见窗口则需重新平衡
                 WindowsMethods.syncAllWindows(requireContext());
             }
+            ImageMethods.clearStagedReplacementImage(PictureId);
+            ImageMethods.clearPendingReplacementImage(PictureId);
             releaseSourceBitmap();
         }
     }

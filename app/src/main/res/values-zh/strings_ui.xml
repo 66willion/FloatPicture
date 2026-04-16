@@ -19,4 +19,7 @@
     <string name="main_trusted_overlay_off">Trusted 关</string>
     <string name="action_release_memory_result">内存清理完成：已清理%1$d个窗口缓存/异常悬浮项，清理%2$d个无用临时文件。</string>
     <string name="picture_settings_open_failed">无法打开这张图片。</string>
+    <string name="picture_settings_replace_success">图片已替换，当前参数已保留，记得点击右上角保存。</string>
+    <string name="picture_settings_replace_failed">替换图片失败，请重新选择一张图片。</string>
+    <string name="picture_settings_save_failed">保存图片设置失败，请重试。</string>
 </resources>

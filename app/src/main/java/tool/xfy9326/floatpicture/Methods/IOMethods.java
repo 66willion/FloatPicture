@@ -84,6 +84,30 @@ public class IOMethods {
         return false;
     }
 
+    static boolean copyFile(File source, File target) {
+        if (source == null || target == null || !source.exists() || !source.isFile()) {
+            return false;
+        }
+        try {
+            if (CheckFile(target, true)) {
+                return false;
+            }
+            try (InputStream inputStream = new FileInputStream(source);
+                 OutputStream outputStream = new FileOutputStream(target)) {
+                byte[] buffer = new byte[8192];
+                int readBytes;
+                while ((readBytes = inputStream.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, readBytes);
+                }
+                outputStream.flush();
+                return true;
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
     @SuppressWarnings("SameParameterValue")
     static void saveBitmapLossless(Bitmap bitmap, String path, boolean recycle) {
         File file = new File(path);

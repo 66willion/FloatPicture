@@ -74,10 +74,13 @@ public class PictureSettingsActivity extends AppCompatActivity {
         if (itemId == R.id.menu_picture_settings_save) {
             // 禁用保存按钮，防止用户在后台 IO 期间重复点击
             item.setEnabled(false);
-            mPictureSettingsFragment.saveAllData(() -> {
-                setSuccessResult();
-                finish();
-            });
+            mPictureSettingsFragment.saveAllData(
+                    () -> {
+                        setSuccessResult();
+                        finish();
+                    },
+                    () -> item.setEnabled(true)
+            );
         } else if (itemId == android.R.id.home) {
             mPictureSettingsFragment.exit();
             finish();

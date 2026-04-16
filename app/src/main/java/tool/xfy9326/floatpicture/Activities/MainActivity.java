@@ -347,7 +347,7 @@ public class MainActivity extends AppCompatActivity {
         if (trustedOverlayButton == null) {
             return;
         }
-        boolean trustedOverlayEnabled = TrustedOverlayAccessibilityService.isActive(this);
+        boolean trustedOverlayEnabled = TrustedOverlayAccessibilityService.isEnabled(this);
         int backgroundColor = ContextCompat.getColor(
                 this,
                 trustedOverlayEnabled ? R.color.colorTrustedOverlayOn : R.color.colorTrustedOverlayOff

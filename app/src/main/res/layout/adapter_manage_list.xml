@@ -1,110 +1,166 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content">
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="12dp"
+    app:cardBackgroundColor="@color/colorSurface"
+    app:cardCornerRadius="24dp"
+    app:cardElevation="0dp"
+    app:strokeColor="@color/colorCardStroke"
+    app:strokeWidth="1dp">
 
-    <androidx.cardview.widget.CardView xmlns:card_view="http://schemas.android.com/apk/res-auto"
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_margin="7dp"
-        android:clickable="true"
-        android:focusable="true"
-        android:foreground="?android:attr/selectableItemBackground"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
         android:orientation="horizontal"
-        card_view:cardCornerRadius="2dp"
-        card_view:cardElevation="5dp"
-        card_view:cardPreventCornerOverlap="true">
+        android:padding="16dp">
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:layout_margin="6dp">
-
+        <FrameLayout
+            android:layout_width="92dp"
+            android:layout_height="116dp"
+            android:background="@drawable/bg_preview_surface">
 
             <ImageView
                 android:id="@+id/adapter_picture_preview"
-                android:layout_width="80dp"
-                android:layout_height="100dp"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_margin="10dp"
                 android:contentDescription="@string/adapter_image_description"
-                android:src="@color/cardview_light_background"
+                android:scaleType="fitCenter"
                 tools:ignore="PrivateResource" />
 
+        </FrameLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
             <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="2"
-                android:orientation="vertical"
-                android:padding="10dp">
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
                 <TextView
                     android:id="@+id/adapter_picture_name"
-                    android:layout_width="match_parent"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
+                    android:layout_weight="1"
                     android:ellipsize="end"
+                    android:fontFamily="sans-serif-medium"
                     android:maxLines="1"
-                    android:textSize="18sp"
-                    android:textStyle="bold" />
+                    android:textColor="@color/colorTextPrimary"
+                    android:textSize="18sp" />
 
-                <TextView
-                    android:id="@+id/adapter_picture_id"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
-                    android:ellipsize="end"
-                    android:maxLines="1"
-                    android:textSize="14sp" />
-
-                <TextView
-                    android:id="@+id/adapter_picture_error"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
-                    android:text="@string/error_picture_not_found"
-                    android:textColor="@android:color/holo_red_light"
-                    android:visibility="invisible" />
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/adapter_picture_show"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
 
             </LinearLayout>
 
+            <TextView
+                android:id="@+id/adapter_picture_id"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:ellipsize="middle"
+                android:fontFamily="monospace"
+                android:maxLines="1"
+                android:textColor="@color/colorTextSecondary"
+                android:textSize="12sp" />
+
             <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="1"
-                android:gravity="center|end"
-                android:orientation="vertical">
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:orientation="horizontal">
 
-                <androidx.appcompat.widget.SwitchCompat
-                    android:id="@+id/adapter_picture_show"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content" />
-
-                <RelativeLayout
-                    android:layout_width="match_parent"
+                <TextView
+                    android:id="@+id/adapter_picture_visible"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="20dp">
+                    android:paddingStart="10dp"
+                    android:paddingTop="6dp"
+                    android:paddingEnd="10dp"
+                    android:paddingBottom="6dp"
+                    android:textSize="12sp"
+                    tools:text="Visible" />
 
-                    <Button
-                        android:id="@+id/adapter_picture_delete"
-                        android:layout_width="35dp"
-                        android:layout_height="35dp"
-                        android:layout_alignParentStart="false"
-                        android:layout_marginEnd="8dp"
-                        android:layout_toStartOf="@+id/adapter_picture_edit"
-                        android:background="@drawable/ic_delete" />
+                <TextView
+                    android:id="@+id/adapter_picture_touch_mode"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:paddingStart="10dp"
+                    android:paddingTop="6dp"
+                    android:paddingEnd="10dp"
+                    android:paddingBottom="6dp"
+                    android:textSize="12sp"
+                    tools:text="Click-through" />
 
-                    <Button
-                        android:id="@+id/adapter_picture_edit"
-                        android:layout_width="35dp"
-                        android:layout_height="35dp"
-                        android:layout_alignParentEnd="true"
-                        android:layout_marginEnd="5dp"
-                        android:background="@drawable/ic_edit" />
-                </RelativeLayout>
+                <TextView
+                    android:id="@+id/adapter_picture_boundary"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:paddingStart="10dp"
+                    android:paddingTop="6dp"
+                    android:paddingEnd="10dp"
+                    android:paddingBottom="6dp"
+                    android:textSize="12sp"
+                    tools:text="Screen-bound" />
+
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/adapter_picture_error"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/error_picture_not_found"
+                android:textColor="@color/colorStatusDangerText"
+                android:textSize="13sp"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:gravity="end"
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/adapter_picture_edit"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="0dp"
+                    android:text="@string/manage_action_edit"
+                    android:textAllCaps="false" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/adapter_picture_delete"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:minWidth="0dp"
+                    android:text="@string/manage_action_delete"
+                    android:textAllCaps="false"
+                    android:textColor="@color/colorStatusDangerText"
+                    app:strokeColor="@color/colorStatusDangerText" />
 
             </LinearLayout>
 
         </LinearLayout>
 
-    </androidx.cardview.widget.CardView>
+    </LinearLayout>
 
-</LinearLayout>
+</com.google.android.material.card.MaterialCardView>

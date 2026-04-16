@@ -1,9 +1,11 @@
 package tool.xfy9326.floatpicture.View;
 
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.Point;
+import android.os.Build;
 import android.os.Bundle;
 import android.text.InputType;
 import android.view.LayoutInflater;
@@ -14,16 +16,20 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import android.util.Log;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
-import androidx.preference.CheckBoxPreference;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.PreferenceManager;
+import androidx.preference.SwitchPreferenceCompat;
 
+import java.util.LinkedHashMap;
 import java.util.Objects;
 
+import tool.xfy9326.floatpicture.MainApplication;
 import tool.xfy9326.floatpicture.Methods.ImageMethods;
 import tool.xfy9326.floatpicture.Methods.WindowsMethods;
 import tool.xfy9326.floatpicture.R;
@@ -40,7 +46,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
     private String PictureId;
     private String PictureName;
     private WindowManager windowManager;
-    private FloatImageView floatImageView;
+    private volatile FloatImageView floatImageView;
     private Bitmap bitmap;
     private Bitmap bitmap_Edit;
     private FloatImageView floatImageView_Edit;
@@ -57,6 +63,9 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
     private int position_x_temp;
     private int position_y_temp;
     private boolean allow_picture_over_layout;
+    /** 进入编辑时窗口是否处于隐藏状态；编辑完成后恢复该状态 */
+    private boolean wasHidden = false;
+    private volatile boolean fragmentClosing = false;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -64,7 +73,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         Window_Created = false;
         Edit_Mode = false;
         pictureData = new PictureData();
-        inflater = LayoutInflater.from(getActivity());
+        inflater = LayoutInflater.from(requireActivity());
         windowManager = WindowsMethods.getWindowManager(requireActivity());
     }
 
@@ -76,9 +85,16 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
+        fragmentClosing = false;
         restoreData(savedInstanceState);
-        setMode();
         PreferenceSet();
+        setMode();
+    }
+
+    @Override
+    public void onDestroy() {
+        fragmentClosing = true;
+        super.onDestroy();
     }
 
     @Override
@@ -97,11 +113,9 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
     private void setMode() {
         Intent intent = Objects.requireNonNull(requireActivity().getIntent());
         Edit_Mode = intent.getBooleanExtra(Config.INTENT_PICTURE_EDIT_MODE, false);
+        wasHidden = intent.getBooleanExtra(Config.INTENT_PICTURE_WAS_HIDDEN, false);
         AlertDialog.Builder loading = new AlertDialog.Builder(requireActivity());
         loading.setCancelable(false);
-        if (!Edit_Mode) {
-            loading.setOnCancelListener(dialog -> WindowsMethods.createWindow(windowManager, floatImageView, touch_and_move, allow_picture_over_layout, position_x, position_y));
-        }
         View mView = inflater.inflate(R.layout.dialog_loading, requireActivity().findViewById(R.id.layout_dialog_loading));
         loading.setView(mView);
         final AlertDialog alertDialog = loading.show();
@@ -110,21 +124,44 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                 if (Edit_Mode) {
                     //Edit
                     PictureId = intent.getStringExtra(Config.INTENT_PICTURE_EDIT_ID);
+                    if (PictureId == null) {
+                        finishWithError(alertDialog);
+                        return;
+                    }
                     pictureData.setDataControl(PictureId);
-                    PictureName = pictureData.getListArray().get(PictureId);
+                    LinkedHashMap<String, String> listArray = pictureData.getListArray();
+                    if (listArray == null || !listArray.containsKey(PictureId)) {
+                        finishWithError(alertDialog);
+                        return;
+                    }
+                    PictureName = listArray.get(PictureId);
                     position_x = pictureData.getInt(Config.DATA_PICTURE_POSITION_X, Config.DATA_DEFAULT_PICTURE_POSITION_X);
                     position_y = pictureData.getInt(Config.DATA_PICTURE_POSITION_Y, Config.DATA_DEFAULT_PICTURE_POSITION_Y);
                     picture_degree = pictureData.getFloat(Config.DATA_PICTURE_DEGREE, Config.DATA_DEFAULT_PICTURE_DEGREE);
                     picture_alpha = pictureData.getFloat(Config.DATA_PICTURE_ALPHA, Config.DATA_DEFAULT_PICTURE_ALPHA);
                     touch_and_move = pictureData.getBoolean(Config.DATA_PICTURE_TOUCH_AND_MOVE, Config.DATA_DEFAULT_PICTURE_TOUCH_AND_MOVE);
                     allow_picture_over_layout = pictureData.getBoolean(Config.DATA_ALLOW_PICTURE_OVER_LAYOUT, Config.DATA_DEFAULT_ALLOW_PICTURE_OVER_LAYOUT);
-                    bitmap = ImageMethods.getShowBitmap(requireContext(), PictureId);
+                    bitmap = ImageMethods.getEditSourceBitmap(requireContext(), PictureId);
+                    if (bitmap == null) {
+                        finishWithError(alertDialog);
+                        return;
+                    }
                     default_zoom = ImageMethods.getDefaultZoom(requireContext(), bitmap, false);
                     zoom = pictureData.getFloat(Config.DATA_PICTURE_ZOOM, default_zoom);
                     floatImageView = ImageMethods.getFloatImageViewById(requireContext(), PictureId);
+                    if (floatImageView == null) {
+                        Bitmap displayBitmap = ImageMethods.getDisplayBitmap(requireContext(), PictureId, zoom, picture_degree);
+                        floatImageView = ImageMethods.createPictureView(requireContext(), displayBitmap, touch_and_move, allow_picture_over_layout, picture_alpha);
+                        registerWorkingFloatImageView();
+                    }
+                    floatImageView.setPictureAlpha(picture_alpha);
                 } else {
                     //New
-                    PictureId = ImageMethods.setNewImage(getActivity(), intent.getData());
+                    PictureId = ImageMethods.setNewImage(requireActivity(), intent.getData());
+                    if (PictureId == null) {
+                        finishWithError(alertDialog);
+                        return;
+                    }
                     pictureData.setDataControl(PictureId);
                     PictureName = getString(R.string.new_picture_name);
                     position_x = Config.DATA_DEFAULT_PICTURE_POSITION_X;
@@ -133,14 +170,35 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                     picture_degree = Config.DATA_DEFAULT_PICTURE_DEGREE;
                     touch_and_move = Config.DATA_DEFAULT_PICTURE_TOUCH_AND_MOVE;
                     allow_picture_over_layout = Config.DATA_DEFAULT_ALLOW_PICTURE_OVER_LAYOUT;
-                    bitmap = ImageMethods.getShowBitmap(requireContext(), PictureId);
+                    bitmap = ImageMethods.getEditSourceBitmap(requireContext(), PictureId);
+                    if (bitmap == null) {
+                        finishWithError(alertDialog);
+                        return;
+                    }
                     default_zoom = ImageMethods.getDefaultZoom(requireContext(), bitmap, false);
                     zoom = default_zoom;
-                    floatImageView = ImageMethods.createPictureView(requireContext(), bitmap, touch_and_move, allow_picture_over_layout, zoom, picture_degree);
-                    floatImageView.setAlpha(picture_alpha);
-                    floatImageView.setPictureId(PictureId);
+                    Bitmap displayBitmap = ImageMethods.createAndSaveDisplayBitmap(PictureId, zoom, picture_degree);
+                    floatImageView = ImageMethods.createPictureView(requireContext(), displayBitmap, touch_and_move, allow_picture_over_layout, picture_alpha);
+                    registerWorkingFloatImageView();
                 }
-                alertDialog.cancel();
+                if (shouldAbortFragmentWork()) {
+                    dismissDialogIfShowing(alertDialog);
+                    return;
+                }
+                requireActivity().runOnUiThread(() -> {
+                    if (shouldAbortFragmentWork()) {
+                        dismissDialogIfShowing(alertDialog);
+                        return;
+                    }
+                    bindPreferenceValues();
+                    if (!Edit_Mode && floatImageView != null) {
+                        // 新增模式：直接创建并显示悬浮窗
+                        WindowsMethods.createWindow(windowManager, floatImageView, touch_and_move, allow_picture_over_layout, picture_alpha, position_x, position_y);
+                    } else if (Edit_Mode && floatImageView != null) {
+                        showWorkingWindowPreview(picture_alpha);
+                    }
+                    dismissDialogIfShowing(alertDialog);
+                });
             }
         }).start();
     }
@@ -164,12 +222,10 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
             return true;
         });
         requirePreference(Config.PREFERENCE_PICTURE_ALPHA).setOnPreferenceClickListener(preference -> {
-            setPictureAlpha();
+            showPictureAlphaDialog();
             return true;
         });
-        CheckBoxPreference preference_touch_and_move = findPreference(Config.PREFERENCE_PICTURE_TOUCH_AND_MOVE);
-        assert preference_touch_and_move != null;
-        preference_touch_and_move.setChecked(touch_and_move);
+        SwitchPreferenceCompat preference_touch_and_move = requireSwitchPreference(Config.PREFERENCE_PICTURE_TOUCH_AND_MOVE);
         preference_touch_and_move.setOnPreferenceChangeListener((preference, newValue) -> {
             if ((boolean) newValue) {
                 PictureTouchAndMoveAlert();
@@ -179,9 +235,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                 return true;
             }
         });
-        CheckBoxPreference preference_over_layout = findPreference(Config.PREFERENCE_ALLOW_PICTURE_OVER_LAYOUT);
-        assert preference_over_layout != null;
-        preference_over_layout.setChecked(allow_picture_over_layout);
+        SwitchPreferenceCompat preference_over_layout = requireSwitchPreference(Config.PREFERENCE_ALLOW_PICTURE_OVER_LAYOUT);
         preference_over_layout.setOnPreferenceChangeListener((preference, newValue) -> {
             setAllowPictureOverLayout((boolean) newValue);
             return true;
@@ -192,18 +246,64 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         });
     }
 
+    @NonNull
+    private SwitchPreferenceCompat requireSwitchPreference(CharSequence key) {
+        return Objects.requireNonNull(findPreference(key));
+    }
+
+    private void bindPreferenceValues() {
+        requireSwitchPreference(Config.PREFERENCE_PICTURE_TOUCH_AND_MOVE).setChecked(touch_and_move);
+        requireSwitchPreference(Config.PREFERENCE_ALLOW_PICTURE_OVER_LAYOUT).setChecked(allow_picture_over_layout);
+    }
+
+    private boolean ensureSourceBitmapLoaded() {
+        if (bitmap != null && !bitmap.isRecycled()) {
+            return true;
+        }
+        bitmap = ImageMethods.getEditSourceBitmap(requireContext(), PictureId);
+        if (bitmap == null || bitmap.isRecycled()) {
+            bitmap = null;
+            Toast.makeText(requireContext(), R.string.picture_settings_open_failed, Toast.LENGTH_SHORT).show();
+            return false;
+        }
+        return true;
+    }
+
+    private void releaseSourceBitmap() {
+        ImageMethods.recycleBitmap(bitmap);
+        bitmap = null;
+    }
+
+    private void releaseEditResources() {
+        releaseEditResources(false);
+    }
+
+    private void releaseEditResources(boolean releaseSourceBitmapNow) {
+        FloatImageView editView = floatImageView_Edit;
+        Bitmap editBitmap = bitmap_Edit;
+        floatImageView_Edit = null;
+        bitmap_Edit = null;
+        if (editView != null) {
+            removeViewIfAttached(editView);
+            ImageMethods.releasePictureView(editView);
+        }
+        ImageMethods.recycleBitmap(editBitmap);
+        if (releaseSourceBitmapNow) {
+            releaseSourceBitmap();
+        }
+        onUseEditPicture = false;
+    }
+
     private void setAllowPictureOverLayout(boolean allow) {
         allow_picture_over_layout = allow;
-        windowManager.removeView(floatImageView);
         floatImageView.setOverLayout(allow_picture_over_layout);
-        WindowsMethods.createWindow(windowManager, floatImageView, touch_and_move, allow, position_x, position_y);
+        showWorkingWindowPreview(picture_alpha);
     }
 
     private void setPictureTouchAndMove(boolean touchable_and_moveable) {
         touch_and_move = touchable_and_moveable;
-        windowManager.removeView(floatImageView);
         floatImageView.setMoveable(touchable_and_moveable);
-        WindowsMethods.createWindow(windowManager, floatImageView, touchable_and_moveable, allow_picture_over_layout, position_x, position_y);
+        showWorkingWindowPreview(picture_alpha);
     }
 
     private void PictureTouchAndMoveAlert() {
@@ -212,11 +312,26 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         builder.setMessage(R.string.settings_picture_touchable_and_moveable_warn);
         builder.setCancelable(false);
         builder.setPositiveButton(R.string.done, (dialog, which) -> {
-            ((CheckBoxPreference) Objects.requireNonNull(findPreference(Config.PREFERENCE_PICTURE_TOUCH_AND_MOVE))).setChecked(true);
+            requireSwitchPreference(Config.PREFERENCE_PICTURE_TOUCH_AND_MOVE).setChecked(true);
             setPictureTouchAndMove(true);
         });
         builder.setNegativeButton(R.string.cancel, null);
         builder.show();
+    }
+
+    private void finishWithError(AlertDialog alertDialog) {
+        if (!isAdded()) {
+            return;
+        }
+        requireActivity().runOnUiThread(() -> {
+            if (!isAdded() || getActivity() == null) {
+                return;
+            }
+            dismissDialogIfShowing(alertDialog);
+            fragmentClosing = true;
+            Toast.makeText(requireContext(), R.string.picture_settings_open_failed, Toast.LENGTH_SHORT).show();
+            requireActivity().finish();
+        });
     }
 
     private void setPictureName() {
@@ -227,14 +342,14 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         editText.setText(PictureName);
         dialog.setPositiveButton(R.string.done, (dialog12, which) -> {
             if (editText.getText().toString().isEmpty()) {
-                Toast.makeText(getActivity(), R.string.settings_picture_name_warn, Toast.LENGTH_SHORT).show();
+                Toast.makeText(requireContext(), R.string.settings_picture_name_warn, Toast.LENGTH_SHORT).show();
             } else {
                 PictureName = editText.getText().toString();
             }
         });
         dialog.setNegativeButton(R.string.cancel, (dialog1, which) -> {
             if (editText.getText().toString().isEmpty()) {
-                Toast.makeText(getActivity(), R.string.settings_picture_name_warn, Toast.LENGTH_SHORT).show();
+                Toast.makeText(requireContext(), R.string.settings_picture_name_warn, Toast.LENGTH_SHORT).show();
             }
         });
         dialog.setView(mView);
@@ -242,8 +357,11 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
     }
 
     private void setPictureSize() {
-        bitmap_Edit = ImageMethods.getEditBitmap(getActivity(), bitmap);
-        floatImageView_Edit = ImageMethods.createPictureView(getActivity(), bitmap_Edit, touch_and_move, allow_picture_over_layout, zoom, picture_degree);
+        if (!ensureSourceBitmapLoaded()) {
+            return;
+        }
+        bitmap_Edit = ImageMethods.getEditBitmap(requireActivity(), bitmap);
+        floatImageView_Edit = ImageMethods.createPictureView(requireActivity(), bitmap_Edit, touch_and_move, allow_picture_over_layout, picture_alpha, zoom, picture_degree);
         onEditPicture(floatImageView_Edit);
 
         View mView = inflater.inflate(R.layout.dialog_set_size, requireActivity().findViewById(R.id.layout_dialog_set_size));
@@ -265,7 +383,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                 if (progress > 0) {
                     zoom_temp = ((float) progress) / 100;
                     editText.setText(String.valueOf(zoom_temp));
-                    WindowsMethods.updateWindow(windowManager, floatImageView_Edit, bitmap_Edit, touch_and_move, allow_picture_over_layout, zoom_temp, picture_degree, position_x, position_y);
+                    WindowsMethods.updateWindow(windowManager, floatImageView_Edit, bitmap_Edit, touch_and_move, allow_picture_over_layout, picture_alpha, zoom_temp, picture_degree, position_x, position_y);
                 }
             }
 
@@ -278,15 +396,19 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
             }
         });
         editText.setOnEditorActionListener((v, actionId, event) -> {
-            float edittext_temp = Float.parseFloat(v.getText().toString());
-            if (edittext_temp > 0 && (allow_picture_over_layout || edittext_temp <= Max_Size)) {
-                zoom_temp = edittext_temp;
-                if (!allow_picture_over_layout) {
-                    seekBar.setProgress((int) (zoom_temp * 100));
+            try {
+                float edittext_temp = Float.parseFloat(v.getText().toString());
+                if (edittext_temp > 0 && (allow_picture_over_layout || edittext_temp <= Max_Size)) {
+                    zoom_temp = edittext_temp;
+                    if (!allow_picture_over_layout) {
+                        seekBar.setProgress((int) (zoom_temp * 100));
+                    }
+                    WindowsMethods.updateWindow(windowManager, floatImageView_Edit, bitmap_Edit, touch_and_move, allow_picture_over_layout, picture_alpha, zoom_temp, picture_degree, position_x, position_y);
+                } else {
+                    Toast.makeText(requireContext(), R.string.settings_picture_resize_warn, Toast.LENGTH_SHORT).show();
                 }
-                WindowsMethods.updateWindow(windowManager, floatImageView_Edit, bitmap_Edit, touch_and_move, allow_picture_over_layout, zoom_temp, picture_degree, position_x, position_y);
-            } else {
-                Toast.makeText(getActivity(), R.string.settings_picture_resize_warn, Toast.LENGTH_SHORT).show();
+            } catch (NumberFormatException ignored) {
+                Toast.makeText(requireContext(), R.string.settings_number_warn, Toast.LENGTH_SHORT).show();
             }
             return false;
         });
@@ -301,16 +423,27 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
             } else {
                 zoom = zoom_temp;
             }
-            onSuccessEditPicture(floatImageView_Edit, bitmap_Edit);
+            onSuccessEditPicture();
         });
-        dialog.setNegativeButton(R.string.cancel, (__, which) -> onFailedEditPicture(floatImageView_Edit, bitmap_Edit));
+        dialog.setNegativeButton(R.string.cancel, (__, which) -> onFailedEditPicture());
         dialog.setView(mView);
-        dialog.show();
+        // 用户按返回键关闭对话框时，OnDismissListener 保证资源一定被回收
+        AlertDialog alertDialog = dialog.show();
+        alertDialog.setOnDismissListener(d -> {
+            if (onUseEditPicture) {
+                onFailedEditPicture();
+            } else if (floatImageView_Edit != null || bitmap_Edit != null) {
+                releaseEditResources();
+            }
+        });
     }
 
     private void setPictureDegree() {
-        bitmap_Edit = ImageMethods.getEditBitmap(getActivity(), bitmap);
-        floatImageView_Edit = ImageMethods.createPictureView(getActivity(), bitmap_Edit, touch_and_move, allow_picture_over_layout, zoom, picture_degree);
+        if (!ensureSourceBitmapLoaded()) {
+            return;
+        }
+        bitmap_Edit = ImageMethods.getEditBitmap(requireActivity(), bitmap);
+        floatImageView_Edit = ImageMethods.createPictureView(requireActivity(), bitmap_Edit, touch_and_move, allow_picture_over_layout, picture_alpha, zoom, picture_degree);
         onEditPicture(floatImageView_Edit);
 
         View mView = inflater.inflate(R.layout.dialog_set_size, requireActivity().findViewById(R.id.layout_dialog_set_size));
@@ -330,7 +463,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 picture_degree_temp = ((float) progress) / 10;
                 editText.setText(String.valueOf(((float) Math.round(picture_degree_temp * 10)) / 10));
-                WindowsMethods.updateWindow(windowManager, floatImageView_Edit, bitmap_Edit, touch_and_move, allow_picture_over_layout, zoom, picture_degree_temp, position_x, position_y);
+                WindowsMethods.updateWindow(windowManager, floatImageView_Edit, bitmap_Edit, touch_and_move, allow_picture_over_layout, picture_alpha, zoom, picture_degree_temp, position_x, position_y);
             }
 
             @Override
@@ -342,26 +475,39 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
             }
         });
         editText.setOnEditorActionListener((v, actionId, event) -> {
-            float edittext_temp = Float.parseFloat(v.getText().toString());
-            if (edittext_temp >= 0 && edittext_temp <= 360) {
-                picture_degree_temp = edittext_temp;
-                seekBar.setProgress((int) (picture_degree_temp * 10));
-                WindowsMethods.updateWindow(windowManager, floatImageView_Edit, bitmap_Edit, touch_and_move, allow_picture_over_layout, zoom, picture_degree_temp, position_x, position_y);
-            } else {
-                Toast.makeText(getActivity(), R.string.settings_number_warn, Toast.LENGTH_SHORT).show();
+            try {
+                float edittext_temp = Float.parseFloat(v.getText().toString());
+                if (edittext_temp >= 0 && edittext_temp <= 360) {
+                    picture_degree_temp = edittext_temp;
+                    seekBar.setProgress((int) (picture_degree_temp * 10));
+                    WindowsMethods.updateWindow(windowManager, floatImageView_Edit, bitmap_Edit, touch_and_move, allow_picture_over_layout, picture_alpha, zoom, picture_degree_temp, position_x, position_y);
+                } else {
+                    Toast.makeText(requireContext(), R.string.settings_number_warn, Toast.LENGTH_SHORT).show();
+                }
+            } catch (NumberFormatException ignored) {
+                Toast.makeText(requireContext(), R.string.settings_number_warn, Toast.LENGTH_SHORT).show();
             }
             return false;
         });
         dialog.setPositiveButton(R.string.done, (__, which) -> {
             picture_degree = picture_degree_temp;
-            onSuccessEditPicture(floatImageView_Edit, bitmap_Edit);
+            onSuccessEditPicture();
         });
-        dialog.setNegativeButton(R.string.cancel, (__, which) -> onFailedEditPicture(floatImageView_Edit, bitmap_Edit));
+        dialog.setNegativeButton(R.string.cancel, (__, which) -> onFailedEditPicture());
         dialog.setView(mView);
-        dialog.show();
+        // 用户按返回键关闭对话框时，OnDismissListener 保证资源一定被回收
+        AlertDialog alertDialogDegree = dialog.show();
+        alertDialogDegree.setOnDismissListener(d -> {
+            if (onUseEditPicture) {
+                onFailedEditPicture();
+            } else if (floatImageView_Edit != null || bitmap_Edit != null) {
+                releaseEditResources();
+            }
+        });
     }
 
-    private void setPictureAlpha() {
+    // 方法名改为 showPictureAlphaDialog 避免与 FloatImageView.setPictureAlpha(float) 重名
+    private void showPictureAlphaDialog() {
         View mView = inflater.inflate(R.layout.dialog_set_size, requireActivity().findViewById(R.id.layout_dialog_set_size));
         AlertDialog.Builder dialog = new AlertDialog.Builder(requireContext());
         dialog.setTitle(R.string.settings_picture_alpha);
@@ -379,8 +525,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 picture_alpha_temp = ((float) progress) / 100;
                 editText.setText(String.valueOf(picture_alpha_temp));
-                floatImageView.setAlpha(picture_alpha_temp);
-                WindowsMethods.updateWindow(windowManager, floatImageView, touch_and_move, allow_picture_over_layout, position_x, position_y);
+                showWorkingWindowPreview(picture_alpha_temp);
             }
 
             @Override
@@ -392,46 +537,49 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
             }
         });
         editText.setOnEditorActionListener((v, actionId, event) -> {
-            float edittext_temp = Float.parseFloat(v.getText().toString());
-            if (edittext_temp >= 0 && edittext_temp <= 100) {
-                picture_alpha_temp = edittext_temp;
-                seekBar.setProgress((int) (picture_alpha_temp * 100));
-                floatImageView.setAlpha(picture_alpha_temp);
-                WindowsMethods.updateWindow(windowManager, floatImageView, touch_and_move, allow_picture_over_layout, position_x, position_y);
-            } else {
-                Toast.makeText(getActivity(), R.string.settings_number_warn, Toast.LENGTH_SHORT).show();
+            try {
+                float edittext_temp = Float.parseFloat(v.getText().toString());
+                if (edittext_temp >= 0 && edittext_temp <= 1) {
+                    picture_alpha_temp = edittext_temp;
+                    seekBar.setProgress((int) (picture_alpha_temp * 100));
+                    showWorkingWindowPreview(picture_alpha_temp);
+                } else {
+                    Toast.makeText(requireContext(), R.string.settings_number_warn, Toast.LENGTH_SHORT).show();
+                }
+            } catch (NumberFormatException ignored) {
+                Toast.makeText(requireContext(), R.string.settings_number_warn, Toast.LENGTH_SHORT).show();
             }
             return false;
         });
         dialog.setPositiveButton(R.string.done, (__, which) -> {
             picture_alpha = picture_alpha_temp;
-            floatImageView.setAlpha(picture_alpha);
-            WindowsMethods.updateWindow(windowManager, floatImageView, touch_and_move, allow_picture_over_layout, position_x, position_y);
+            showWorkingWindowPreview(picture_alpha);
         });
         dialog.setNegativeButton(R.string.cancel, (__, which) -> {
-            floatImageView.setAlpha(picture_alpha);
-            WindowsMethods.updateWindow(windowManager, floatImageView, touch_and_move, allow_picture_over_layout, position_x, position_y);
+            showWorkingWindowPreview(picture_alpha);
         });
         dialog.setView(mView);
         dialog.show();
     }
 
     private void setPicturePosition() {
+        if (!ensureSourceBitmapLoaded()) {
+            return;
+        }
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(requireContext());
         final boolean touchable_edit = (touch_and_move || sharedPreferences.getBoolean(Config.PREFERENCE_TOUCHABLE_POSITION_EDIT, false));
-        bitmap_Edit = ImageMethods.getEditBitmap(getActivity(), bitmap);
-        floatImageView_Edit = ImageMethods.createPictureView(getActivity(), bitmap_Edit, touchable_edit, allow_picture_over_layout, zoom, picture_degree);
+        bitmap_Edit = ImageMethods.getEditBitmap(requireActivity(), bitmap);
+        floatImageView_Edit = ImageMethods.createPictureView(requireActivity(), bitmap_Edit, touchable_edit, allow_picture_over_layout, picture_alpha, zoom, picture_degree);
         onEditPicture(floatImageView_Edit);
         if (touchable_edit) {
-            WindowsMethods.updateWindow(windowManager, floatImageView_Edit, bitmap_Edit, true, allow_picture_over_layout, zoom, picture_degree, position_x, position_y);
+            WindowsMethods.updateWindow(windowManager, floatImageView_Edit, bitmap_Edit, true, allow_picture_over_layout, picture_alpha, zoom, picture_degree, position_x, position_y);
         }
 
         View mView = inflater.inflate(R.layout.dialog_set_position, requireActivity().findViewById(R.id.layout_dialog_set_position));
         AlertDialog.Builder dialog = new AlertDialog.Builder(requireContext());
         dialog.setTitle(R.string.settings_picture_position);
         dialog.setCancelable(false);
-        Point size = new Point();
-        requireActivity().getWindowManager().getDefaultDisplay().getSize(size);
+        Point size = getWindowSize();
         final int Max_X = size.x;
         final int Max_Y = size.y;
         final SeekBar seekBar_x = mView.findViewById(R.id.seekbar_set_position_x);
@@ -459,7 +607,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 position_x_temp = progress;
                 editText_x.setText(String.valueOf(progress));
-                WindowsMethods.updateWindow(windowManager, floatImageView_Edit, bitmap_Edit, touchable_edit, allow_picture_over_layout, zoom, picture_degree, position_x_temp, position_y_temp);
+                WindowsMethods.updateWindow(windowManager, floatImageView_Edit, bitmap_Edit, touchable_edit, allow_picture_over_layout, picture_alpha, zoom, picture_degree, position_x_temp, position_y_temp);
             }
 
             @Override
@@ -478,9 +626,9 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                     if (!allow_picture_over_layout) {
                         seekBar_x.setProgress(edittext_temp);
                     }
-                    WindowsMethods.updateWindow(windowManager, floatImageView_Edit, bitmap_Edit, touchable_edit, allow_picture_over_layout, zoom, picture_degree, position_x_temp, position_y_temp);
+                    WindowsMethods.updateWindow(windowManager, floatImageView_Edit, bitmap_Edit, touchable_edit, allow_picture_over_layout, picture_alpha, zoom, picture_degree, position_x_temp, position_y_temp);
                 } else {
-                    Toast.makeText(getActivity(), R.string.settings_picture_position_warn, Toast.LENGTH_SHORT).show();
+                    Toast.makeText(requireContext(), R.string.settings_picture_position_warn, Toast.LENGTH_SHORT).show();
                 }
             } catch (Exception e) {
                 e.printStackTrace();
@@ -492,7 +640,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 position_y_temp = progress;
                 editText_y.setText(String.valueOf(progress));
-                WindowsMethods.updateWindow(windowManager, floatImageView_Edit, bitmap_Edit, touchable_edit, allow_picture_over_layout, zoom, picture_degree, position_x_temp, position_y_temp);
+                WindowsMethods.updateWindow(windowManager, floatImageView_Edit, bitmap_Edit, touchable_edit, allow_picture_over_layout, picture_alpha, zoom, picture_degree, position_x_temp, position_y_temp);
             }
 
             @Override
@@ -511,9 +659,9 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                     if (!allow_picture_over_layout) {
                         seekBar_y.setProgress(edittext_temp);
                     }
-                    WindowsMethods.updateWindow(windowManager, floatImageView_Edit, bitmap_Edit, touchable_edit, allow_picture_over_layout, zoom, picture_degree, position_x_temp, position_y_temp);
+                    WindowsMethods.updateWindow(windowManager, floatImageView_Edit, bitmap_Edit, touchable_edit, allow_picture_over_layout, picture_alpha, zoom, picture_degree, position_x_temp, position_y_temp);
                 } else {
-                    Toast.makeText(getActivity(), R.string.settings_picture_position_warn, Toast.LENGTH_SHORT).show();
+                    Toast.makeText(requireContext(), R.string.settings_picture_position_warn, Toast.LENGTH_SHORT).show();
                 }
             } catch (Exception e) {
                 e.printStackTrace();
@@ -528,7 +676,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
             dialog.setNeutralButton(R.string.save_moved_position, (dialog1, which) -> {
                 position_x = (int) floatImageView_Edit.getMovedPositionX();
                 position_y = (int) floatImageView_Edit.getMovedPositionY();
-                onSuccessEditPicture(floatImageView_Edit, bitmap_Edit);
+                onSuccessEditPicture();
             });
         }
         dialog.setPositiveButton(R.string.done, (__, which) -> {
@@ -545,45 +693,143 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                 position_x = position_x_temp;
                 position_y = position_y_temp;
             }
-            onSuccessEditPicture(floatImageView_Edit, bitmap_Edit);
+            onSuccessEditPicture();
         });
-        dialog.setNegativeButton(R.string.cancel, (__, which) -> onFailedEditPicture(floatImageView_Edit, bitmap_Edit));
+        dialog.setNegativeButton(R.string.cancel, (__, which) -> onFailedEditPicture());
         dialog.setView(mView);
-        dialog.show();
+        // 用户按返回键关闭对话框时，OnDismissListener 保证资源一定被回收
+        AlertDialog alertDialogPosition = dialog.show();
+        alertDialogPosition.setOnDismissListener(d -> {
+            if (onUseEditPicture) {
+                onFailedEditPicture();
+            } else if (floatImageView_Edit != null || bitmap_Edit != null) {
+                releaseEditResources();
+            }
+        });
+    }
+
+    private Point getWindowSize() {
+        Point size = new Point();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            android.graphics.Rect bounds = requireActivity().getWindowManager().getMaximumWindowMetrics().getBounds();
+            size.x = bounds.width();
+            size.y = bounds.height();
+        } else {
+            size.x = requireContext().getResources().getDisplayMetrics().widthPixels;
+            size.y = requireContext().getResources().getDisplayMetrics().heightPixels;
+        }
+        return size;
+    }
+
+    private boolean removeViewIfAttached(FloatImageView imageView) {
+        return WindowsMethods.removeWindowIfAttached(imageView);
+    }
+
+    private boolean shouldAbortFragmentWork() {
+        if (fragmentClosing || !isAdded()) {
+            return true;
+        }
+        if (getActivity() == null) {
+            return true;
+        }
+        return requireActivity().isFinishing() || requireActivity().isDestroyed();
+    }
+
+    private void dismissDialogIfShowing(AlertDialog alertDialog) {
+        if (alertDialog != null && alertDialog.isShowing()) {
+            alertDialog.dismiss();
+        }
+    }
+
+    private void registerWorkingFloatImageView() {
+        if (floatImageView == null || PictureId == null) {
+            return;
+        }
+        Context context = getContext();
+        if (context != null) {
+            ImageMethods.saveFloatImageViewById(context, PictureId, floatImageView);
+        }
+    }
+
+    private void showWorkingWindowPreview(float alpha) {
+        if (floatImageView == null) {
+            return;
+        }
+        floatImageView.setPictureAlpha(alpha);
+        floatImageView.setMoveable(touch_and_move);
+        floatImageView.setOverLayout(allow_picture_over_layout);
+        WindowsMethods.createWindow(windowManager, floatImageView, touch_and_move, allow_picture_over_layout, alpha, position_x, position_y);
+    }
+
+    private boolean restoreWorkingWindowVisibility(float alpha) {
+        if (!wasHidden) {
+            showWorkingWindowPreview(alpha);
+            return true;
+        }
+        if (floatImageView == null) {
+            return true;
+        }
+        floatImageView.setPictureAlpha(alpha);
+        floatImageView.setMoveable(touch_and_move);
+        floatImageView.setOverLayout(allow_picture_over_layout);
+        removeViewIfAttached(floatImageView);
+        Context context = getContext();
+        if (context != null) {
+            WindowsMethods.syncAllWindows(context);
+        }
+        if (!floatImageView.isAttachedToWindow()) {
+            releaseWorkingWindowRegistration();
+            return true;
+        }
+        return false;
+    }
+
+    private void releaseWorkingWindowRegistration() {
+        if (floatImageView == null || PictureId == null) {
+            return;
+        }
+        if (!removeViewIfAttached(floatImageView) || floatImageView.isAttachedToWindow()) {
+            return;
+        }
+        ImageMethods.releasePictureView(floatImageView);
+        MainApplication mainApplication = (MainApplication) MainApplication.getAppContext();
+        if (mainApplication != null) {
+            mainApplication.unregisterView(PictureId);
+        }
     }
 
     private void onEditPicture(FloatImageView FloatImageView_Edit) {
         if (!onUseEditPicture) {
-            windowManager.removeView(floatImageView);
+            removeViewIfAttached(floatImageView);
             floatImageView.refreshDrawableState();
-            WindowsMethods.createWindow(windowManager, FloatImageView_Edit, touch_and_move, allow_picture_over_layout, position_x, position_y);
+            WindowsMethods.createWindow(windowManager, FloatImageView_Edit, touch_and_move, allow_picture_over_layout, picture_alpha, position_x, position_y);
             onUseEditPicture = true;
         }
     }
 
-    private void onSuccessEditPicture(FloatImageView floatImageView_Edit, Bitmap bitmap_Edit) {
-        if (onUseEditPicture) {
-            windowManager.removeView(floatImageView_Edit);
-            floatImageView_Edit.refreshDrawableState();
-            bitmap_Edit.recycle();
-            floatImageView.setImageBitmap(ImageMethods.resizeBitmap(bitmap, zoom, picture_degree));
-            WindowsMethods.createWindow(windowManager, floatImageView, touch_and_move, allow_picture_over_layout, position_x, position_y);
-            onUseEditPicture = false;
+    private void onSuccessEditPicture() {
+        if (!onUseEditPicture) {
+            return;
         }
+        Bitmap displayBitmap = ImageMethods.createAndSaveDisplayBitmap(PictureId, zoom, picture_degree);
+        releaseEditResources(true);
+        if (displayBitmap != null) {
+            ImageMethods.setPictureBitmap(floatImageView, displayBitmap);
+        }
+        showWorkingWindowPreview(picture_alpha);
     }
 
-    private void onFailedEditPicture(FloatImageView floatImageView_Edit, Bitmap bitmap_Edit) {
-        if (onUseEditPicture) {
-            windowManager.removeView(floatImageView_Edit);
-            floatImageView_Edit.refreshDrawableState();
-            bitmap_Edit.recycle();
-            WindowsMethods.createWindow(windowManager, floatImageView, touch_and_move, allow_picture_over_layout, position_x, position_y);
-            onUseEditPicture = false;
+    private void onFailedEditPicture() {
+        if (!onUseEditPicture) {
+            return;
         }
+        releaseEditResources();
+        showWorkingWindowPreview(picture_alpha);
     }
 
-    public void saveAllData() {
-        pictureData.put(Config.DATA_PICTURE_SHOW_ENABLED, true);
+    public void saveAllData(Runnable onComplete) {
+        // 若编辑前窗口是隐藏的，保存后仍保持隐藏（用户只修改设置，不改变显示状态）
+        pictureData.put(Config.DATA_PICTURE_SHOW_ENABLED, !wasHidden);
         pictureData.put(Config.DATA_PICTURE_ZOOM, zoom);
         pictureData.put(Config.DATA_PICTURE_DEFAULT_ZOOM, default_zoom);
         pictureData.put(Config.DATA_PICTURE_ALPHA, picture_alpha);
@@ -596,41 +842,111 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         pictureData.put(Config.DATA_PICTURE_DEGREE, picture_degree);
         pictureData.put(Config.DATA_PICTURE_TOUCH_AND_MOVE, touch_and_move);
         pictureData.put(Config.DATA_ALLOW_PICTURE_OVER_LAYOUT, allow_picture_over_layout);
-        pictureData.commit(PictureName);
-        WindowsMethods.updateWindow(windowManager, floatImageView, bitmap, touch_and_move, allow_picture_over_layout, zoom, picture_degree, position_x, position_y);
-        ImageMethods.saveFloatImageViewById(requireActivity(), PictureId, floatImageView);
+        // 快照不可变值供后台线程使用，避免主线程字段被并发读
+        final String snapshotPictureId = PictureId;
+        final String snapshotPictureName = PictureName;
+        final float snapshotZoom = zoom;
+        final float snapshotDegree = picture_degree;
+        final float snapshotAlpha = picture_alpha;
+        final int snapshotX = position_x;
+        final int snapshotY = position_y;
+        final boolean snapshotTouchAndMove = touch_and_move;
+        final boolean snapshotOverLayout = allow_picture_over_layout;
+        final boolean snapshotWasHidden = wasHidden;
+        new Thread(() -> {
+            // JSON 序列化写磁盘（阻塞 IO）
+            pictureData.commit(snapshotPictureName);
+            // Bitmap 缩放 + PNG 压缩写磁盘（CPU + IO 密集）
+            Bitmap displayBitmap = ImageMethods.createAndSaveDisplayBitmap(snapshotPictureId, snapshotZoom, snapshotDegree);
+            if (shouldAbortFragmentWork()) {
+                if (displayBitmap != null) {
+                    ImageMethods.recycleBitmap(displayBitmap);
+                }
+                releaseSourceBitmap();
+                return;
+            }
+            requireActivity().runOnUiThread(() -> {
+                if (shouldAbortFragmentWork()) {
+                    if (displayBitmap != null) {
+                        ImageMethods.recycleBitmap(displayBitmap);
+                    }
+                    releaseSourceBitmap();
+                    return;
+                }
+                if (displayBitmap != null) {
+                    ImageMethods.setPictureBitmap(floatImageView, displayBitmap);
+                }
+                touch_and_move = snapshotTouchAndMove;
+                allow_picture_over_layout = snapshotOverLayout;
+                picture_alpha = snapshotAlpha;
+                position_x = snapshotX;
+                position_y = snapshotY;
+                wasHidden = snapshotWasHidden;
+                if (snapshotWasHidden) {
+                    if (!restoreWorkingWindowVisibility(snapshotAlpha) && floatImageView.isAttachedToWindow()) {
+                        pictureData.put(Config.DATA_PICTURE_SHOW_ENABLED, true);
+                        pictureData.commit(null);
+                        wasHidden = false;
+                    }
+                } else {
+                    restoreWorkingWindowVisibility(snapshotAlpha);
+                }
+                releaseEditResources(true);
+                if (onComplete != null) {
+                    onComplete.run();
+                }
+            });
+        }).start();
     }
 
     public void clearEditView() {
         if (onUseEditPicture) {
-            if (floatImageView_Edit != null && bitmap_Edit != null) {
-                onFailedEditPicture(floatImageView_Edit, bitmap_Edit);
-            }
+            onFailedEditPicture();
+        } else if (floatImageView_Edit != null || bitmap_Edit != null) {
+            releaseEditResources();
         }
     }
 
     public void exit() {
+        fragmentClosing = true;
         if (!Edit_Mode) {
+            releaseEditResources(true);
             if (floatImageView != null) {
-                windowManager.removeView(floatImageView);
-                bitmap.recycle();
+                removeViewIfAttached(floatImageView);
+                ImageMethods.releasePictureView(floatImageView);
                 floatImageView = null;
             }
             ImageMethods.clearAllTemp(requireActivity(), PictureId);
         } else {
+            releaseEditResources();
             float original_zoom = pictureData.getFloat(Config.DATA_PICTURE_ZOOM, zoom);
-            float original_alpha = pictureData.getFloat(Config.DATA_PICTURE_ALPHA, picture_alpha);
             float original_degree = pictureData.getFloat(Config.DATA_PICTURE_DEGREE, picture_degree);
-            int original_position_x = pictureData.getInt(Config.DATA_PICTURE_POSITION_X, position_x);
-            int original_position_y = pictureData.getInt(Config.DATA_PICTURE_POSITION_Y, position_y);
-            boolean original_allow_picture_over_layout = pictureData.getBoolean(Config.DATA_ALLOW_PICTURE_OVER_LAYOUT, allow_picture_over_layout);
-            boolean original_touch_and_move = pictureData.getBoolean(Config.DATA_PICTURE_TOUCH_AND_MOVE, Config.DATA_DEFAULT_PICTURE_TOUCH_AND_MOVE);
-            floatImageView.setAlpha(original_alpha);
-            floatImageView.setOverLayout(original_allow_picture_over_layout);
-            floatImageView.setMoveable(original_touch_and_move);
-            WindowsMethods.updateWindow(windowManager, floatImageView, bitmap, original_touch_and_move, original_allow_picture_over_layout, original_zoom, original_degree, original_position_x, original_position_y);
+            // 恢复磁盘上的 display bitmap（用户可能在子对话框中确认了临时修改）
+            Bitmap originalDisplayBitmap = ImageMethods.createAndSaveDisplayBitmap(PictureId, original_zoom, original_degree);
+            if (originalDisplayBitmap != null) {
+                ImageMethods.setPictureBitmap(floatImageView, originalDisplayBitmap);
+            }
+            if (wasHidden) {
+                if (!restoreWorkingWindowVisibility(picture_alpha) && floatImageView.isAttachedToWindow()) {
+                    pictureData.put(Config.DATA_PICTURE_SHOW_ENABLED, true);
+                    pictureData.commit(null);
+                    wasHidden = false;
+                }
+            } else {
+                float original_alpha = pictureData.getFloat(Config.DATA_PICTURE_ALPHA, picture_alpha);
+                int original_position_x = pictureData.getInt(Config.DATA_PICTURE_POSITION_X, position_x);
+                int original_position_y = pictureData.getInt(Config.DATA_PICTURE_POSITION_Y, position_y);
+                boolean original_allow_picture_over_layout = pictureData.getBoolean(Config.DATA_ALLOW_PICTURE_OVER_LAYOUT, allow_picture_over_layout);
+                boolean original_touch_and_move = pictureData.getBoolean(Config.DATA_PICTURE_TOUCH_AND_MOVE, Config.DATA_DEFAULT_PICTURE_TOUCH_AND_MOVE);
+                floatImageView.setPictureAlpha(original_alpha);
+                floatImageView.setOverLayout(original_allow_picture_over_layout);
+                floatImageView.setMoveable(original_touch_and_move);
+                WindowsMethods.updateWindow(windowManager, floatImageView, original_touch_and_move, original_allow_picture_over_layout, original_alpha, original_position_x, original_position_y);
+                // updateWindow 走单窗口路径（alpha 上限 0.8），若存在其他可见窗口则需重新平衡
+                WindowsMethods.syncAllWindows(requireContext());
+            }
+            releaseSourceBitmap();
         }
-
     }
 
 }

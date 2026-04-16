@@ -1,16 +1,15 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace "tool.xfy9326.floatpicture"
-    compileSdk 35
+    namespace = "tool.xfy9326.floatpicture"
+    compileSdk = 35
 
     defaultConfig {
         applicationId "tool.xfy9326.floatpicture"
-        minSdkVersion 21
-        //noinspection ExpiredTargetSdkVersion
-        targetSdkVersion 29
-        versionCode 12
-        versionName "1.9.2"
+        minSdk = 21
+        targetSdk = 34
+        versionCode 53
+        versionName "2.2.17"
 
         resourceConfigurations.add("zh")
 
@@ -36,13 +35,13 @@ android {
     }
 
     buildFeatures {
-        buildConfig true
+        buildConfig = true
     }
 
     buildTypes {
         release {
-            minifyEnabled true
-            shrinkResources true
+            minifyEnabled = true
+            shrinkResources = true
 
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
 
@@ -57,13 +56,14 @@ android {
         targetCompatibility JavaVersion.VERSION_17
     }
 
-    lintOptions {
-        abortOnError false
-        checkReleaseBuilds false
+    lint {
+        abortOnError = false
+        checkReleaseBuilds = false
     }
 }
 
 dependencies {
+    implementation 'androidx.activity:activity:1.9.0'
     implementation 'androidx.appcompat:appcompat:1.7.0'
     implementation 'androidx.cardview:cardview:1.0.0'
     implementation 'androidx.preference:preference:1.2.1'

@@ -64,6 +64,14 @@
     <string name="settings_picture_degree_sum">旋转图片到任意角度</string>
     <string name="degree">角度：</string>
     <string name="settings_global_advanced">高级功能</string>
+    <string name="settings_global_trusted_overlay_accessibility">受信任悬浮模式</string>
+    <string name="settings_global_trusted_overlay_accessibility_sum">开启无障碍服务后，Android 12+ 上可以在不降低透明度的情况下使用受信任悬浮窗。</string>
+    <string name="settings_global_trusted_overlay_accessibility_sum_authorized">无障碍授权已经打开。如果受信任悬浮窗还未生效，等待系统重连服务即可。</string>
+    <string name="settings_global_trusted_overlay_accessibility_sum_enabled">无障碍服务已启用，悬浮窗现在会尽量使用受信任窗口。</string>
+    <string name="settings_global_trusted_overlay_accessibility_enable_title">开启受信任悬浮模式</string>
+    <string name="settings_global_trusted_overlay_accessibility_enable_prompt">受信任悬浮模式需要依赖系统的无障碍权限。接下来会打开系统无障碍设置页，请在其中手动为 FloatPicture 开启授权。</string>
+    <string name="settings_global_trusted_overlay_accessibility_disable_title">关闭受信任悬浮模式</string>
+    <string name="settings_global_trusted_overlay_accessibility_disable_prompt">受信任悬浮模式由系统无障碍权限控制。接下来会打开系统无障碍设置页，请在其中手动关闭 FloatPicture 的授权。</string>
     <string name="settings_global_advanced_touchable_position_edit">可触摸的位置编辑</string>
     <string name="settings_global_advanced_touchable_position_edit_sum">可以用手指移动图片设置位置</string>
     <string name="save_moved_position">保存移动后位置</string>

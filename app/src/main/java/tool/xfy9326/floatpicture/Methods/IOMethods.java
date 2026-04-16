@@ -22,8 +22,14 @@ public class IOMethods {
 
     static Bitmap readImageByUri(Context context, Uri uri) {
         ContentResolver contentResolver = context.getContentResolver();
-        try (FileInputStream inputStream = Objects.requireNonNull(contentResolver.openAssetFileDescriptor(uri, "r")).createInputStream()) {
-            return BitmapFactory.decodeStream(inputStream);
+        try {
+            android.content.res.AssetFileDescriptor afd = contentResolver.openAssetFileDescriptor(uri, "r");
+            if (afd == null) {
+                return null;
+            }
+            try (afd; FileInputStream inputStream = afd.createInputStream()) {
+                return BitmapFactory.decodeStream(inputStream);
+            }
         } catch (Exception e) {
             e.printStackTrace();
             return null;
@@ -32,12 +38,63 @@ public class IOMethods {
 
     @SuppressWarnings("SameParameterValue")
     static void saveBitmap(Bitmap bitmap, int quality, String path) {
+        saveBitmap(bitmap, quality, path, true);
+    }
+
+    @SuppressWarnings("SameParameterValue")
+    static void saveBitmap(Bitmap bitmap, int quality, String path, boolean recycle) {
         File file = new File(path);
         try {
             if (!CheckFile(file, true)) {
-                OutputStream outputStream = new FileOutputStream(file);
-                bitmap.compress(Bitmap.CompressFormat.WEBP, quality, outputStream);
-                bitmap.recycle();
+                try (OutputStream outputStream = new FileOutputStream(file)) {
+                    bitmap.compress(Bitmap.CompressFormat.WEBP_LOSSY, quality, outputStream);
+                }
+                if (recycle) {
+                    bitmap.recycle();
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    static boolean copyUriToFile(Context context, Uri uri, String path) {
+        ContentResolver contentResolver = context.getContentResolver();
+        File file = new File(path);
+        try {
+            if (CheckFile(file, true)) {
+                return false;
+            }
+            try (InputStream inputStream = contentResolver.openInputStream(uri);
+                 OutputStream outputStream = new FileOutputStream(file)) {
+                if (inputStream == null) {
+                    return false;
+                }
+                byte[] buffer = new byte[8192];
+                int readBytes;
+                while ((readBytes = inputStream.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, readBytes);
+                }
+                outputStream.flush();
+                return true;
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
+    @SuppressWarnings("SameParameterValue")
+    static void saveBitmapLossless(Bitmap bitmap, String path, boolean recycle) {
+        File file = new File(path);
+        try {
+            if (!CheckFile(file, true)) {
+                try (OutputStream outputStream = new FileOutputStream(file)) {
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream);
+                }
+                if (recycle) {
+                    bitmap.recycle();
+                }
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -45,10 +102,9 @@ public class IOMethods {
     }
 
     public static String readAssetText(Context mContext, String path) {
-        try {
+        try (BufferedReader bufReader = new BufferedReader(
+                new InputStreamReader(mContext.getResources().getAssets().open(path)))) {
             StringBuilder result = new StringBuilder();
-            InputStreamReader inputReader = new InputStreamReader(mContext.getResources().getAssets().open(path));
-            BufferedReader bufReader = new BufferedReader(inputReader);
             String line;
             while ((line = bufReader.readLine()) != null) {
                 result.append(line).append("\n");
@@ -62,7 +118,7 @@ public class IOMethods {
 
     @SuppressWarnings("UnusedReturnValue")
     public static boolean setNoMedia() {
-        File nomedia = new File(Config.NO_MEDIA_FILE_DIR);
+        File nomedia = new File(Config.getNoMediaFilePath());
         if (!nomedia.exists()) {
             try {
                 return nomedia.createNewFile();
@@ -111,11 +167,11 @@ public class IOMethods {
             if (CheckFile(file, false)) {
                 return false;
             }
-            OutputStream writer = new FileOutputStream(file);
-            byte[] Bytes = content.getBytes();
-            writer.write(Bytes);
-            writer.flush();
-            writer.close();
+            try (OutputStream writer = new FileOutputStream(file)) {
+                byte[] Bytes = content.getBytes();
+                writer.write(Bytes);
+                writer.flush();
+            }
             return true;
         } catch (IOException e) {
             e.printStackTrace();
@@ -129,15 +185,14 @@ public class IOMethods {
             if (CheckFile(file, false)) {
                 return null;
             }
-            InputStream file_stream = new FileInputStream(file);
-            BufferedReader reader = new BufferedReader(new InputStreamReader(file_stream));
-            String line;
             StringBuilder result = new StringBuilder();
-            while ((line = reader.readLine()) != null) {
-                result.append(line).append("\n");
+            try (InputStream file_stream = new FileInputStream(file);
+                 BufferedReader reader = new BufferedReader(new InputStreamReader(file_stream))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    result.append(line).append("\n");
+                }
             }
-            reader.close();
-            file_stream.close();
             return result.toString();
         } catch (IOException e) {
             e.printStackTrace();

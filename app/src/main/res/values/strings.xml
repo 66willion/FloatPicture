@@ -63,6 +63,14 @@
     <string name="settings_picture_degree_sum">Rotate picture to any degree</string>
     <string name="degree">Degree:</string>
     <string name="settings_global_advanced">Advanced Functions</string>
+    <string name="settings_global_trusted_overlay_accessibility">Trusted overlay mode</string>
+    <string name="settings_global_trusted_overlay_accessibility_sum">Enable the accessibility service to use trusted overlays on Android 12+ without lowering transparency.</string>
+    <string name="settings_global_trusted_overlay_accessibility_sum_authorized">Accessibility permission is already granted. If trusted overlays are not active yet, the system will reconnect the service automatically.</string>
+    <string name="settings_global_trusted_overlay_accessibility_sum_enabled">Accessibility service is enabled. Floating windows now use trusted overlays when possible.</string>
+    <string name="settings_global_trusted_overlay_accessibility_enable_title">Enable trusted overlay mode</string>
+    <string name="settings_global_trusted_overlay_accessibility_enable_prompt">Trusted overlay mode relies on the system accessibility permission. The next screen will open Accessibility settings, where you need to enable FloatPicture manually.</string>
+    <string name="settings_global_trusted_overlay_accessibility_disable_title">Disable trusted overlay mode</string>
+    <string name="settings_global_trusted_overlay_accessibility_disable_prompt">Trusted overlay mode is controlled by the system accessibility permission. The next screen will open Accessibility settings, where you can turn FloatPicture off manually.</string>
     <string name="settings_global_advanced_touchable_position_edit">Touchable position edit</string>
     <string name="settings_global_advanced_touchable_position_edit_sum">Can move picture by fingers to set position.</string>
     <string name="save_moved_position">Save moved position</string>
@@ -79,4 +87,6 @@
     <string name="notification_channel_des">Default Notification</string>
     <string name="settings_allow_picture_over_layout">Allow picture over layout</string>
     <string name="settings_allow_picture_over_layout_sum">Show picture out of current window</string>
+    <string name="accessibility_overlay_service_label">Trusted overlay service</string>
+    <string name="accessibility_overlay_service_description">Allows FloatPicture to display trusted floating windows without triggering Android 12 touch security limits.</string>
 </resources>

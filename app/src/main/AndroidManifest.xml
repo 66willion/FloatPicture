@@ -1,13 +1,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
-    package="tool.xfy9326.floatpicture">
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-    <uses-permission android:name="android.permission.SYSTEM_OVERLAY_WINDOW" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- Android 13+ 读取图库图片 -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <!-- Android 13+ 发送通知 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".MainApplication"
@@ -15,7 +16,6 @@
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:largeHeap="true"
-        android:requestLegacyExternalStorage="true"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
 
@@ -33,6 +33,7 @@
 
         <activity
             android:name=".Activities.PictureSettingsActivity"
+            android:exported="false"
             android:label="@string/settings_label"
             tools:ignore="InnerclassSeparator">
             <meta-data
@@ -41,6 +42,7 @@
         </activity>
         <activity
             android:name=".Activities.GlobalSettingsActivity"
+            android:exported="false"
             android:label="@string/settings_global_label"
             tools:ignore="InnerclassSeparator">
             <meta-data
@@ -50,6 +52,7 @@
 
         <activity
             android:name=".Activities.AboutActivity"
+            android:exported="false"
             android:label="@string/about"
             tools:ignore="InnerclassSeparator">
             <meta-data
@@ -59,6 +62,7 @@
 
         <activity
             android:name=".Activities.LicenseActivity"
+            android:exported="false"
             android:label="@string/open_source_license"
             tools:ignore="InnerclassSeparator">
             <meta-data
@@ -68,7 +72,27 @@
 
         <service
             android:name=".Services.NotificationService"
-            tools:ignore="InnerclassSeparator" />
+            android:exported="false"
+            android:foregroundServiceType="specialUse"
+            tools:ignore="InnerclassSeparator">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="floating_picture_overlay_control" />
+        </service>
+
+        <service
+            android:name=".Services.TrustedOverlayAccessibilityService"
+            android:exported="false"
+            android:label="@string/accessibility_overlay_service_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_trusted_overlay_service" />
+        </service>
 
         <receiver
             android:name=".Receiver.BootCompleteReceiver"

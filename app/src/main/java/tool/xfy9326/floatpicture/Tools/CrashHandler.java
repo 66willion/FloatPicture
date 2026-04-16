@@ -2,6 +2,7 @@ package tool.xfy9326.floatpicture.Tools;
 
 
 import android.content.Context;
+import android.os.Handler;
 import android.os.Looper;
 import android.widget.Toast;
 
@@ -19,24 +20,24 @@ public class CrashHandler implements Thread.UncaughtExceptionHandler {
     }
 
     public void Catch(Context context) {
-        this.mContext = context;
+        this.mContext = context.getApplicationContext();
         Thread.setDefaultUncaughtExceptionHandler(this);
     }
 
     @Override
     public void uncaughtException(Thread thread, @NonNull final Throwable ex) {
-        new Thread(() -> {
-            Looper.prepare();
-            Toast.makeText(mContext, ExToString(ex), Toast.LENGTH_LONG).show();
-            Looper.loop();
-        }).start();
+        // 使用主线程 Handler 显示 Toast，避免 Looper.loop() 无限循环造成僵尸线程
+        new Handler(Looper.getMainLooper()).post(() ->
+                Toast.makeText(mContext, ExToString(ex), Toast.LENGTH_SHORT).show()
+        );
         try {
-            Thread.sleep(5000);
-            thread.interrupt();
+            // 等待 Toast 有机会显示后退出，时间缩短为 2s 避免长时间卡死
+            Thread.sleep(2000);
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            Thread.currentThread().interrupt();
         }
-        System.exit(0);
+        // 使用非零退出码表示异常退出，与正常退出（0）区分
+        System.exit(1);
     }
 
     private String ExToString(Throwable ex) {

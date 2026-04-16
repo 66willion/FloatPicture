@@ -3,14 +3,27 @@
 
     <PreferenceCategory
         app:iconSpaceReserved="false"
+        app:title="@string/settings_appearance">
+        <ListPreference
+            app:defaultValue="system"
+            app:entries="@array/theme_mode_entries"
+            app:entryValues="@array/theme_mode_values"
+            app:iconSpaceReserved="false"
+            app:key="theme_mode"
+            app:title="@string/settings_theme_mode"
+            app:useSimpleSummaryProvider="true" />
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        app:iconSpaceReserved="false"
         app:title="@string/settings_general">
-        <CheckBoxPreference
+        <SwitchPreferenceCompat
             app:defaultValue="false"
             app:iconSpaceReserved="false"
             app:key="boot_auto_run"
             app:summary="@string/settings_global_start_on_boot_sum"
             app:title="@string/settings_global_start_on_boot" />
-        <CheckBoxPreference
+        <SwitchPreferenceCompat
             app:defaultValue="true"
             app:iconSpaceReserved="false"
             app:key="show_notification_control"
@@ -26,7 +39,13 @@
     <PreferenceCategory
         app:iconSpaceReserved="false"
         app:title="@string/settings_global_advanced">
-        <CheckBoxPreference
+        <SwitchPreferenceCompat
+            app:defaultValue="false"
+            app:iconSpaceReserved="false"
+            app:key="trusted_overlay_accessibility"
+            app:summary="@string/settings_global_trusted_overlay_accessibility_sum"
+            app:title="@string/settings_global_trusted_overlay_accessibility" />
+        <SwitchPreferenceCompat
             app:defaultValue="false"
             app:iconSpaceReserved="false"
             app:key="touchable_position_edit"

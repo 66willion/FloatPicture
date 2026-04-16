@@ -4,83 +4,109 @@
     android:id="@+id/main_layout_content"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fitsSystemWindows="true"
+    android:background="@color/colorBackground"
     tools:context=".Activities.MainActivity">
 
     <com.google.android.material.appbar.AppBarLayout
         android:id="@+id/main_layout_app_bar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:fitsSystemWindows="true"
+        android:background="@color/colorSurface"
         android:theme="@style/AppTheme.AppBarOverlay">
 
-        <com.google.android.material.appbar.CollapsingToolbarLayout
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/toolbar"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            app:contentScrim="@color/colorPrimary"
-            app:layout_scrollFlags="scroll|exitUntilCollapsed"
-            app:title="@string/app_name"
-            app:titleEnabled="true">
-
-            <ImageView
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:layout_gravity="center_horizontal"
-                android:adjustViewBounds="true"
-                android:contentDescription="@string/imageview_collapsing_toolbar_head"
-                android:cropToPadding="true"
-                android:fitsSystemWindows="true"
-                android:scaleType="centerCrop"
-                app:layout_collapseMode="parallax"
-                app:layout_collapseParallaxMultiplier="0.7"
-                app:srcCompat="@drawable/collapsing_toolbar_head_background" />
-
-            <com.google.android.material.appbar.MaterialToolbar
-                android:id="@+id/toolbar"
-                android:layout_width="match_parent"
-                android:layout_height="?attr/actionBarSize"
-                app:layout_collapseMode="pin"
-                app:popupTheme="@style/AppTheme.PopupOverlay" />
-
-        </com.google.android.material.appbar.CollapsingToolbarLayout>
+            android:layout_height="?attr/actionBarSize"
+            android:background="@color/colorSurface"
+            app:popupTheme="@style/AppTheme.PopupOverlay" />
 
     </com.google.android.material.appbar.AppBarLayout>
 
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/main_button_add"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginEnd="15dp"
-        android:clickable="true"
-        android:contentDescription="@string/add"
-        android:fitsSystemWindows="false"
-        android:focusable="true"
-        app:backgroundTint="@color/colorFloatingActionButtonBackGround"
-        app:elevation="6dp"
-        app:fabSize="normal"
-        app:layout_anchor="@id/main_layout_app_bar"
-        app:layout_anchorGravity="bottom|end"
-        app:layout_collapseMode="parallax"
-        app:pressedTranslationZ="12dp"
-        app:srcCompat="@drawable/ic_add" />
-
-    <LinearLayout
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_marginTop="10dp"
-        android:orientation="vertical"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
         <tool.xfy9326.floatpicture.View.AdvancedRecyclerView
             android:id="@+id/main_list_manage"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:paddingStart="16dp"
+            android:paddingTop="12dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="152dp"
             android:scrollbars="none"
             app:layoutManager="LinearLayoutManager" />
 
         <include
             android:id="@+id/layout_widget_empty_view"
             layout="@layout/widget_list_empty" />
+
+    </FrameLayout>
+
+    <LinearLayout
+        android:id="@+id/main_layout_actions"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="20dp"
+        android:layout_marginBottom="24dp"
+        android:elevation="16dp"
+        android:gravity="end"
+        android:orientation="vertical"
+        android:translationZ="16dp">
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/main_button_add"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:clickable="true"
+            android:contentDescription="@string/main_add_overlay"
+            android:focusable="true"
+            app:backgroundTint="@color/colorFloatingActionButtonBackGround"
+            app:elevation="8dp"
+            app:fabSize="normal"
+            app:pressedTranslationZ="12dp"
+            app:srcCompat="@drawable/ic_add" />
+
+        <LinearLayout
+            android:id="@+id/main_layout_secondary_actions"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:gravity="center_vertical|end"
+            android:orientation="horizontal">
+
+            <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+                android:id="@+id/main_button_trusted_overlay"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="12dp"
+                android:contentDescription="@string/main_trusted_overlay_off"
+                android:text="@string/main_trusted_overlay_off"
+                android:textAllCaps="false"
+                android:textColor="@color/white"
+                app:backgroundTint="@color/colorTrustedOverlayOff"
+                app:elevation="8dp"
+                app:icon="@drawable/ic_invisible"
+                app:iconTint="@color/white" />
+
+            <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+                android:id="@+id/main_button_release_memory"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:contentDescription="@string/main_release_memory"
+                android:text="@string/main_release_memory"
+                android:textAllCaps="false"
+                android:textColor="@color/white"
+                app:backgroundTint="@color/colorPrimary"
+                app:elevation="8dp"
+                app:icon="@drawable/ic_memory_clean"
+                app:iconTint="@color/white" />
+
+        </LinearLayout>
 
     </LinearLayout>
 

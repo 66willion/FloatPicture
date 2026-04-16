@@ -49,7 +49,7 @@
             app:singleLine="true"
             app:summary="@string/settings_picture_position_sum"
             app:title="@string/settings_picture_position" />
-        <CheckBoxPreference
+        <SwitchPreferenceCompat
             android:selectAllOnFocus="true"
             app:disableDependentsState="true"
             app:iconSpaceReserved="false"
@@ -57,7 +57,7 @@
             app:singleLine="true"
             app:summary="@string/settings_picture_touchable_and_moveable_sum"
             app:title="@string/settings_picture_touchable_and_moveable" />
-        <CheckBoxPreference
+        <SwitchPreferenceCompat
             android:selectAllOnFocus="true"
             app:iconSpaceReserved="false"
             app:key="settings_allow_picture_over_layout"

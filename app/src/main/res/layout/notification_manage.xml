@@ -68,7 +68,7 @@
             android:clickable="true"
             android:contentDescription="@string/imageview_notification_visible"
             android:focusable="true"
-            app:srcCompat="@drawable/ic_invisible" />
+            app:srcCompat="@drawable/ic_visible" />
 
     </LinearLayout>
 

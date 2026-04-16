@@ -5,6 +5,7 @@ import android.os.Bundle;
 import android.view.Menu;
 import android.view.MenuItem;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
@@ -23,7 +24,7 @@ public class PictureSettingsActivity extends AppCompatActivity {
         setContentView(R.layout.activity_settings);
         ViewSet();
         fragmentSet(savedInstanceState);
-        setBackResult();
+        initBackPressedCallback();
     }
 
     private void ViewSet() {
@@ -33,7 +34,6 @@ public class PictureSettingsActivity extends AppCompatActivity {
         Intent intent = getIntent();
         if (actionBar != null && intent != null) {
             if (!intent.getBooleanExtra(Config.INTENT_PICTURE_EDIT_MODE, false)) {
-                actionBar.setHomeButtonEnabled(true);
                 actionBar.setDisplayHomeAsUpEnabled(true);
             }
         }
@@ -50,22 +50,16 @@ public class PictureSettingsActivity extends AppCompatActivity {
         }
     }
 
-    private void setBackResult() {
-        Intent intent = getIntent();
-        if (intent != null) {
-            if (intent.getBooleanExtra(Config.INTENT_PICTURE_EDIT_MODE, false)) {
-                Intent result_intent = new Intent();
-                result_intent.putExtra(Config.INTENT_PICTURE_EDIT_POSITION, getIntent().getIntExtra(Config.INTENT_PICTURE_EDIT_POSITION, -1));
-                setResult(Config.REQUEST_CODE_ACTIVITY_PICTURE_SETTINGS_CHANGE, result_intent);
+    private void initBackPressedCallback() {
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                if (mPictureSettingsFragment != null) {
+                    mPictureSettingsFragment.exit();
+                }
+                finish();
             }
-        }
-    }
-
-    @Override
-    public void onBackPressed() {
-        mPictureSettingsFragment.exit();
-        finish();
-        super.onBackPressed();
+        });
     }
 
     @Override
@@ -78,8 +72,12 @@ public class PictureSettingsActivity extends AppCompatActivity {
     public boolean onOptionsItemSelected(MenuItem item) {
         int itemId = item.getItemId();
         if (itemId == R.id.menu_picture_settings_save) {
-            mPictureSettingsFragment.saveAllData();
-            finish();
+            // 禁用保存按钮，防止用户在后台 IO 期间重复点击
+            item.setEnabled(false);
+            mPictureSettingsFragment.saveAllData(() -> {
+                setSuccessResult();
+                finish();
+            });
         } else if (itemId == android.R.id.home) {
             mPictureSettingsFragment.exit();
             finish();
@@ -87,10 +85,22 @@ public class PictureSettingsActivity extends AppCompatActivity {
         return super.onOptionsItemSelected(item);
     }
 
+    private void setSuccessResult() {
+        Intent intent = getIntent();
+        if (intent != null && intent.getBooleanExtra(Config.INTENT_PICTURE_EDIT_MODE, false)) {
+            Intent resultIntent = new Intent();
+            resultIntent.putExtra(Config.INTENT_PICTURE_EDIT_POSITION, intent.getIntExtra(Config.INTENT_PICTURE_EDIT_POSITION, -1));
+            setResult(RESULT_OK, resultIntent);
+        } else {
+            setResult(RESULT_OK);
+        }
+    }
+
     @Override
     protected void onDestroy() {
-        mPictureSettingsFragment.clearEditView();
-        System.gc();
+        if (mPictureSettingsFragment != null) {
+            mPictureSettingsFragment.clearEditView();
+        }
         super.onDestroy();
     }
 }

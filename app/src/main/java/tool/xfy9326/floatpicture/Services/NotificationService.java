@@ -1,15 +1,15 @@
 package tool.xfy9326.floatpicture.Services;
 
-import android.annotation.SuppressLint;
+import android.Manifest;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
-import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
+import android.content.pm.PackageManager;
+import android.content.pm.ServiceInfo;
 import android.os.Build;
 import android.os.IBinder;
 import android.widget.RemoteViews;
@@ -18,8 +18,9 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
-
-import java.util.Objects;
+import androidx.core.app.ServiceCompat;
+import androidx.core.content.ContextCompat;
+import androidx.preference.PreferenceManager;
 
 import tool.xfy9326.floatpicture.Activities.MainActivity;
 import tool.xfy9326.floatpicture.MainApplication;
@@ -31,11 +32,38 @@ import tool.xfy9326.floatpicture.View.ManageListAdapter;
 public class NotificationService extends Service {
     private static final String CHANNEL_ID = "channel_default";
     private RemoteViews remoteViews;
-    private NotificationCompat.Builder builder_manage;
-    private NotificationButtonBroadcastReceiver notificationButtonBroadcastReceiver;
+    private NotificationCompat.Builder builderManage;
+
+    public static Intent createIntent(Context context, String action) {
+        return new Intent(context, NotificationService.class).setAction(action);
+    }
+
+    public static void start(Context context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
+                        != PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+        if (!PreferenceManager.getDefaultSharedPreferences(context).getBoolean(Config.PREFERENCE_SHOW_NOTIFICATION_CONTROL, true)) {
+            return;
+        }
+        ContextCompat.startForegroundService(context, createIntent(context, Config.INTENT_ACTION_NOTIFICATION_START));
+    }
+
+    public static void refresh(Context context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
+                        != PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+        if (!PreferenceManager.getDefaultSharedPreferences(context).getBoolean(Config.PREFERENCE_SHOW_NOTIFICATION_CONTROL, true)) {
+            return;
+        }
+        ContextCompat.startForegroundService(context, createIntent(context, Config.INTENT_ACTION_NOTIFICATION_UPDATE_COUNT));
+    }
 
     private static void createNotificationChannel(@NonNull Context context, @NonNull NotificationManagerCompat notificationManager) {
-        if (Build.VERSION.SDK_INT >= 26) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel notificationChannel = notificationManager.getNotificationChannel(CHANNEL_ID);
             if (notificationChannel == null) {
                 notificationChannel = new NotificationChannel(CHANNEL_ID, context.getString(R.string.notification_channel), NotificationManager.IMPORTANCE_LOW);
@@ -49,21 +77,21 @@ public class NotificationService extends Service {
         }
     }
 
-    @SuppressLint({"ForegroundServiceType", "UnspecifiedRegisterReceiverFlag"})
     @Override
     public void onCreate() {
         super.onCreate();
-        if (notificationButtonBroadcastReceiver == null) {
-            notificationButtonBroadcastReceiver = new NotificationButtonBroadcastReceiver();
-            IntentFilter intentFilter = new IntentFilter();
-            intentFilter.addAction(Config.INTENT_ACTION_NOTIFICATION_BUTTON_CLICK);
-            intentFilter.addAction(Config.INTENT_ACTION_NOTIFICATION_UPDATE_COUNT);
-            registerReceiver(notificationButtonBroadcastReceiver, intentFilter);
+        createNotificationChannel(this, NotificationManagerCompat.from(this));
+    }
+
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        ensureForegroundStarted();
+        String action = intent != null ? intent.getAction() : Config.INTENT_ACTION_NOTIFICATION_START;
+        if (Config.INTENT_ACTION_NOTIFICATION_BUTTON_CLICK.equals(action)) {
+            toggleAllWindowsVisible();
         }
-        if (builder_manage == null) {
-            builder_manage = createNotification();
-            startForeground(Config.NOTIFICATION_ID, builder_manage.build());
-        }
+        updateNotification();
+        return START_STICKY;
     }
 
     @Nullable
@@ -74,77 +102,76 @@ public class NotificationService extends Service {
 
     @Override
     public void onDestroy() {
+        ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE);
+        builderManage = null;
+        remoteViews = null;
         super.onDestroy();
-        if (notificationButtonBroadcastReceiver != null) {
-            unregisterReceiver(notificationButtonBroadcastReceiver);
-            notificationButtonBroadcastReceiver = null;
-        }
-        if (builder_manage != null) {
-            stopForeground(true);
-            builder_manage = null;
+    }
+
+    private void ensureForegroundStarted() {
+        if (builderManage == null) {
+            builderManage = new NotificationCompat.Builder(this, CHANNEL_ID)
+                    .setSmallIcon(R.drawable.ic_notification)
+                    .setOngoing(true)
+                    .setOnlyAlertOnce(true)
+                    .setContentIntent(createContentIntent());
+            remoteViews = new RemoteViews(getPackageName(), R.layout.notification_manage);
+            builderManage.setContent(remoteViews);
+            startForegroundCompat(builderManage.build());
         }
     }
 
-    private NotificationCompat.Builder createNotification() {
+    private PendingIntent createContentIntent() {
+        Intent intentMain = new Intent(this, MainActivity.class);
+        intentMain.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        return PendingIntent.getActivity(this, 0, intentMain, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+    }
+
+    private PendingIntent createToggleIntent() {
+        return PendingIntent.getService(
+                this,
+                1,
+                createIntent(this, Config.INTENT_ACTION_NOTIFICATION_BUTTON_CLICK),
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+    }
+
+    private void startForegroundCompat(Notification notification) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(Config.NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+        } else {
+            startForeground(Config.NOTIFICATION_ID, notification);
+        }
+    }
+
+    private void toggleAllWindowsVisible() {
         MainApplication mainApplication = (MainApplication) getApplicationContext();
-        mainApplication.setWinVisible(true);
-        //Create Notification
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID);
-
-        NotificationManagerCompat notificationManager = NotificationManagerCompat.from(this);
-        createNotificationChannel(this, notificationManager);
-
-        builder.setSmallIcon(R.drawable.ic_notification);
-
-        //Content Intent
-        Intent intent_main = new Intent(this, MainActivity.class);
-        intent_main.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        PendingIntent pendingIntent_main = PendingIntent.getActivity(this, 0, intent_main, PendingIntent.FLAG_UPDATE_CURRENT);
-        builder.setContentIntent(pendingIntent_main);
-
-        //Content View
-        remoteViews = new RemoteViews(getPackageName(), R.layout.notification_manage);
-        remoteViews.setImageViewResource(R.id.imageview_notification_application, R.mipmap.ic_launcher);
-        remoteViews.setTextViewText(R.id.textview_picture_num, getString(R.string.notification_picture_count, String.valueOf(mainApplication.getViewCount())));
-
-        remoteViews.setImageViewResource(R.id.imageview_set_picture_view, R.drawable.ic_invisible);
-        Intent intent_picture_show = new Intent();
-        intent_picture_show.setAction(Config.INTENT_ACTION_NOTIFICATION_BUTTON_CLICK);
-        PendingIntent pendingIntent_picture_show = PendingIntent.getBroadcast(this, 1, intent_picture_show, PendingIntent.FLAG_UPDATE_CURRENT);
-        remoteViews.setOnClickPendingIntent(R.id.imageview_set_picture_view, pendingIntent_picture_show);
-
-        builder.setContent(remoteViews);
-        return builder;
-    }
-
-    private class NotificationButtonBroadcastReceiver extends BroadcastReceiver {
-        @SuppressLint("NotifyDataSetChanged")
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            if (remoteViews != null) {
-                MainApplication mainApplication = (MainApplication) getApplicationContext();
-                if (Objects.equals(intent.getAction(), Config.INTENT_ACTION_NOTIFICATION_BUTTON_CLICK)) {
-                    if (mainApplication.getWinVisible()) {
-                        ManageMethods.setAllWindowsVisible(context, false);
-                        remoteViews.setImageViewResource(R.id.imageview_set_picture_view, R.drawable.ic_visible);
-                        mainApplication.setWinVisible(false);
-                    } else {
-                        ManageMethods.setAllWindowsVisible(context, true);
-                        remoteViews.setImageViewResource(R.id.imageview_set_picture_view, R.drawable.ic_invisible);
-                        mainApplication.setWinVisible(true);
-                    }
-                    ManageListAdapter manageListAdapter = ((MainApplication) getApplicationContext()).getManageListAdapter();
-                    if (manageListAdapter != null) {
-                        manageListAdapter.notifyDataSetChanged();
-                    }
-                } else if (Objects.equals(intent.getAction(), Config.INTENT_ACTION_NOTIFICATION_UPDATE_COUNT)) {
-                    remoteViews.setTextViewText(R.id.textview_picture_num, getString(R.string.notification_picture_count, String.valueOf(mainApplication.getViewCount())));
-                }
-                NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-                builder_manage.setContent(remoteViews);
-                Objects.requireNonNull(notificationManager).notify(Config.NOTIFICATION_ID, builder_manage.build());
-            }
+        boolean visible = !mainApplication.getWinVisible();
+        ManageMethods.setAllWindowsVisible(this, visible);
+        ManageListAdapter manageListAdapter = mainApplication.getManageListAdapter();
+        if (manageListAdapter != null) {
+            manageListAdapter.notifyDataSetChanged();
         }
     }
 
+    private void updateNotification() {
+        if (builderManage == null || remoteViews == null) {
+            return;
+        }
+        MainApplication mainApplication = (MainApplication) getApplicationContext();
+        remoteViews.setImageViewResource(R.id.imageview_notification_application, R.mipmap.ic_launcher);
+        remoteViews.setTextViewText(R.id.textview_picture_num, getString(R.string.notification_picture_count, String.valueOf(ManageMethods.getWindowCount())));
+        remoteViews.setImageViewResource(
+                R.id.imageview_set_picture_view,
+                mainApplication.getWinVisible() ? R.drawable.ic_visible : R.drawable.ic_invisible
+        );
+        remoteViews.setOnClickPendingIntent(R.id.imageview_set_picture_view, createToggleIntent());
+        builderManage.setContent(remoteViews);
+
+        Notification notification = builderManage.build();
+        NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (notificationManager != null) {
+            notificationManager.notify(Config.NOTIFICATION_ID, notification);
+        }
+    }
 }

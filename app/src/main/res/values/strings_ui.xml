@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="manage_empty_title">No floating windows yet</string>
+    <string name="manage_empty_description">Add an image to create your first overlay window.</string>
+    <string name="manage_action_edit">Edit</string>
+    <string name="manage_action_delete">Delete</string>
+    <string name="manage_state_visible">Visible</string>
+    <string name="manage_state_hidden">Hidden</string>
+    <string name="manage_state_drag_enabled">Draggable</string>
+    <string name="manage_state_click_through">Click-through</string>
+    <string name="manage_state_allow_overflow">Can overflow</string>
+    <string name="manage_state_screen_bound">Screen-bound</string>
+    <string name="drawer_subtitle">Overlay window manager</string>
+    <string name="settings_appearance">Appearance</string>
+    <string name="settings_theme_mode">Theme mode</string>
+    <string name="main_add_overlay">Add overlay</string>
+    <string name="main_release_memory">Free memory</string>
+    <string name="main_trusted_overlay_on">Trusted On</string>
+    <string name="main_trusted_overlay_off">Trusted Off</string>
+    <string name="action_release_memory_result">Memory cleanup finished: %1$d window cache / abnormal overlay item(s), %2$d temp file(s).</string>
+    <string name="picture_settings_open_failed">Unable to open this picture.</string>
+</resources>

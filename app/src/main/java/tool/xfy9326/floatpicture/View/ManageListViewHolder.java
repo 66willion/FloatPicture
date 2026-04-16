@@ -14,6 +14,9 @@ public class ManageListViewHolder extends AdvancedRecyclerView.ViewHolder {
     final SwitchCompat switch_Picture_Show;
     final TextView textView_Picture_Name;
     final TextView textView_Picture_Id;
+    final TextView textView_Picture_Visible;
+    final TextView textView_Picture_TouchMode;
+    final TextView textView_Picture_Boundary;
     final TextView textView_Picture_Error;
     final Button button_Picture_Edit;
     final Button button_Picture_Delete;
@@ -24,6 +27,9 @@ public class ManageListViewHolder extends AdvancedRecyclerView.ViewHolder {
         switch_Picture_Show = mView.findViewById(R.id.adapter_picture_show);
         textView_Picture_Name = mView.findViewById(R.id.adapter_picture_name);
         textView_Picture_Id = mView.findViewById(R.id.adapter_picture_id);
+        textView_Picture_Visible = mView.findViewById(R.id.adapter_picture_visible);
+        textView_Picture_TouchMode = mView.findViewById(R.id.adapter_picture_touch_mode);
+        textView_Picture_Boundary = mView.findViewById(R.id.adapter_picture_boundary);
         textView_Picture_Error = mView.findViewById(R.id.adapter_picture_error);
         button_Picture_Edit = mView.findViewById(R.id.adapter_picture_edit);
         button_Picture_Delete = mView.findViewById(R.id.adapter_picture_delete);

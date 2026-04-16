@@ -9,7 +9,9 @@ import androidx.preference.PreferenceManager;
 import java.util.Objects;
 
 import tool.xfy9326.floatpicture.MainApplication;
+import tool.xfy9326.floatpicture.Methods.ApplicationMethods;
 import tool.xfy9326.floatpicture.Methods.ManageMethods;
+import tool.xfy9326.floatpicture.Methods.PermissionMethods;
 import tool.xfy9326.floatpicture.Utils.Config;
 
 public class BootCompleteReceiver extends BroadcastReceiver {
@@ -18,7 +20,8 @@ public class BootCompleteReceiver extends BroadcastReceiver {
         if (Objects.equals(intent.getAction(), Intent.ACTION_BOOT_COMPLETED)) {
             if (PreferenceManager.getDefaultSharedPreferences(context).getBoolean(Config.PREFERENCE_BOOT_AUTO_RUN, false)) {
                 MainApplication mainApplication = (MainApplication) context.getApplicationContext();
-                if (mainApplication.isAppInit()) {
+                if (!mainApplication.isAppInit() && PermissionMethods.hasOverlayPermission(context)) {
+                    ApplicationMethods.startNotificationControl(context);
                     ManageMethods.RunWin(context);
                     mainApplication.setAppInit(true);
                 }

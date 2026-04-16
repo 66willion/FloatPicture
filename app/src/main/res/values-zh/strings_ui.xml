@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="manage_empty_title">还没有悬浮窗</string>
+    <string name="manage_empty_description">添加一张图片，创建第一个悬浮窗。</string>
+    <string name="manage_action_edit">编辑</string>
+    <string name="manage_action_delete">删除</string>
+    <string name="manage_state_visible">显示中</string>
+    <string name="manage_state_hidden">已隐藏</string>
+    <string name="manage_state_drag_enabled">可拖动</string>
+    <string name="manage_state_click_through">可穿透</string>
+    <string name="manage_state_allow_overflow">可越界</string>
+    <string name="manage_state_screen_bound">限屏内</string>
+    <string name="drawer_subtitle">悬浮窗管理</string>
+    <string name="settings_appearance">外观</string>
+    <string name="settings_theme_mode">主题模式</string>
+    <string name="main_add_overlay">新增悬浮窗</string>
+    <string name="main_release_memory">释放内存</string>
+    <string name="main_trusted_overlay_on">Trusted 开</string>
+    <string name="main_trusted_overlay_off">Trusted 关</string>
+    <string name="action_release_memory_result">内存清理完成：已清理%1$d个窗口缓存/异常悬浮项，清理%2$d个无用临时文件。</string>
+    <string name="picture_settings_open_failed">无法打开这张图片。</string>
+</resources>

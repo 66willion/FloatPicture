@@ -14,6 +14,13 @@ public class PictureData {
 
     private static final String DataFileName = "PictureData.list";
     private static final String ListFileName = "PictureList.list";
+
+    // 静态缓存：在同一进程内跨实例共享，避免每次 setDataControl() 都读磁盘。
+    // volatile 保证子线程（ClearUselessTemp）对缓存失效的可见性。
+    // 写操作（commit/remove）先更新缓存再同步写磁盘，保持一致性。
+    private static volatile JSONObject cachedListObject = null;
+    private static volatile JSONObject cachedDataObject = null;
+
     private String id;
     private JSONObject detailObject;
     private JSONObject listObject;
@@ -22,11 +29,35 @@ public class PictureData {
     public PictureData() {
     }
 
+    /** 使静态缓存失效，下次读取时重新从磁盘加载。写操作完成后调用。 */
+    public static synchronized void invalidateCache() {
+        cachedListObject = null;
+        cachedDataObject = null;
+    }
+
     public void setDataControl(String id) {
         this.id = id;
-        this.listObject = getJSONFile(ListFileName);
-        this.dataObject = getJSONFile(DataFileName);
+        this.listObject = loadListObject();
+        this.dataObject = loadDataObject();
         this.detailObject = getDetailObject(this.id);
+    }
+
+    private synchronized JSONObject loadListObject() {
+        if (cachedListObject != null) {
+            return cachedListObject;
+        }
+        JSONObject loaded = getJSONFile(ListFileName);
+        cachedListObject = loaded;
+        return loaded;
+    }
+
+    private synchronized JSONObject loadDataObject() {
+        if (cachedDataObject != null) {
+            return cachedDataObject;
+        }
+        JSONObject loaded = getJSONFile(DataFileName);
+        cachedDataObject = loaded;
+        return loaded;
     }
 
     @SuppressWarnings("SameParameterValue")
@@ -103,7 +134,7 @@ public class PictureData {
     public float getFloat(String name, float defaultValue) {
         if (detailObject.has(name)) {
             try {
-                return Float.parseFloat(detailObject.get(name) + "f");
+                return (float) detailObject.getDouble(name);
             } catch (JSONException e) {
                 e.printStackTrace();
             }
@@ -117,6 +148,9 @@ public class PictureData {
                 listObject.put(id, pictureName);
             }
             dataObject.put(id, detailObject);
+            // 先更新缓存，再写磁盘，保持内存与磁盘一致
+            cachedListObject = listObject;
+            cachedDataObject = dataObject;
             setJSONFile(ListFileName, listObject);
             setJSONFile(DataFileName, dataObject);
         } catch (JSONException e) {
@@ -128,6 +162,8 @@ public class PictureData {
         if (listObject.has(id)) {
             listObject.remove(id);
             dataObject.remove(id);
+            cachedListObject = listObject;
+            cachedDataObject = dataObject;
             setJSONFile(ListFileName, listObject);
             setJSONFile(DataFileName, dataObject);
         }
@@ -145,14 +181,15 @@ public class PictureData {
     }
 
     public LinkedHashMap<String, String> getListArray() {
-        JSONObject listObject = getJSONFile(ListFileName);
+        // getListArray() 是独立方法，直接走缓存或磁盘，不依赖 setDataControl 的状态
+        JSONObject listObj = loadListObject();
         try {
-            Iterator<String> iterator = listObject.keys();
+            Iterator<String> iterator = listObj.keys();
             LinkedHashMap<String, String> arr = new LinkedHashMap<>();
             String key;
             while (iterator.hasNext()) {
                 key = iterator.next();
-                arr.put(key, listObject.getString(key));
+                arr.put(key, listObj.getString(key));
             }
             return arr;
         } catch (JSONException e) {
@@ -162,7 +199,7 @@ public class PictureData {
     }
 
     private JSONObject getJSONFile(String FileName) {
-        String content = IOMethods.readFile(Config.DEFAULT_DATA_DIR + FileName);
+        String content = IOMethods.readFile(Config.getDataDir() + FileName);
         if (content != null) {
             try {
                 if (!content.isEmpty()) {
@@ -177,7 +214,8 @@ public class PictureData {
 
     @SuppressWarnings("UnusedReturnValue")
     private boolean setJSONFile(String FileName, JSONObject jsonObject) {
-        return IOMethods.writeFile(jsonObject.toString(), Config.DEFAULT_DATA_DIR + FileName);
+        return IOMethods.writeFile(jsonObject.toString(), Config.getDataDir() + FileName);
     }
 
 }
+

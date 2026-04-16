@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="white">#FFFFFF</color>
+    <color name="colorPrimary">#60A5FA</color>
+    <color name="colorPrimaryDark">#3B82F6</color>
+    <color name="colorPrimaryContainer">#102A56</color>
+    <color name="colorOnPrimary">#081120</color>
+    <color name="colorAccent">#34D399</color>
+    <color name="colorBackground">#0F172A</color>
+    <color name="colorSurface">#111827</color>
+    <color name="colorSurfaceElevated">#162033</color>
+    <color name="colorCardStroke">#243247</color>
+    <color name="colorDivider">#243247</color>
+    <color name="colorTextPrimary">#F3F4F6</color>
+    <color name="colorTextSecondary">#A7B3C7</color>
+    <color name="colorPreviewBackground">#1A2740</color>
+    <color name="colorCodeBackGround">#1A2740</color>
+    <color name="colorImageViewEditBackground">#7834465E</color>
+    <color name="colorFloatingActionButtonBackGround">#60A5FA</color>
+    <color name="colorStatusSuccessBackground">#123524</color>
+    <color name="colorStatusSuccessText">#7DDA9C</color>
+    <color name="colorStatusInfoBackground">#112947</color>
+    <color name="colorStatusInfoText">#8ABEFF</color>
+    <color name="colorStatusWarningBackground">#3B2A15</color>
+    <color name="colorStatusWarningText">#F6C56D</color>
+    <color name="colorStatusNeutralBackground">#223147</color>
+    <color name="colorStatusNeutralText">#D3DCE8</color>
+    <color name="colorStatusDangerBackground">#482026</color>
+    <color name="colorStatusDangerText">#FFB4AB</color>
+    <color name="colorTrustedOverlayOn">#22C55E</color>
+    <color name="colorTrustedOverlayOff">#EF4444</color>
+</resources>

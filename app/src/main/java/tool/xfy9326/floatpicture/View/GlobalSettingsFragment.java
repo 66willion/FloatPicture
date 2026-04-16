@@ -1,6 +1,8 @@
 package tool.xfy9326.floatpicture.View;
 
+import android.content.Intent;
 import android.content.SharedPreferences;
+import android.provider.Settings;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -15,11 +17,14 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.PreferenceManager;
+import androidx.preference.SwitchPreferenceCompat;
 
 import java.util.Objects;
 
 import tool.xfy9326.floatpicture.R;
+import tool.xfy9326.floatpicture.Services.TrustedOverlayAccessibilityService;
 import tool.xfy9326.floatpicture.Utils.Config;
+import tool.xfy9326.floatpicture.Methods.ThemeMethods;
 
 public class GlobalSettingsFragment extends PreferenceFragmentCompat {
     private LayoutInflater inflater;
@@ -36,6 +41,13 @@ public class GlobalSettingsFragment extends PreferenceFragmentCompat {
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
         addPreferencesFromResource(R.xml.fragment_global_settings);
         PreferenceSet();
+        updateTrustedOverlaySummary();
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        updateTrustedOverlaySummary();
     }
 
     @NonNull
@@ -43,15 +55,45 @@ public class GlobalSettingsFragment extends PreferenceFragmentCompat {
         return Objects.requireNonNull(findPreference(key));
     }
 
+    @NonNull
+    private SwitchPreferenceCompat requireSwitchPreference(CharSequence key) {
+        return Objects.requireNonNull(findPreference(key));
+    }
+
     private void PreferenceSet() {
+        requirePreference(Config.PREFERENCE_THEME_MODE).setOnPreferenceChangeListener((preference, newValue) -> {
+            ThemeMethods.applyThemeMode(String.valueOf(newValue));
+            return true;
+        });
         requirePreference(Config.PREFERENCE_NEW_PICTURE_QUALITY).setOnPreferenceClickListener(preference -> {
             PictureQualitySet();
             return true;
+        });
+        requireSwitchPreference(Config.PREFERENCE_TRUSTED_OVERLAY_ACCESSIBILITY).setOnPreferenceChangeListener((preference, newValue) -> {
+            startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+            return false;
         });
         requirePreference(Config.PREFERENCE_SHOW_NOTIFICATION_CONTROL).setOnPreferenceChangeListener((preference, newValue) -> {
             Toast.makeText(getActivity(), R.string.restart_to_apply_changes, Toast.LENGTH_SHORT).show();
             return true;
         });
+    }
+
+    private void updateTrustedOverlaySummary() {
+        SwitchPreferenceCompat preference = findPreference(Config.PREFERENCE_TRUSTED_OVERLAY_ACCESSIBILITY);
+        if (preference == null) {
+            return;
+        }
+        boolean authorized = TrustedOverlayAccessibilityService.isAuthorized(requireContext());
+        boolean active = TrustedOverlayAccessibilityService.isActive();
+        preference.setChecked(authorized);
+        if (!authorized) {
+            preference.setSummary(R.string.settings_global_trusted_overlay_accessibility_sum);
+            return;
+        }
+        preference.setSummary(active
+                ? R.string.settings_global_trusted_overlay_accessibility_sum_enabled
+                : R.string.settings_global_trusted_overlay_accessibility_sum_authorized);
     }
 
     private void PictureQualitySet() {

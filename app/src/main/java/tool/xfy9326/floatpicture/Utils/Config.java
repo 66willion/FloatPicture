@@ -1,22 +1,21 @@
 package tool.xfy9326.floatpicture.Utils;
 
+import android.content.Context;
 import android.os.Environment;
 
 import java.io.File;
 
+import tool.xfy9326.floatpicture.MainApplication;
+
 public class Config {
     public final static int NOTIFICATION_ID = 4500;
-
-    public final static int REQUEST_CODE_PERMISSION_STORAGE = 1;
-    public final static int REQUEST_CODE_PERMISSION_OVERLAY = 2;
-    public final static int REQUEST_CODE_ACTIVITY_PICTURE_SETTINGS_ADD = 3;
-    public final static int REQUEST_CODE_ACTIVITY_PICTURE_SETTINGS_GET_PICTURE = 4;
-    public final static int REQUEST_CODE_ACTIVITY_PICTURE_SETTINGS_CHANGE = 5;
 
     public final static String INTENT_PICTURE_EDIT_POSITION = "EDIT_POSITION";
     public final static String INTENT_PICTURE_EDIT_ID = "EDIT_ID";
     public final static String INTENT_PICTURE_EDIT_MODE = "EDIT_MODE";
+    public final static String INTENT_PICTURE_WAS_HIDDEN = "PICTURE_WAS_HIDDEN";
 
+    public final static String INTENT_ACTION_NOTIFICATION_START = "ACTION_NOTIFICATION_START";
     public final static String INTENT_ACTION_NOTIFICATION_BUTTON_CLICK = "ACTION_NOTIFICATION_BUTTON_CLICK";
     public final static String INTENT_ACTION_NOTIFICATION_UPDATE_COUNT = "ACTION_NOTIFICATION_UPDATE_COUNT";
 
@@ -50,12 +49,49 @@ public class Config {
     public final static String PREFERENCE_SHOW_NOTIFICATION_CONTROL = "show_notification_control";
     public final static String PREFERENCE_NEW_PICTURE_QUALITY = "new_picture_quality";
     public final static String PREFERENCE_TOUCHABLE_POSITION_EDIT = "touchable_position_edit";
+    public final static String PREFERENCE_TRUSTED_OVERLAY_ACCESSIBILITY = "trusted_overlay_accessibility";
+    public final static String PREFERENCE_THEME_MODE = "theme_mode";
 
     public final static String LICENSE_PATH_APPLICATION = "LICENSE";
-    private final static String DEFAULT_ROOT_DIR = Environment.getExternalStorageDirectory().getAbsolutePath() + File.separator;
-    private final static String DEFAULT_APPLICATION_DIR = DEFAULT_ROOT_DIR + "FloatPicture" + File.separator;
-    public final static String DEFAULT_PICTURE_TEMP_DIR = DEFAULT_APPLICATION_DIR + "Pictures" + File.separator + ".TEMP" + File.separator;
-    final static String DEFAULT_DATA_DIR = DEFAULT_APPLICATION_DIR + "Data" + File.separator;
-    public final static String DEFAULT_PICTURE_DIR = DEFAULT_APPLICATION_DIR + "Pictures" + File.separator;
-    public final static String NO_MEDIA_FILE_DIR = DEFAULT_APPLICATION_DIR + File.separator + ".nomedia";
+    private final static String DEFAULT_APPLICATION_DIR = "FloatPicture";
+    private final static String DEFAULT_ORIGINAL_DIR_NAME = "Original";
+    private final static String DEFAULT_PICTURE_DIR_NAME = "Pictures";
+    private final static String DEFAULT_PICTURE_TEMP_DIR_NAME = ".TEMP";
+    private final static String DEFAULT_DATA_DIR_NAME = "Data";
+    private final static String NO_MEDIA_FILE_NAME = ".nomedia";
+
+    private static Context getContext() {
+        return MainApplication.getAppContext();
+    }
+
+    private static File getAppRootDir() {
+        Context context = getContext();
+        File externalFilesDir = context.getExternalFilesDir(Environment.DIRECTORY_PICTURES);
+        File baseDir = externalFilesDir != null ? externalFilesDir : context.getFilesDir();
+        return new File(baseDir, DEFAULT_APPLICATION_DIR);
+    }
+
+    private static String ensureSeparator(File file) {
+        return file.getAbsolutePath() + File.separator;
+    }
+
+    public static String getPictureTempDir() {
+        return ensureSeparator(new File(new File(getAppRootDir(), DEFAULT_PICTURE_DIR_NAME), DEFAULT_PICTURE_TEMP_DIR_NAME));
+    }
+
+    public static String getOriginalPictureDir() {
+        return ensureSeparator(new File(getAppRootDir(), DEFAULT_ORIGINAL_DIR_NAME));
+    }
+
+    static String getDataDir() {
+        return ensureSeparator(new File(getAppRootDir(), DEFAULT_DATA_DIR_NAME));
+    }
+
+    public static String getPictureDir() {
+        return ensureSeparator(new File(getAppRootDir(), DEFAULT_PICTURE_DIR_NAME));
+    }
+
+    public static String getNoMediaFilePath() {
+        return new File(getAppRootDir(), NO_MEDIA_FILE_NAME).getAbsolutePath();
+    }
 }

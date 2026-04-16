@@ -2,21 +2,25 @@ package tool.xfy9326.floatpicture.Methods;
 
 import static android.graphics.Bitmap.createBitmap;
 
-import android.content.ContentResolver;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Matrix;
+import android.graphics.Paint;
+import android.graphics.Point;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.util.DisplayMetrics;
+import android.util.Log;
+import android.widget.ImageView;
 
+import androidx.core.content.ContextCompat;
 import androidx.exifinterface.media.ExifInterface;
-import androidx.preference.PreferenceManager;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Objects;
 
 import tool.xfy9326.floatpicture.MainApplication;
 import tool.xfy9326.floatpicture.R;
@@ -24,20 +28,48 @@ import tool.xfy9326.floatpicture.Utils.Config;
 import tool.xfy9326.floatpicture.View.FloatImageView;
 
 public class ImageMethods {
+    private static final int DEFAULT_PREVIEW_SIZE_DP = 120;
+    private static final int DISPLAY_DECODE_MULTIPLIER = 2;
+    private static final float MIN_ZOOM = 0.01f;
+    private static final Object BITMAP_LOCK = new Object();
 
     private static Bitmap getBitmapFromFile(File imageFile) {
+        return getBitmapFromFile(imageFile, null);
+    }
+
+    private static Bitmap getBitmapFromFile(File imageFile, BitmapFactory.Options options) {
         if (imageFile.exists() && imageFile.isFile() && imageFile.canRead()) {
-            return BitmapFactory.decodeFile(imageFile.getAbsolutePath());
+            return BitmapFactory.decodeFile(imageFile.getAbsolutePath(), options);
         }
         return null;
     }
 
-    private static Bitmap getPictureById(String id) {
-        return getBitmapFromFile(new File(Config.DEFAULT_PICTURE_DIR + id));
+    private static File getOriginalPictureFile(String id) {
+        return new File(Config.getOriginalPictureDir() + id);
     }
 
-    private static Bitmap getPictureTempById(String id) {
-        return getBitmapFromFile(new File(Config.DEFAULT_PICTURE_TEMP_DIR + id));
+    private static File getLegacyPictureFile(String id) {
+        return new File(Config.getPictureDir() + id);
+    }
+
+    private static File getDisplayPictureFile(String id) {
+        return new File(Config.getPictureTempDir() + id);
+    }
+
+    private static File getAvailableSourceFile(String id) {
+        File originalFile = getOriginalPictureFile(id);
+        if (originalFile.exists()) {
+            return originalFile;
+        }
+        File legacyFile = getLegacyPictureFile(id);
+        if (legacyFile.exists()) {
+            return legacyFile;
+        }
+        return null;
+    }
+
+    private static boolean isOriginalPictureFile(File imageFile) {
+        return imageFile != null && imageFile.getAbsolutePath().startsWith(Config.getOriginalPictureDir());
     }
 
     private static String getNewPictureId(Context mContext, Uri uri) {
@@ -47,17 +79,18 @@ public class ImageMethods {
     public static String setNewImage(Context mContext, Uri uri) {
         try {
             String id = getNewPictureId(mContext, uri);
-            Bitmap bitmap = getNewBitmap(mContext, uri);
-            IOMethods.saveBitmap(bitmap, PreferenceManager.getDefaultSharedPreferences(mContext).getInt(Config.PREFERENCE_NEW_PICTURE_QUALITY, 80), Config.DEFAULT_PICTURE_DIR + id);
-            return id;
+            if (IOMethods.copyUriToFile(mContext, uri, Config.getOriginalPictureDir() + id)) {
+                return id;
+            }
         } catch (Exception e) {
             e.printStackTrace();
-            return null;
         }
+        return null;
     }
 
     public static void saveFloatImageViewById(Context mContext, String id, FloatImageView FloatImageView) {
         MainApplication mainApplication = (MainApplication) mContext.getApplicationContext();
+        FloatImageView.setPictureId(id);
         mainApplication.registerView(id, FloatImageView);
     }
 
@@ -66,12 +99,18 @@ public class ImageMethods {
         return (FloatImageView) mainApplication.getRegisteredView(id);
     }
 
-    public static FloatImageView createPictureView(Context mContext, Bitmap bitmap, boolean touchable, boolean overLayout, float zoom, float degree) {
-        FloatImageView imageView = new FloatImageView(mContext);
+    public static FloatImageView createPictureView(Context mContext, Bitmap bitmap, boolean touchable, boolean overLayout, float pictureAlpha, float zoom, float degree) {
+        return createPictureView(mContext, resizeBitmap(bitmap, zoom, degree), touchable, overLayout, pictureAlpha);
+    }
+
+    public static FloatImageView createPictureView(Context mContext, Bitmap bitmap, boolean touchable, boolean overLayout, float pictureAlpha) {
+        Context viewContext = mContext.getApplicationContext() != null ? mContext.getApplicationContext() : mContext;
+        FloatImageView imageView = new FloatImageView(viewContext);
         imageView.setMoveable(touchable);
         imageView.setOverLayout(overLayout);
-        imageView.setImageBitmap(resizeBitmap(bitmap, zoom, degree));
-        imageView.setBackgroundColor(mContext.getResources().getColor(android.R.color.transparent));
+        imageView.setPictureAlpha(pictureAlpha);
+        setPictureBitmap(imageView, bitmap);
+        imageView.setBackgroundColor(ContextCompat.getColor(viewContext, android.R.color.transparent));
         imageView.getBackground().setAlpha(0);
         return imageView;
     }
@@ -83,7 +122,7 @@ public class ImageMethods {
     private static Bitmap getEditBitmap(Context mContext, int width, int height) {
         Bitmap transparent_bitmap = createBitmap(width, height, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(transparent_bitmap);
-        canvas.drawColor(mContext.getResources().getColor(R.color.colorImageViewEditBackground));
+        canvas.drawColor(ContextCompat.getColor(mContext, R.color.colorImageViewEditBackground));
         return transparent_bitmap;
     }
 
@@ -91,43 +130,64 @@ public class ImageMethods {
         int width = bitmap.getWidth();
         int height = bitmap.getHeight();
         Matrix matrix = new Matrix();
-        if (zoom != 0) {
-            matrix.postScale(zoom, zoom);
+        float safeZoom = Math.max(zoom, MIN_ZOOM);
+        if (safeZoom != 1.0f) {
+            matrix.postScale(safeZoom, safeZoom);
         }
         if (degree != -1) {
             matrix.postRotate(degree);
         }
-        synchronized (ImageMethods.class) {
+        synchronized (BITMAP_LOCK) {
             return createBitmap(bitmap, 0, 0, width, height, matrix, true);
         }
     }
 
-    private static Bitmap getNewBitmap(Context mContext, Uri uri) {
-        int degree = 0;
-        Bitmap bitmap = IOMethods.readImageByUri(mContext, uri);
-        if (bitmap != null) {
-            try {
-                ContentResolver contentResolver = mContext.getContentResolver();
-                ExifInterface exifInterface = new ExifInterface(Objects.requireNonNull(contentResolver.openAssetFileDescriptor(uri, "r")).createInputStream());
-                int orientation = exifInterface.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
-                switch (orientation) {
-                    case ExifInterface.ORIENTATION_ROTATE_90 -> degree = 90;
-                    case ExifInterface.ORIENTATION_ROTATE_180 -> degree = 180;
-                    case ExifInterface.ORIENTATION_ROTATE_270 -> degree = 270;
-                }
-                Matrix matrix = new Matrix();
-                matrix.postRotate(degree);
-                bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-        return bitmap;
+    public static float getDefaultZoom(Context mContext, Bitmap bitmap, boolean isMax) {
+        return getDefaultZoom(mContext, bitmap.getWidth(), bitmap.getHeight(), isMax);
     }
 
-    public static float getDefaultZoom(Context mContext, Bitmap bitmap, boolean isMax) {
-        float image_width = bitmap.getWidth();
-        float image_height = bitmap.getHeight();
+    public static float getDefaultZoom(Context mContext, String id, boolean isMax) {
+        Point pictureSize = getSourceBitmapSize(id);
+        if (pictureSize != null) {
+            return getDefaultZoom(mContext, pictureSize.x, pictureSize.y, isMax);
+        }
+        Bitmap bitmap = getEditSourceBitmap(mContext, id);
+        float defaultZoom = getDefaultZoom(mContext, bitmap, isMax);
+        recycleBitmap(bitmap);
+        return defaultZoom;
+    }
+
+    public static Bitmap getDisplayBitmap(Context mContext, String id, float zoom, float degree) {
+        Bitmap displayBitmap = getBitmapFromFile(getDisplayPictureFile(id));
+        if (displayBitmap != null) {
+            return displayBitmap;
+        }
+        Bitmap renderedBitmap = createAndSaveDisplayBitmap(id, zoom, degree);
+        return renderedBitmap != null ? renderedBitmap : getEditBitmap(mContext, 50, 50);
+    }
+
+    public static Bitmap createAndSaveDisplayBitmap(String id, Bitmap sourceBitmap, float zoom, float degree) {
+        Bitmap renderedBitmap = renderDisplayBitmap(sourceBitmap, zoom, degree);
+        saveDisplayBitmap(id, renderedBitmap, false);
+        return renderedBitmap;
+    }
+
+    public static Bitmap createAndSaveDisplayBitmap(String id, float zoom, float degree) {
+        Bitmap renderedBitmap = buildDisplayBitmap(id, zoom, degree);
+        if (renderedBitmap != null) {
+            saveDisplayBitmap(id, renderedBitmap, false);
+        }
+        return renderedBitmap;
+    }
+
+    public static void recycleBitmap(Bitmap bitmap) {
+        recycleBitmap(bitmap, null);
+    }
+
+    private static float getDefaultZoom(Context mContext, int imageWidth, int imageHeight, boolean isMax) {
+        if (imageWidth <= 0 || imageHeight <= 0) {
+            return 1;
+        }
         DisplayMetrics displayMetrics = mContext.getResources().getDisplayMetrics();
         float screen_width;
         float screen_height;
@@ -138,64 +198,332 @@ public class ImageMethods {
             screen_width = displayMetrics.widthPixels / 3.0f;
             screen_height = displayMetrics.heightPixels / 3.0f;
         }
-        if (image_height <= image_width) {
-            if (image_height > screen_height || isMax) {
-                return ((float) Math.round((screen_height / image_height) * 100f)) / 100f;
+        if (imageHeight <= imageWidth) {
+            if (imageHeight > screen_height || isMax) {
+                return ((float) Math.round((screen_height / imageHeight) * 100f)) / 100f;
             }
         } else {
-            if (image_width > screen_width || isMax) {
-                return ((float) Math.round((screen_width / image_width) * 100f)) / 100f;
+            if (imageWidth > screen_width || isMax) {
+                return ((float) Math.round((screen_width / imageWidth) * 100f)) / 100f;
             }
         }
         return 1;
     }
 
     public static Bitmap getPreviewBitmap(Context mContext, String id) {
-        Bitmap temp = getPictureTempById(id);
-        if (temp == null) {
-            Bitmap bitmap = getPictureById(id);
-            if (bitmap == null) {
-                temp = getEditBitmap(mContext, 50, 50);
-            } else {
-                IOMethods.saveBitmap(bitmap, 50, Config.DEFAULT_PICTURE_TEMP_DIR + id);
-                bitmap.recycle();
-                temp = getPictureTempById(id);
+        int previewSize = Math.max(Math.round(mContext.getResources().getDisplayMetrics().density * DEFAULT_PREVIEW_SIZE_DP), 1);
+        Bitmap preview = decodeSampledBitmap(getDisplayPictureFile(id), previewSize, previewSize, true);
+        if (preview != null) {
+            return preview;
+        }
+        File sourceFile = getAvailableSourceFile(id);
+        if (sourceFile != null) {
+            preview = decodeSourceBitmap(sourceFile, previewSize, previewSize, true);
+            if (preview != null) {
+                return preview;
             }
         }
-        return temp;
+        return getEditBitmap(mContext, 50, 50);
+    }
+
+    public static Bitmap getEditSourceBitmap(Context mContext, String id) {
+        File originalFile = getOriginalPictureFile(id);
+        if (originalFile.exists()) {
+            Bitmap bitmap = decodeSourceBitmap(originalFile, 0, 0, false);
+            if (bitmap != null) {
+                return bitmap;
+            }
+        }
+        File legacyFile = getLegacyPictureFile(id);
+        if (legacyFile.exists()) {
+            Bitmap bitmap = getBitmapFromFile(legacyFile);
+            if (bitmap != null) {
+                return bitmap;
+            }
+        }
+        Bitmap displayBitmap = getBitmapFromFile(getDisplayPictureFile(id));
+        if (displayBitmap != null) {
+            return displayBitmap;
+        }
+        return getEditBitmap(mContext, 50, 50);
     }
 
     public static Bitmap getShowBitmap(Context mContext, String id) {
-        Bitmap temp = getPictureById(id);
-        if (temp == null) {
-            Bitmap bitmap = getPictureTempById(id);
-            if (bitmap == null) {
-                temp = getEditBitmap(mContext, 50, 50);
-            } else {
-                temp = getEditBitmap(mContext, bitmap);
-                bitmap.recycle();
-            }
-        }
-        return temp;
+        return getEditSourceBitmap(mContext, id);
     }
 
     public static boolean isPictureFileExist(String id) {
-        File picture = new File(Config.DEFAULT_PICTURE_DIR + id);
-        return picture.exists();
+        return getOriginalPictureFile(id).exists() || getLegacyPictureFile(id).exists();
+    }
+
+    public static void setPictureBitmap(FloatImageView imageView, Bitmap bitmap) {
+        Bitmap previousBitmap = getBitmapFromDrawable(imageView.getDrawable());
+        imageView.setImageBitmap(bitmap);
+        recycleBitmap(previousBitmap, bitmap);
+    }
+
+    public static void releaseImageBitmap(ImageView imageView) {
+        if (imageView == null) {
+            return;
+        }
+        Bitmap bitmap = getBitmapFromDrawable(imageView.getDrawable());
+        imageView.setImageDrawable(null);
+        recycleBitmap(bitmap, null);
+    }
+
+    public static void releasePictureView(FloatImageView imageView) {
+        if (imageView == null) {
+            return;
+        }
+        releaseImageBitmap(imageView);
+        imageView.setBackground(null);
     }
 
     public static void clearAllTemp(Context mContext, String id) {
         MainApplication mainApplication = (MainApplication) mContext.getApplicationContext();
-        mainApplication.unregisterView(id);
-        File imageFile = new File(Config.DEFAULT_PICTURE_DIR + id);
-        File tempFile = new File(Config.DEFAULT_PICTURE_TEMP_DIR + id);
-        if (imageFile.exists()) {
-            //noinspection ResultOfMethodCallIgnored
-            imageFile.delete();
+        if (mainApplication.getRegisteredView(id) instanceof FloatImageView floatImageView) {
+            releasePictureView(floatImageView);
         }
-        if (tempFile.exists()) {
-            //noinspection ResultOfMethodCallIgnored
-            tempFile.delete();
+        mainApplication.unregisterView(id);
+        deleteFileIfExists(getOriginalPictureFile(id));
+        deleteFileIfExists(getLegacyPictureFile(id));
+        deleteFileIfExists(getDisplayPictureFile(id));
+    }
+
+    private static Bitmap decodeSampledBitmap(File imageFile, int reqWidth, int reqHeight, boolean decodeAtLeastTarget) {
+        if (reqWidth <= 0 || reqHeight <= 0) {
+            return getBitmapFromFile(imageFile);
+        }
+        BitmapFactory.Options options = new BitmapFactory.Options();
+        options.inJustDecodeBounds = true;
+        getBitmapFromFile(imageFile, options);
+        if (options.outWidth <= 0 || options.outHeight <= 0) {
+            return null;
+        }
+        options.inJustDecodeBounds = false;
+        options.inPreferredConfig = Bitmap.Config.ARGB_8888;
+        options.inSampleSize = calculateInSampleSize(options, reqWidth, reqHeight, decodeAtLeastTarget);
+        return getBitmapFromFile(imageFile, options);
+    }
+
+    private static Bitmap decodeSourceBitmap(File sourceFile, int reqWidth, int reqHeight, boolean decodeAtLeastTarget) {
+        Bitmap bitmap = decodeSampledBitmap(sourceFile, reqWidth, reqHeight, decodeAtLeastTarget);
+        if (bitmap == null) {
+            return null;
+        }
+        if (isOriginalPictureFile(sourceFile)) {
+            return applyExifOrientation(bitmap, sourceFile);
+        }
+        return bitmap;
+    }
+
+    private static int calculateInSampleSize(BitmapFactory.Options options, int reqWidth, int reqHeight, boolean decodeAtLeastTarget) {
+        int width = options.outWidth;
+        int height = options.outHeight;
+        if (reqWidth <= 0 || reqHeight <= 0 || width <= 0 || height <= 0) {
+            return 1;
+        }
+        if (decodeAtLeastTarget) {
+            int widthRatio = Math.max(width / reqWidth, 1);
+            int heightRatio = Math.max(height / reqHeight, 1);
+            int minRatio = Math.min(widthRatio, heightRatio);
+            if (minRatio <= 1) {
+                return 1;
+            }
+            return Math.max(Integer.highestOneBit(minRatio), 1);
+        }
+        int inSampleSize = 1;
+        while ((height / inSampleSize) > reqHeight || (width / inSampleSize) > reqWidth) {
+            inSampleSize *= 2;
+        }
+        return Math.max(inSampleSize, 1);
+    }
+
+    private static Point getSourceBitmapSize(String id) {
+        File sourceFile = getAvailableSourceFile(id);
+        if (sourceFile == null) {
+            return null;
+        }
+        Point size = getBitmapSize(sourceFile);
+        if (size == null) {
+            return null;
+        }
+        if (isRotateSizeSwapped(getExifRotationDegrees(sourceFile))) {
+            return new Point(size.y, size.x);
+        }
+        return size;
+    }
+
+    private static Point getBitmapSize(File imageFile) {
+        BitmapFactory.Options options = new BitmapFactory.Options();
+        options.inJustDecodeBounds = true;
+        getBitmapFromFile(imageFile, options);
+        if (options.outWidth <= 0 || options.outHeight <= 0) {
+            return null;
+        }
+        return new Point(options.outWidth, options.outHeight);
+    }
+
+    private static Bitmap buildDisplayBitmap(String id, float zoom, float degree) {
+        File sourceFile = getAvailableSourceFile(id);
+        Point sourceSize = getSourceBitmapSize(id);
+        if (sourceFile == null || sourceSize == null) {
+            return null;
+        }
+        int targetWidth = getDisplayTargetSize(sourceSize.x, zoom);
+        int targetHeight = getDisplayTargetSize(sourceSize.y, zoom);
+        int decodeWidth = getDecodeTargetSize(targetWidth);
+        int decodeHeight = getDecodeTargetSize(targetHeight);
+        Bitmap sourceBitmap = decodeSourceBitmap(sourceFile, decodeWidth, decodeHeight, true);
+        if (sourceBitmap == null) {
+            return null;
+        }
+        Bitmap renderedBitmap = renderDisplayBitmap(sourceBitmap, targetWidth, targetHeight, degree);
+        if (renderedBitmap != sourceBitmap) {
+            recycleBitmap(sourceBitmap);
+        }
+        return renderedBitmap;
+    }
+
+    private static Bitmap renderDisplayBitmap(Bitmap sourceBitmap, float zoom, float degree) {
+        int targetWidth = getDisplayTargetSize(sourceBitmap.getWidth(), zoom);
+        int targetHeight = getDisplayTargetSize(sourceBitmap.getHeight(), zoom);
+        return renderDisplayBitmap(sourceBitmap, targetWidth, targetHeight, degree);
+    }
+
+    private static Bitmap renderDisplayBitmap(Bitmap sourceBitmap, int targetWidth, int targetHeight, float degree) {
+        Bitmap scaledBitmap = scaleBitmapMultiPass(sourceBitmap, targetWidth, targetHeight);
+        Bitmap rotatedBitmap = applyUserRotation(scaledBitmap, degree);
+        if (rotatedBitmap != scaledBitmap) {
+            recycleBitmap(scaledBitmap);
+        }
+        return rotatedBitmap;
+    }
+
+    private static Bitmap scaleBitmapMultiPass(Bitmap bitmap, int targetWidth, int targetHeight) {
+        if (targetWidth <= 0 || targetHeight <= 0) {
+            return bitmap;
+        }
+        Bitmap currentBitmap = bitmap;
+        while ((currentBitmap.getWidth() / 2) >= targetWidth && (currentBitmap.getHeight() / 2) >= targetHeight) {
+            int nextWidth = Math.max(targetWidth, currentBitmap.getWidth() / 2);
+            int nextHeight = Math.max(targetHeight, currentBitmap.getHeight() / 2);
+            Bitmap nextBitmap = createScaledBitmapHighQuality(currentBitmap, nextWidth, nextHeight);
+            if (currentBitmap != bitmap) {
+                recycleBitmap(currentBitmap);
+            }
+            currentBitmap = nextBitmap;
+        }
+        if (currentBitmap.getWidth() != targetWidth || currentBitmap.getHeight() != targetHeight) {
+            Bitmap exactBitmap = createScaledBitmapHighQuality(currentBitmap, targetWidth, targetHeight);
+            if (currentBitmap != bitmap) {
+                recycleBitmap(currentBitmap);
+            }
+            currentBitmap = exactBitmap;
+        }
+        return currentBitmap;
+    }
+
+    private static Bitmap createScaledBitmapHighQuality(Bitmap bitmap, int targetWidth, int targetHeight) {
+        if (bitmap.getWidth() == targetWidth && bitmap.getHeight() == targetHeight) {
+            return bitmap;
+        }
+        Bitmap scaledBitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(scaledBitmap);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG | Paint.DITHER_FLAG);
+        canvas.drawBitmap(bitmap, null, new android.graphics.Rect(0, 0, targetWidth, targetHeight), paint);
+        return scaledBitmap;
+    }
+
+    private static Bitmap applyUserRotation(Bitmap bitmap, float degree) {
+        float normalizedDegree = normalizeDegree(degree);
+        if (normalizedDegree == 0f) {
+            return bitmap;
+        }
+        Matrix matrix = new Matrix();
+        matrix.postRotate(normalizedDegree);
+        return Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
+    }
+
+    private static Bitmap applyExifOrientation(Bitmap bitmap, File imageFile) {
+        int rotationDegrees = getExifRotationDegrees(imageFile);
+        if (rotationDegrees == 0) {
+            return bitmap;
+        }
+        Matrix matrix = new Matrix();
+        matrix.postRotate(rotationDegrees);
+        Bitmap rotatedBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
+        if (rotatedBitmap != bitmap) {
+            recycleBitmap(bitmap);
+        }
+        return rotatedBitmap;
+    }
+
+    private static int getExifRotationDegrees(File imageFile) {
+        if (!isOriginalPictureFile(imageFile) || !imageFile.exists()) {
+            return 0;
+        }
+        try {
+            ExifInterface exifInterface = new ExifInterface(imageFile.getAbsolutePath());
+            int orientation = exifInterface.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
+            return switch (orientation) {
+                case ExifInterface.ORIENTATION_ROTATE_90 -> 90;
+                case ExifInterface.ORIENTATION_ROTATE_180 -> 180;
+                case ExifInterface.ORIENTATION_ROTATE_270 -> 270;
+                default -> 0;
+            };
+        } catch (IOException e) {
+            e.printStackTrace();
+            return 0;
+        }
+    }
+
+    private static boolean isRotateSizeSwapped(int rotationDegrees) {
+        return rotationDegrees == 90 || rotationDegrees == 270;
+    }
+
+    private static int getDisplayTargetSize(int sourceSize, float zoom) {
+        float safeZoom = Math.max(zoom, MIN_ZOOM);
+        return Math.max(Math.round(sourceSize * safeZoom), 1);
+    }
+
+    private static int getDecodeTargetSize(int targetSize) {
+        return Math.max(targetSize * DISPLAY_DECODE_MULTIPLIER, 1);
+    }
+
+    private static float normalizeDegree(float degree) {
+        float normalizedDegree = degree % 360f;
+        if (normalizedDegree < 0f) {
+            normalizedDegree += 360f;
+        }
+        if (Math.abs(normalizedDegree) < 0.01f || Math.abs(normalizedDegree - 360f) < 0.01f) {
+            return 0f;
+        }
+        return normalizedDegree;
+    }
+
+    private static void saveDisplayBitmap(String id, Bitmap bitmap, boolean recycle) {
+        IOMethods.saveBitmapLossless(bitmap, Config.getPictureTempDir() + id, recycle);
+    }
+
+    private static void deleteFileIfExists(File file) {
+        if (file.exists()) {
+            if (!file.delete()) {
+                Log.w("ImageMethods", "Failed to delete: " + file.getAbsolutePath());
+            }
+        }
+    }
+
+    private static Bitmap getBitmapFromDrawable(Drawable drawable) {
+        if (drawable instanceof BitmapDrawable bitmapDrawable) {
+            return bitmapDrawable.getBitmap();
+        }
+        return null;
+    }
+
+    private static void recycleBitmap(Bitmap bitmap, Bitmap keepBitmap) {
+        if (bitmap != null && bitmap != keepBitmap && !bitmap.isRecycled()) {
+            bitmap.recycle();
         }
     }
 }

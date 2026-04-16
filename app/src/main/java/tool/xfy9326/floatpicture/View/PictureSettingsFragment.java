@@ -27,6 +27,7 @@ import androidx.preference.PreferenceManager;
 import androidx.preference.SwitchPreferenceCompat;
 
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Objects;
 
 import tool.xfy9326.floatpicture.MainApplication;
@@ -38,6 +39,7 @@ import tool.xfy9326.floatpicture.Utils.PictureData;
 
 public class PictureSettingsFragment extends PreferenceFragmentCompat {
     private final static String WINDOW_CREATED = "WINDOW_CREATED";
+    private static final int THREE_DECIMAL_SCALE = 1000;
     private boolean Edit_Mode;
     private boolean Window_Created;
     private boolean onUseEditPicture = false;
@@ -368,21 +370,22 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         AlertDialog.Builder dialog = new AlertDialog.Builder(requireContext());
         dialog.setTitle(R.string.settings_picture_resize);
         dialog.setCancelable(false);
-        final float Max_Size = ImageMethods.getDefaultZoom(requireContext(), bitmap, true) * 100;
+        final float maxSize = roundToThreeDecimals(ImageMethods.getDefaultZoom(requireContext(), bitmap, true));
         TextView name = mView.findViewById(R.id.textview_set_size);
         name.setText(R.string.settings_picture_resize_size);
         final SeekBar seekBar = mView.findViewById(R.id.seekbar_set_size);
-        seekBar.setMax((int) Max_Size);
-        seekBar.setProgress((int) (zoom * 100));
+        seekBar.setMax(Math.max(1, toThreeDecimalProgress(maxSize)));
+        seekBar.setProgress(Math.max(1, Math.min(seekBar.getMax(), toThreeDecimalProgress(zoom))));
         final EditText editText = mView.findViewById(R.id.edittext_set_size);
-        editText.setText(String.valueOf(zoom));
-        zoom_temp = zoom;
+        enableDecimalInput(editText);
+        editText.setText(formatThreeDecimal(zoom));
+        zoom_temp = roundToThreeDecimals(zoom);
         seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 if (progress > 0) {
-                    zoom_temp = ((float) progress) / 100;
-                    editText.setText(String.valueOf(zoom_temp));
+                    zoom_temp = roundToThreeDecimals(((float) progress) / THREE_DECIMAL_SCALE);
+                    editText.setText(formatThreeDecimal(zoom_temp));
                     WindowsMethods.updateWindow(windowManager, floatImageView_Edit, bitmap_Edit, touch_and_move, allow_picture_over_layout, picture_alpha, zoom_temp, picture_degree, position_x, position_y);
                 }
             }
@@ -397,13 +400,21 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         });
         editText.setOnEditorActionListener((v, actionId, event) -> {
             try {
-                float edittext_temp = Float.parseFloat(v.getText().toString());
-                if (edittext_temp > 0 && (allow_picture_over_layout || edittext_temp <= Max_Size)) {
+                float edittext_temp = roundToThreeDecimals(Float.parseFloat(v.getText().toString().trim()));
+                if (edittext_temp > 0 && (allow_picture_over_layout || edittext_temp <= maxSize)) {
                     zoom_temp = edittext_temp;
-                    if (!allow_picture_over_layout) {
-                        seekBar.setProgress((int) (zoom_temp * 100));
+                    editText.setText(formatThreeDecimal(zoom_temp));
+                    boolean updatedBySeekBar = false;
+                    if (zoom_temp <= maxSize) {
+                        int progress = Math.max(1, Math.min(seekBar.getMax(), toThreeDecimalProgress(zoom_temp)));
+                        if (seekBar.getProgress() != progress) {
+                            seekBar.setProgress(progress);
+                            updatedBySeekBar = true;
+                        }
                     }
-                    WindowsMethods.updateWindow(windowManager, floatImageView_Edit, bitmap_Edit, touch_and_move, allow_picture_over_layout, picture_alpha, zoom_temp, picture_degree, position_x, position_y);
+                    if (!updatedBySeekBar) {
+                        WindowsMethods.updateWindow(windowManager, floatImageView_Edit, bitmap_Edit, touch_and_move, allow_picture_over_layout, picture_alpha, zoom_temp, picture_degree, position_x, position_y);
+                    }
                 } else {
                     Toast.makeText(requireContext(), R.string.settings_picture_resize_warn, Toast.LENGTH_SHORT).show();
                 }
@@ -413,13 +424,9 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
             return false;
         });
         dialog.setPositiveButton(R.string.done, (__, which) -> {
-            if (allow_picture_over_layout) {
-                try {
-                    zoom = Float.parseFloat(editText.getText().toString());
-                } catch (NumberFormatException e) {
-                    e.printStackTrace();
-                    zoom = zoom_temp;
-                }
+            Float inputValue = parseThreeDecimalFloat(editText);
+            if (inputValue != null && inputValue > 0f && (allow_picture_over_layout || inputValue <= maxSize)) {
+                zoom = inputValue;
             } else {
                 zoom = zoom_temp;
             }
@@ -453,16 +460,17 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         TextView name = mView.findViewById(R.id.textview_set_size);
         name.setText(R.string.degree);
         final SeekBar seekBar = mView.findViewById(R.id.seekbar_set_size);
-        seekBar.setMax(3600);
-        seekBar.setProgress((int) (picture_degree * 10));
+        seekBar.setMax(360 * THREE_DECIMAL_SCALE);
+        seekBar.setProgress(Math.min(seekBar.getMax(), toThreeDecimalProgress(picture_degree)));
         final EditText editText = mView.findViewById(R.id.edittext_set_size);
-        editText.setText(String.valueOf(((float) Math.round(picture_degree * 10)) / 10));
-        picture_degree_temp = picture_degree;
+        enableDecimalInput(editText);
+        editText.setText(formatThreeDecimal(picture_degree));
+        picture_degree_temp = roundToThreeDecimals(picture_degree);
         seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                picture_degree_temp = ((float) progress) / 10;
-                editText.setText(String.valueOf(((float) Math.round(picture_degree_temp * 10)) / 10));
+                picture_degree_temp = roundToThreeDecimals(((float) progress) / THREE_DECIMAL_SCALE);
+                editText.setText(formatThreeDecimal(picture_degree_temp));
                 WindowsMethods.updateWindow(windowManager, floatImageView_Edit, bitmap_Edit, touch_and_move, allow_picture_over_layout, picture_alpha, zoom, picture_degree_temp, position_x, position_y);
             }
 
@@ -476,11 +484,16 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         });
         editText.setOnEditorActionListener((v, actionId, event) -> {
             try {
-                float edittext_temp = Float.parseFloat(v.getText().toString());
+                float edittext_temp = roundToThreeDecimals(Float.parseFloat(v.getText().toString().trim()));
                 if (edittext_temp >= 0 && edittext_temp <= 360) {
                     picture_degree_temp = edittext_temp;
-                    seekBar.setProgress((int) (picture_degree_temp * 10));
-                    WindowsMethods.updateWindow(windowManager, floatImageView_Edit, bitmap_Edit, touch_and_move, allow_picture_over_layout, picture_alpha, zoom, picture_degree_temp, position_x, position_y);
+                    editText.setText(formatThreeDecimal(picture_degree_temp));
+                    int progress = Math.min(seekBar.getMax(), toThreeDecimalProgress(picture_degree_temp));
+                    if (seekBar.getProgress() != progress) {
+                        seekBar.setProgress(progress);
+                    } else {
+                        WindowsMethods.updateWindow(windowManager, floatImageView_Edit, bitmap_Edit, touch_and_move, allow_picture_over_layout, picture_alpha, zoom, picture_degree_temp, position_x, position_y);
+                    }
                 } else {
                     Toast.makeText(requireContext(), R.string.settings_number_warn, Toast.LENGTH_SHORT).show();
                 }
@@ -490,7 +503,12 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
             return false;
         });
         dialog.setPositiveButton(R.string.done, (__, which) -> {
-            picture_degree = picture_degree_temp;
+            Float inputValue = parseThreeDecimalFloat(editText);
+            if (inputValue != null && inputValue >= 0f && inputValue <= 360f) {
+                picture_degree = inputValue;
+            } else {
+                picture_degree = picture_degree_temp;
+            }
             onSuccessEditPicture();
         });
         dialog.setNegativeButton(R.string.cancel, (__, which) -> onFailedEditPicture());
@@ -515,16 +533,17 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         TextView name = mView.findViewById(R.id.textview_set_size);
         name.setText(R.string.transparency);
         final SeekBar seekBar = mView.findViewById(R.id.seekbar_set_size);
-        seekBar.setMax(100);
-        seekBar.setProgress((int) (picture_alpha * 100));
+        seekBar.setMax(THREE_DECIMAL_SCALE);
+        seekBar.setProgress(Math.min(seekBar.getMax(), toThreeDecimalProgress(picture_alpha)));
         final EditText editText = mView.findViewById(R.id.edittext_set_size);
-        editText.setText(String.valueOf(picture_alpha));
-        picture_alpha_temp = picture_alpha;
+        enableDecimalInput(editText);
+        editText.setText(formatThreeDecimal(picture_alpha));
+        picture_alpha_temp = roundToThreeDecimals(picture_alpha);
         seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                picture_alpha_temp = ((float) progress) / 100;
-                editText.setText(String.valueOf(picture_alpha_temp));
+                picture_alpha_temp = roundToThreeDecimals(((float) progress) / THREE_DECIMAL_SCALE);
+                editText.setText(formatThreeDecimal(picture_alpha_temp));
                 showWorkingWindowPreview(picture_alpha_temp);
             }
 
@@ -538,11 +557,16 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         });
         editText.setOnEditorActionListener((v, actionId, event) -> {
             try {
-                float edittext_temp = Float.parseFloat(v.getText().toString());
+                float edittext_temp = roundToThreeDecimals(Float.parseFloat(v.getText().toString().trim()));
                 if (edittext_temp >= 0 && edittext_temp <= 1) {
                     picture_alpha_temp = edittext_temp;
-                    seekBar.setProgress((int) (picture_alpha_temp * 100));
-                    showWorkingWindowPreview(picture_alpha_temp);
+                    editText.setText(formatThreeDecimal(picture_alpha_temp));
+                    int progress = Math.min(seekBar.getMax(), toThreeDecimalProgress(picture_alpha_temp));
+                    if (seekBar.getProgress() != progress) {
+                        seekBar.setProgress(progress);
+                    } else {
+                        showWorkingWindowPreview(picture_alpha_temp);
+                    }
                 } else {
                     Toast.makeText(requireContext(), R.string.settings_number_warn, Toast.LENGTH_SHORT).show();
                 }
@@ -552,7 +576,12 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
             return false;
         });
         dialog.setPositiveButton(R.string.done, (__, which) -> {
-            picture_alpha = picture_alpha_temp;
+            Float inputValue = parseThreeDecimalFloat(editText);
+            if (inputValue != null && inputValue >= 0f && inputValue <= 1f) {
+                picture_alpha = inputValue;
+            } else {
+                picture_alpha = picture_alpha_temp;
+            }
             showWorkingWindowPreview(picture_alpha);
         });
         dialog.setNegativeButton(R.string.cancel, (__, which) -> {
@@ -748,6 +777,31 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         Context context = getContext();
         if (context != null) {
             ImageMethods.saveFloatImageViewById(context, PictureId, floatImageView);
+        }
+    }
+
+    private void enableDecimalInput(EditText editText) {
+        editText.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+    }
+
+    private float roundToThreeDecimals(float value) {
+        return Math.round(value * THREE_DECIMAL_SCALE) / (float) THREE_DECIMAL_SCALE;
+    }
+
+    private int toThreeDecimalProgress(float value) {
+        return Math.round(roundToThreeDecimals(value) * THREE_DECIMAL_SCALE);
+    }
+
+    private String formatThreeDecimal(float value) {
+        return String.format(Locale.US, "%.3f", roundToThreeDecimals(value));
+    }
+
+    @Nullable
+    private Float parseThreeDecimalFloat(EditText editText) {
+        try {
+            return roundToThreeDecimals(Float.parseFloat(editText.getText().toString().trim()));
+        } catch (NumberFormatException ignored) {
+            return null;
         }
     }
 

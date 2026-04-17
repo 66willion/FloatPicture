@@ -60,6 +60,12 @@
     <string name="settings_picture_alpha">Set picture transparency</string>
     <string name="settings_picture_alpha_sum">Have transparent effects for regular pictures.</string>
     <string name="transparency">Transparency:</string>
+    <string name="settings_picture_corner_radius">Round corners</string>
+    <string name="settings_picture_corner_radius_sum">Softens rectangular edges with a rounded outline.</string>
+    <string name="settings_picture_corner_radius_value">Corner radius:</string>
+    <string name="settings_picture_edge_feather">Edge feather</string>
+    <string name="settings_picture_edge_feather_sum">Fade the image edges inward with a transparent transition.</string>
+    <string name="settings_picture_edge_feather_value">Feather width:</string>
     <string name="settings_number_warn">Please input a correct number!</string>
     <string name="settings_picture_degree">Set picture show degree</string>
     <string name="settings_picture_degree_sum">Rotate picture to any degree</string>

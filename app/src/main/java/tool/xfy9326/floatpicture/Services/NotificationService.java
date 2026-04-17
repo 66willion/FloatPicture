@@ -274,6 +274,14 @@ public class NotificationService extends Service {
         previewSession.zoom = intent.getFloatExtra(OverlayRuntimeController.EXTRA_ZOOM, 1f);
         previewSession.degree = intent.getFloatExtra(OverlayRuntimeController.EXTRA_DEGREE, Config.DATA_DEFAULT_PICTURE_DEGREE);
         previewSession.alpha = intent.getFloatExtra(OverlayRuntimeController.EXTRA_ALPHA, Config.DATA_DEFAULT_PICTURE_ALPHA);
+        previewSession.cornerRadiusRatio = intent.getFloatExtra(
+                OverlayRuntimeController.EXTRA_CORNER_RADIUS_RATIO,
+                Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_RATIO
+        );
+        previewSession.edgeFeatherRatio = intent.getFloatExtra(
+                OverlayRuntimeController.EXTRA_EDGE_FEATHER_RATIO,
+                Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_RATIO
+        );
         previewSession.positionX = intent.getIntExtra(OverlayRuntimeController.EXTRA_POSITION_X, Config.DATA_DEFAULT_PICTURE_POSITION_X);
         previewSession.positionY = intent.getIntExtra(OverlayRuntimeController.EXTRA_POSITION_Y, Config.DATA_DEFAULT_PICTURE_POSITION_Y);
         previewSession.touchAndMove = intent.getBooleanExtra(OverlayRuntimeController.EXTRA_TOUCH_AND_MOVE, Config.DATA_DEFAULT_PICTURE_TOUCH_AND_MOVE);
@@ -352,7 +360,13 @@ public class NotificationService extends Service {
     }
 
     private void applyPreviewSession(@NonNull PreviewSession previewSession) {
-        Bitmap renderedBitmap = ImageMethods.resizeBitmap(previewSession.sourceBitmap, previewSession.zoom, previewSession.degree);
+        Bitmap renderedBitmap = ImageMethods.resizeBitmap(
+                previewSession.sourceBitmap,
+                previewSession.zoom,
+                previewSession.degree,
+                previewSession.cornerRadiusRatio,
+                previewSession.edgeFeatherRatio
+        );
         FloatImageView floatImageView = ImageMethods.getFloatImageViewById(this, previewSession.pictureId);
         if (floatImageView == null) {
             floatImageView = ImageMethods.createPictureView(this, renderedBitmap, previewSession.touchAndMove, previewSession.overLayout, previewSession.alpha);
@@ -410,6 +424,8 @@ public class NotificationService extends Service {
         private float zoom = 1f;
         private float degree = Config.DATA_DEFAULT_PICTURE_DEGREE;
         private float alpha = Config.DATA_DEFAULT_PICTURE_ALPHA;
+        private float cornerRadiusRatio = Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_RATIO;
+        private float edgeFeatherRatio = Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_RATIO;
         private int positionX = Config.DATA_DEFAULT_PICTURE_POSITION_X;
         private int positionY = Config.DATA_DEFAULT_PICTURE_POSITION_Y;
         private boolean touchAndMove = Config.DATA_DEFAULT_PICTURE_TOUCH_AND_MOVE;

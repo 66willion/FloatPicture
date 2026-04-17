@@ -26,6 +26,8 @@ public class Config {
     public final static String DATA_PICTURE_DEFAULT_ZOOM = "DEFAULT_ZOOM";
     public final static String DATA_PICTURE_ALPHA = "ALPHA";
     public final static String DATA_PICTURE_DEGREE = "DEGREE";
+    public final static String DATA_PICTURE_CORNER_RADIUS_RATIO = "CORNER_RADIUS_RATIO";
+    public final static String DATA_PICTURE_EDGE_FEATHER_RATIO = "EDGE_FEATHER_RATIO";
     public final static String DATA_PICTURE_TOUCH_AND_MOVE = "TOUCH_AND_MOVE";
     public final static String DATA_ALLOW_PICTURE_OVER_LAYOUT = "ALLOW_PICTURE_OVER_LAYOUT";
 
@@ -34,6 +36,8 @@ public class Config {
     public final static int DATA_DEFAULT_PICTURE_POSITION_Y = 100;
     public final static float DATA_DEFAULT_PICTURE_ALPHA = 0.5f;
     public final static float DATA_DEFAULT_PICTURE_DEGREE = 0f;
+    public final static float DATA_DEFAULT_PICTURE_CORNER_RADIUS_RATIO = 0f;
+    public final static float DATA_DEFAULT_PICTURE_EDGE_FEATHER_RATIO = 0f;
     public final static boolean DATA_DEFAULT_PICTURE_TOUCH_AND_MOVE = false;
     public final static boolean DATA_DEFAULT_ALLOW_PICTURE_OVER_LAYOUT = false;
 
@@ -42,6 +46,8 @@ public class Config {
     public final static String PREFERENCE_ALLOW_PICTURE_OVER_LAYOUT = "settings_allow_picture_over_layout";
     public final static String PREFERENCE_PICTURE_RESIZE = "settings_picture_resize";
     public final static String PREFERENCE_PICTURE_ALPHA = "settings_picture_alpha";
+    public final static String PREFERENCE_PICTURE_CORNER_RADIUS = "settings_picture_corner_radius";
+    public final static String PREFERENCE_PICTURE_EDGE_FEATHER = "settings_picture_edge_feather";
     public final static String PREFERENCE_PICTURE_POSITION = "settings_picture_position";
     public final static String PREFERENCE_PICTURE_DEGREE = "settings_picture_degree";
     public final static String PREFERENCE_PICTURE_TOUCH_AND_MOVE = "settings_picture_touchable_and_moveable";

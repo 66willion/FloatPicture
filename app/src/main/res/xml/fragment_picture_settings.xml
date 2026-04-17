@@ -44,6 +44,20 @@
             app:singleLine="true"
             app:summary="@string/settings_picture_alpha_sum"
             app:title="@string/settings_picture_alpha" />
+        <Preference
+            android:selectAllOnFocus="true"
+            app:iconSpaceReserved="false"
+            app:key="settings_picture_corner_radius"
+            app:singleLine="true"
+            app:summary="@string/settings_picture_corner_radius_sum"
+            app:title="@string/settings_picture_corner_radius" />
+        <Preference
+            android:selectAllOnFocus="true"
+            app:iconSpaceReserved="false"
+            app:key="settings_picture_edge_feather"
+            app:singleLine="true"
+            app:summary="@string/settings_picture_edge_feather_sum"
+            app:title="@string/settings_picture_edge_feather" />
     </PreferenceCategory>
     <PreferenceCategory
         app:iconSpaceReserved="false"

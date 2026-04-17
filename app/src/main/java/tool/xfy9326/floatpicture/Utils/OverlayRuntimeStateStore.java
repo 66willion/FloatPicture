@@ -3,8 +3,12 @@ package tool.xfy9326.floatpicture.Utils;
 import android.content.Context;
 import android.graphics.Point;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 import tool.xfy9326.floatpicture.Methods.IOMethods;
 
@@ -12,6 +16,7 @@ public final class OverlayRuntimeStateStore {
     private static final String STATE_FILE_NAME = "OverlayRuntimeState.json";
     private static final String KEY_TRUSTED_OVERLAY_ACTIVE = "trusted_overlay_active";
     private static final String KEY_WINDOW_POSITIONS = "window_positions";
+    private static final String KEY_PURE_OVERLAY_MANAGED_PICTURE_IDS = "pure_overlay_managed_picture_ids";
     private static final String KEY_POSITION_X = "x";
     private static final String KEY_POSITION_Y = "y";
 
@@ -30,6 +35,72 @@ public final class OverlayRuntimeStateStore {
 
     public static synchronized boolean isTrustedOverlayActive(Context context) {
         return readState().optBoolean(KEY_TRUSTED_OVERLAY_ACTIVE, false);
+    }
+
+    public static synchronized void savePureOverlayManagedPictureIds(Context context, Set<String> pictureIds) {
+        JSONObject state = readState();
+        if (pictureIds == null || pictureIds.isEmpty()) {
+            state.remove(KEY_PURE_OVERLAY_MANAGED_PICTURE_IDS);
+            writeState(state);
+            return;
+        }
+        JSONArray pictureIdArray = new JSONArray();
+        for (String pictureId : pictureIds) {
+            if (pictureId == null || pictureId.isEmpty()) {
+                continue;
+            }
+            pictureIdArray.put(pictureId);
+        }
+        if (pictureIdArray.length() == 0) {
+            state.remove(KEY_PURE_OVERLAY_MANAGED_PICTURE_IDS);
+        } else {
+            try {
+                state.put(KEY_PURE_OVERLAY_MANAGED_PICTURE_IDS, pictureIdArray);
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+        }
+        writeState(state);
+    }
+
+    public static synchronized LinkedHashSet<String> getPureOverlayManagedPictureIds(Context context) {
+        LinkedHashSet<String> pictureIds = new LinkedHashSet<>();
+        JSONArray pictureIdArray = readState().optJSONArray(KEY_PURE_OVERLAY_MANAGED_PICTURE_IDS);
+        if (pictureIdArray == null) {
+            return pictureIds;
+        }
+        for (int index = 0; index < pictureIdArray.length(); index++) {
+            String pictureId = pictureIdArray.optString(index, null);
+            if (pictureId == null || pictureId.isEmpty()) {
+                continue;
+            }
+            pictureIds.add(pictureId);
+        }
+        return pictureIds;
+    }
+
+    public static synchronized boolean hasPureOverlayManagedPictureIds(Context context) {
+        return !getPureOverlayManagedPictureIds(context).isEmpty();
+    }
+
+    public static synchronized void clearPureOverlayManagedPictureIds(Context context) {
+        JSONObject state = readState();
+        if (!state.has(KEY_PURE_OVERLAY_MANAGED_PICTURE_IDS)) {
+            return;
+        }
+        state.remove(KEY_PURE_OVERLAY_MANAGED_PICTURE_IDS);
+        writeState(state);
+    }
+
+    public static synchronized void removePureOverlayManagedPictureId(Context context, String pictureId) {
+        if (pictureId == null || pictureId.isEmpty()) {
+            return;
+        }
+        LinkedHashSet<String> pictureIds = getPureOverlayManagedPictureIds(context);
+        if (!pictureIds.remove(pictureId)) {
+            return;
+        }
+        savePureOverlayManagedPictureIds(context, pictureIds);
     }
 
     public static synchronized void saveWindowPosition(Context context, String pictureId, int positionX, int positionY) {

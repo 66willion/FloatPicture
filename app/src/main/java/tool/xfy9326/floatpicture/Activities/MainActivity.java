@@ -39,6 +39,7 @@ import tool.xfy9326.floatpicture.Methods.PermissionMethods;
 import tool.xfy9326.floatpicture.R;
 import tool.xfy9326.floatpicture.Services.TrustedOverlayAccessibilityService;
 import tool.xfy9326.floatpicture.Utils.Config;
+import tool.xfy9326.floatpicture.Utils.OverlayRuntimeStateStore;
 import tool.xfy9326.floatpicture.View.AdvancedRecyclerView;
 import tool.xfy9326.floatpicture.View.ManageListAdapter;
 
@@ -358,8 +359,19 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void deactivatePureOverlayModeIfNeeded() {
-        if (ApplicationMethods.isPureOverlayModeEnabled(this)) {
+        boolean pureOverlayModeEnabled = ApplicationMethods.isPureOverlayModeEnabled(this);
+        boolean managedPictureIdsPresent = OverlayRuntimeStateStore.hasPureOverlayManagedPictureIds(this);
+        if (!pureOverlayModeEnabled && !managedPictureIdsPresent) {
+            return;
+        }
+        if (pureOverlayModeEnabled) {
             ApplicationMethods.setPureOverlayModeEnabled(this, false);
+        }
+        if (managedPictureIdsPresent) {
+            OverlayRuntimeStateStore.clearPureOverlayManagedPictureIds(this);
+        }
+        if (pureOverlayModeEnabled && PermissionMethods.hasOverlayPermission(this)) {
+            OverlayRuntimeController.refreshNotification(this);
         }
     }
 
@@ -372,6 +384,8 @@ public class MainActivity extends AppCompatActivity {
             pureOverlayToggleInProgress = true;
             pureOverlayButton.setEnabled(false);
             ApplicationMethods.setPureOverlayModeEnabled(this, false);
+            OverlayRuntimeStateStore.clearPureOverlayManagedPictureIds(this);
+            OverlayRuntimeController.refreshNotification(this);
             updatePureOverlayButtonState();
             pureOverlayButton.postDelayed(() -> {
                 pureOverlayToggleInProgress = false;
@@ -391,8 +405,14 @@ public class MainActivity extends AppCompatActivity {
             SnackShow(this, R.string.main_pure_overlay_requires_visible_window);
             return;
         }
+        java.util.Set<String> pureOverlayManagedPictureIds = ManageMethods.getVisibleConfiguredPictureIds(this);
+        if (pureOverlayManagedPictureIds.isEmpty()) {
+            SnackShow(this, R.string.main_pure_overlay_requires_visible_window);
+            return;
+        }
         pureOverlayToggleInProgress = true;
         pureOverlayButton.setEnabled(false);
+        OverlayRuntimeStateStore.savePureOverlayManagedPictureIds(this, pureOverlayManagedPictureIds);
         ApplicationMethods.setPureOverlayModeEnabled(this, true);
         ApplicationMethods.startNotificationControl(this);
         updatePureOverlayButtonState();

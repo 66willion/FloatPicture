@@ -9,8 +9,10 @@ import android.view.View;
 import android.view.WindowManager;
 
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 
 import tool.xfy9326.floatpicture.MainApplication;
 import tool.xfy9326.floatpicture.Services.NotificationService;
@@ -71,6 +73,7 @@ public class ManageMethods {
         if (!releaseWindowById(mContext, id, true)) {
             return false;
         }
+        OverlayRuntimeStateStore.removePureOverlayManagedPictureId(mContext, id);
         pictureData.remove();
         ImageMethods.clearAllTemp(mContext, id);
         updateGlobalVisibleState(mContext);
@@ -186,31 +189,66 @@ public class ManageMethods {
     }
 
     public static boolean hasVisibleWindowsConfigured(Context context) {
+        return hasVisibleWindowsConfigured(context, null);
+    }
+
+    public static boolean hasVisibleWindowsConfigured(Context context, Set<String> filterIds) {
+        return !getVisibleConfiguredPictureIds(context, filterIds).isEmpty();
+    }
+
+    public static LinkedHashSet<String> getVisibleConfiguredPictureIds(Context context) {
+        return getVisibleConfiguredPictureIds(context, null);
+    }
+
+    public static LinkedHashSet<String> getVisibleConfiguredPictureIds(Context context, Set<String> filterIds) {
+        if (filterIds != null && filterIds.isEmpty()) {
+            return new LinkedHashSet<>();
+        }
         PictureData pictureData = new PictureData();
         LinkedHashMap<String, String> linkedHashMap = pictureData.getListArray();
+        LinkedHashSet<String> visiblePictureIds = new LinkedHashSet<>();
         if (linkedHashMap == null || linkedHashMap.isEmpty()) {
-            return false;
+            return visiblePictureIds;
         }
         for (Map.Entry<?, ?> entry : linkedHashMap.entrySet()) {
-            pictureData.setDataControl(entry.getKey().toString());
+            String pictureId = entry.getKey().toString();
+            if (filterIds != null && !filterIds.contains(pictureId)) {
+                continue;
+            }
+            pictureData.setDataControl(pictureId);
             if (pictureData.getBoolean(Config.DATA_PICTURE_SHOW_ENABLED, Config.DATA_DEFAULT_PICTURE_SHOW_ENABLED)) {
-                return true;
+                visiblePictureIds.add(pictureId);
             }
         }
-        return false;
+        return visiblePictureIds;
     }
 
     public static void setAllWindowsVisible(Context context, boolean visible) {
-        String id;
         PictureData pictureData = new PictureData();
         LinkedHashMap<String, String> linkedHashMap = pictureData.getListArray();
         if (linkedHashMap == null || linkedHashMap.isEmpty()) {
             ((MainApplication) context.getApplicationContext()).setWinVisible(false);
             return;
         }
-        for (Map.Entry<?, ?> o : linkedHashMap.entrySet()) {
-            id = o.getKey().toString();
-            setWindowVisible(context, pictureData, id, visible);
+        setWindowsVisible(context, new LinkedHashSet<>(linkedHashMap.keySet()), visible);
+    }
+
+    public static void setWindowsVisible(Context context, Set<String> targetIds, boolean visible) {
+        if (targetIds == null || targetIds.isEmpty()) {
+            updateGlobalVisibleState(context);
+            return;
+        }
+        PictureData pictureData = new PictureData();
+        LinkedHashMap<String, String> linkedHashMap = pictureData.getListArray();
+        if (linkedHashMap == null || linkedHashMap.isEmpty()) {
+            ((MainApplication) context.getApplicationContext()).setWinVisible(false);
+            return;
+        }
+        for (String pictureId : targetIds) {
+            if (pictureId == null || pictureId.isEmpty() || !linkedHashMap.containsKey(pictureId)) {
+                continue;
+            }
+            setWindowVisible(context, pictureData, pictureId, visible);
         }
     }
 

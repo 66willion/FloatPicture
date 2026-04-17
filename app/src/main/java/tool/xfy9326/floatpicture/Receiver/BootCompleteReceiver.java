@@ -9,9 +9,9 @@ import androidx.preference.PreferenceManager;
 import java.util.Objects;
 
 import tool.xfy9326.floatpicture.Methods.ApplicationMethods;
-import tool.xfy9326.floatpicture.Methods.ManageMethods;
 import tool.xfy9326.floatpicture.Methods.PermissionMethods;
 import tool.xfy9326.floatpicture.Utils.Config;
+import tool.xfy9326.floatpicture.Utils.OverlayRuntimeStateStore;
 
 public class BootCompleteReceiver extends BroadcastReceiver {
     @Override
@@ -20,7 +20,7 @@ public class BootCompleteReceiver extends BroadcastReceiver {
             boolean bootAutoRun = PreferenceManager.getDefaultSharedPreferences(context)
                     .getBoolean(Config.PREFERENCE_BOOT_AUTO_RUN, false);
             boolean pureOverlayMode = ApplicationMethods.isPureOverlayModeEnabled(context)
-                    && ManageMethods.hasVisibleWindowsConfigured(context);
+                    && OverlayRuntimeStateStore.hasPureOverlayManagedPictureIds(context);
             if ((bootAutoRun || pureOverlayMode) && PermissionMethods.hasOverlayPermission(context)) {
                 ApplicationMethods.startNotificationControl(context);
             }

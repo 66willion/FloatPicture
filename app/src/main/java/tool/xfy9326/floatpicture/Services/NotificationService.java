@@ -25,6 +25,7 @@ import androidx.preference.PreferenceManager;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 
 import tool.xfy9326.floatpicture.Activities.MainActivity;
 import tool.xfy9326.floatpicture.MainApplication;
@@ -321,6 +322,12 @@ public class NotificationService extends Service {
     }
 
     private void toggleAllWindowsVisible() {
+        Set<String> targetIds = getPureOverlayNotificationTargetIds();
+        if (targetIds != null) {
+            boolean visible = !ManageMethods.hasVisibleWindowsConfigured(this, targetIds);
+            ManageMethods.setWindowsVisible(this, targetIds, visible);
+            return;
+        }
         boolean visible = !ManageMethods.hasVisibleWindowsConfigured(this);
         ManageMethods.setAllWindowsVisible(this, visible);
     }
@@ -331,7 +338,10 @@ public class NotificationService extends Service {
         }
         boolean showControl = PreferenceManager.getDefaultSharedPreferences(this)
                 .getBoolean(Config.PREFERENCE_SHOW_NOTIFICATION_CONTROL, true);
-        boolean anyVisible = ManageMethods.hasVisibleWindowsConfigured(this);
+        Set<String> targetIds = getPureOverlayNotificationTargetIds();
+        boolean anyVisible = targetIds != null
+                ? ManageMethods.hasVisibleWindowsConfigured(this, targetIds)
+                : ManageMethods.hasVisibleWindowsConfigured(this);
         remoteViews.setImageViewResource(R.id.imageview_notification_application, R.mipmap.ic_launcher);
         remoteViews.setTextViewText(
                 R.id.textview_picture_num,
@@ -343,9 +353,9 @@ public class NotificationService extends Service {
         );
         remoteViews.setViewVisibility(R.id.imageview_set_picture_view, showControl ? View.VISIBLE : View.GONE);
         if (showControl) {
-            remoteViews.setOnClickPendingIntent(R.id.imageview_set_picture_view, createToggleIntent());
+            remoteViews.setOnClickPendingIntent(R.id.layout_notification_toggle, createToggleIntent());
         } else {
-            remoteViews.setOnClickPendingIntent(R.id.imageview_set_picture_view, null);
+            remoteViews.setOnClickPendingIntent(R.id.layout_notification_toggle, null);
         }
         builderManage.setContent(remoteViews);
 
@@ -357,6 +367,12 @@ public class NotificationService extends Service {
             } catch (SecurityException ignored) {
             }
         }
+    }
+
+    @Nullable
+    private Set<String> getPureOverlayNotificationTargetIds() {
+        Set<String> targetIds = OverlayRuntimeStateStore.getPureOverlayManagedPictureIds(this);
+        return targetIds.isEmpty() ? null : targetIds;
     }
 
     private void applyPreviewSession(@NonNull PreviewSession previewSession) {

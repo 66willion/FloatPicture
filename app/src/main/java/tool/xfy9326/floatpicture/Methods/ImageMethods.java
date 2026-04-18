@@ -33,7 +33,8 @@ import tool.xfy9326.floatpicture.Utils.Config;
 import tool.xfy9326.floatpicture.View.FloatImageView;
 
 public class ImageMethods {
-    private static final int DEFAULT_PREVIEW_SIZE_DP = 120;
+    private static final int MANAGE_PREVIEW_WIDTH_DP = 72;
+    private static final int MANAGE_PREVIEW_HEIGHT_DP = 96;
     private static final int DISPLAY_DECODE_MULTIPLIER = 2;
     private static final int TEMP_PREVIEW_SOURCE_MAX_SIDE = 512;
     private static final float MIN_ZOOM = 0.01f;
@@ -671,14 +672,16 @@ public class ImageMethods {
     }
 
     public static Bitmap getPreviewBitmap(Context mContext, String id) {
-        int previewSize = Math.max(Math.round(mContext.getResources().getDisplayMetrics().density * DEFAULT_PREVIEW_SIZE_DP), 1);
-        Bitmap preview = decodeSampledBitmap(getDisplayPictureFile(id), previewSize, previewSize, true);
+        DisplayMetrics displayMetrics = mContext.getResources().getDisplayMetrics();
+        int previewWidth = Math.max(Math.round(displayMetrics.density * MANAGE_PREVIEW_WIDTH_DP), 1);
+        int previewHeight = Math.max(Math.round(displayMetrics.density * MANAGE_PREVIEW_HEIGHT_DP), 1);
+        Bitmap preview = decodeSampledBitmap(getDisplayPictureFile(id), previewWidth, previewHeight, true);
         if (preview != null) {
             return preview;
         }
         File sourceFile = getAvailableSourceFile(id);
         if (sourceFile != null) {
-            preview = decodeSourceBitmap(sourceFile, previewSize, previewSize, true);
+            preview = decodeSourceBitmap(sourceFile, previewWidth, previewHeight, true);
             if (preview != null) {
                 return preview;
             }

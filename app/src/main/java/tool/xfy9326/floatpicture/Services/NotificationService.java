@@ -170,8 +170,9 @@ public class NotificationService extends Service {
             case OverlayRuntimeController.ACTION_RUNTIME_REFRESH_NOTIFICATION:
                 return true;
             case Config.INTENT_ACTION_NOTIFICATION_BUTTON_CLICK:
-                toggleAllWindowsVisible();
-                OverlayRuntimeController.notifyRuntimeStateChanged(this);
+                if (toggleAllWindowsVisible()) {
+                    OverlayRuntimeController.notifyRuntimeStateChanged(this);
+                }
                 return true;
             case OverlayRuntimeController.ACTION_RUNTIME_RECREATE_WINDOWS:
                 ManageMethods.recreateVisibleWindows(this);
@@ -182,8 +183,9 @@ public class NotificationService extends Service {
                 handleSetWindowVisible(intent);
                 return true;
             case OverlayRuntimeController.ACTION_RUNTIME_SET_ALL_WINDOWS_VISIBLE:
-                ManageMethods.setAllWindowsVisible(this, intent.getBooleanExtra(OverlayRuntimeController.EXTRA_VISIBLE, false));
-                OverlayRuntimeController.notifyRuntimeStateChanged(this);
+                if (setPureOverlayWindowsVisible(intent)) {
+                    OverlayRuntimeController.notifyRuntimeStateChanged(this);
+                }
                 return true;
             case OverlayRuntimeController.ACTION_RUNTIME_SYNC_PICTURE:
                 handleSyncPicture(intent);
@@ -338,15 +340,26 @@ public class NotificationService extends Service {
         stopSelf();
     }
 
-    private void toggleAllWindowsVisible() {
+    private boolean toggleAllWindowsVisible() {
         Set<String> targetIds = getPureOverlayNotificationTargetIds();
-        if (targetIds != null) {
-            boolean visible = !ManageMethods.hasVisibleWindowsConfigured(this, targetIds);
-            ManageMethods.setWindowsVisible(this, targetIds, visible);
-            return;
+        if (targetIds == null) {
+            return false;
         }
-        boolean visible = !ManageMethods.hasVisibleWindowsConfigured(this);
-        ManageMethods.setAllWindowsVisible(this, visible);
+        boolean visible = !ManageMethods.hasVisibleWindowsConfigured(this, targetIds);
+        ManageMethods.setWindowsVisible(this, targetIds, visible);
+        return true;
+    }
+
+    private boolean setPureOverlayWindowsVisible(@Nullable Intent intent) {
+        if (intent == null) {
+            return false;
+        }
+        Set<String> targetIds = getPureOverlayNotificationTargetIds();
+        if (targetIds == null) {
+            return false;
+        }
+        ManageMethods.setWindowsVisible(this, targetIds, intent.getBooleanExtra(OverlayRuntimeController.EXTRA_VISIBLE, false));
+        return true;
     }
 
     private void updateNotification() {
@@ -356,6 +369,7 @@ public class NotificationService extends Service {
         boolean showControl = PreferenceManager.getDefaultSharedPreferences(this)
                 .getBoolean(Config.PREFERENCE_SHOW_NOTIFICATION_CONTROL, true);
         Set<String> targetIds = getPureOverlayNotificationTargetIds();
+        boolean pureOverlayToggleVisible = showControl && targetIds != null;
         boolean anyVisible = targetIds != null
                 ? ManageMethods.hasVisibleWindowsConfigured(this, targetIds)
                 : ManageMethods.hasVisibleWindowsConfigured(this);
@@ -371,8 +385,8 @@ public class NotificationService extends Service {
                 R.id.imageview_set_picture_view,
                 anyVisible ? R.drawable.ic_visible : R.drawable.ic_invisible
         );
-        remoteViews.setViewVisibility(R.id.imageview_set_picture_view, showControl ? View.VISIBLE : View.GONE);
-        if (showControl) {
+        remoteViews.setViewVisibility(R.id.layout_notification_toggle, pureOverlayToggleVisible ? View.VISIBLE : View.GONE);
+        if (pureOverlayToggleVisible) {
             remoteViews.setOnClickPendingIntent(R.id.layout_notification_toggle, createToggleIntent());
         } else {
             remoteViews.setOnClickPendingIntent(R.id.layout_notification_toggle, null);

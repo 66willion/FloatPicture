@@ -359,10 +359,13 @@ public class NotificationService extends Service {
         boolean anyVisible = targetIds != null
                 ? ManageMethods.hasVisibleWindowsConfigured(this, targetIds)
                 : ManageMethods.hasVisibleWindowsConfigured(this);
+        int pictureCount = targetIds != null
+                ? ManageMethods.getWindowCount(targetIds)
+                : ManageMethods.getWindowCount();
         remoteViews.setImageViewResource(R.id.imageview_notification_application, R.mipmap.ic_launcher);
         remoteViews.setTextViewText(
                 R.id.textview_picture_num,
-                getString(R.string.notification_picture_count, String.valueOf(ManageMethods.getWindowCount()))
+                getString(R.string.notification_picture_count, String.valueOf(pictureCount))
         );
         remoteViews.setImageViewResource(
                 R.id.imageview_set_picture_view,

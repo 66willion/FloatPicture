@@ -184,8 +184,30 @@ public class ManageMethods {
     }
 
     public static int getWindowCount() {
+        return getWindowCount(null);
+    }
+
+    public static int getWindowCount(Set<String> filterIds) {
+        if (filterIds != null && filterIds.isEmpty()) {
+            return 0;
+        }
         LinkedHashMap<String, String> list = new PictureData().getListArray();
-        return list != null ? list.size() : 0;
+        if (list == null || list.isEmpty()) {
+            return 0;
+        }
+        if (filterIds == null) {
+            return list.size();
+        }
+        int count = 0;
+        for (String pictureId : filterIds) {
+            if (pictureId == null || pictureId.isEmpty()) {
+                continue;
+            }
+            if (list.containsKey(pictureId)) {
+                count++;
+            }
+        }
+        return count;
     }
 
     public static boolean hasVisibleWindowsConfigured(Context context) {

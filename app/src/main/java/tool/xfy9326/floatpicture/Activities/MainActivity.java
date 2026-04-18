@@ -31,7 +31,6 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.navigation.NavigationView;
 import com.google.android.material.snackbar.Snackbar;
 
-import tool.xfy9326.floatpicture.MainApplication;
 import tool.xfy9326.floatpicture.Methods.ApplicationMethods;
 import tool.xfy9326.floatpicture.Methods.IOMethods;
 import tool.xfy9326.floatpicture.Methods.ManageMethods;
@@ -122,6 +121,15 @@ public class MainActivity extends AppCompatActivity {
         if (trustedOverlayButton != null) {
             trustedOverlayButton.removeCallbacks(trustedOverlayStateUpdater);
         }
+        if (recyclerView != null) {
+            recyclerView.setAdapter(null);
+        }
+        manageListAdapter = null;
+        recyclerView = null;
+        randomWindowButton = null;
+        releaseMemoryButton = null;
+        pureOverlayButton = null;
+        trustedOverlayButton = null;
         super.onDestroy();
     }
 
@@ -144,7 +152,6 @@ public class MainActivity extends AppCompatActivity {
         actionsLayout.setTranslationZ(16f);
 
         manageListAdapter = new ManageListAdapter(this, this::launchPictureSettingsForEdit);
-        ((MainApplication) getApplicationContext()).setManageListAdapter(manageListAdapter);
         recyclerView = findViewById(R.id.main_list_manage);
         recyclerView.setAdapter(manageListAdapter);
         recyclerView.setItemAnimator(new DefaultItemAnimator());

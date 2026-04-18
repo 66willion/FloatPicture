@@ -13,7 +13,6 @@ import tool.xfy9326.floatpicture.Methods.ImageMethods;
 import tool.xfy9326.floatpicture.Tools.CrashHandler;
 import tool.xfy9326.floatpicture.Methods.ThemeMethods;
 import tool.xfy9326.floatpicture.View.FloatImageView;
-import tool.xfy9326.floatpicture.View.ManageListAdapter;
 
 public class MainApplication extends Application {
     // 悬浮窗数量在实际使用中极少超过 20 个；超出时 LRU 淘汰最久未访问的条目并释放其 Bitmap，
@@ -22,7 +21,6 @@ public class MainApplication extends Application {
 
     private static MainApplication instance;
     private LinkedHashMap<String, View> ViewRegister;
-    private ManageListAdapter manageListAdapter;
     private boolean ApplicationInit;
     private boolean winVisible = true;
     private float safeWindowsAlpha = 0.8f;
@@ -69,14 +67,6 @@ public class MainApplication extends Application {
 
     public void setWinVisible(boolean visible) {
         winVisible = visible;
-    }
-
-    public ManageListAdapter getManageListAdapter() {
-        return manageListAdapter;
-    }
-
-    public void setManageListAdapter(ManageListAdapter manageListAdapter) {
-        this.manageListAdapter = manageListAdapter;
     }
 
     public boolean isAppInit() {

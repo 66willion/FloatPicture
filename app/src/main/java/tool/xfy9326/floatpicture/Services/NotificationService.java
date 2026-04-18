@@ -288,9 +288,17 @@ public class NotificationService extends Service {
                 OverlayRuntimeController.EXTRA_CORNER_RADIUS_RATIO,
                 Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_RATIO
         );
+        previewSession.cornerRadiusMask = intent.getIntExtra(
+                OverlayRuntimeController.EXTRA_CORNER_RADIUS_MASK,
+                Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_MASK
+        );
         previewSession.edgeFeatherRatio = intent.getFloatExtra(
                 OverlayRuntimeController.EXTRA_EDGE_FEATHER_RATIO,
                 Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_RATIO
+        );
+        previewSession.edgeFeatherMask = intent.getIntExtra(
+                OverlayRuntimeController.EXTRA_EDGE_FEATHER_MASK,
+                Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_MASK
         );
         previewSession.positionX = intent.getIntExtra(OverlayRuntimeController.EXTRA_POSITION_X, Config.DATA_DEFAULT_PICTURE_POSITION_X);
         previewSession.positionY = intent.getIntExtra(OverlayRuntimeController.EXTRA_POSITION_Y, Config.DATA_DEFAULT_PICTURE_POSITION_Y);
@@ -439,7 +447,8 @@ public class NotificationService extends Service {
                             previewSession.sourceBitmap,
                             previewSession.zoom,
                             previewSession.degree,
-                            previewSession.cornerRadiusRatio
+                            previewSession.cornerRadiusRatio,
+                            previewSession.cornerRadiusMask
                     );
             case OverlayRuntimeController.PREVIEW_MODE_LOW_RES ->
                     ImageMethods.resizeBitmapFromScaledSource(
@@ -449,14 +458,18 @@ public class NotificationService extends Service {
                             previewSession.zoom,
                             previewSession.degree,
                             previewSession.cornerRadiusRatio,
-                            previewSession.edgeFeatherRatio
+                            previewSession.cornerRadiusMask,
+                            previewSession.edgeFeatherRatio,
+                            previewSession.edgeFeatherMask
                     );
             default -> ImageMethods.resizeBitmap(
                     previewSession.sourceBitmap,
                     previewSession.zoom,
                     previewSession.degree,
                     previewSession.cornerRadiusRatio,
-                    previewSession.edgeFeatherRatio
+                    previewSession.cornerRadiusMask,
+                    previewSession.edgeFeatherRatio,
+                    previewSession.edgeFeatherMask
             );
         };
     }
@@ -498,7 +511,9 @@ public class NotificationService extends Service {
         private float degree = Config.DATA_DEFAULT_PICTURE_DEGREE;
         private float alpha = Config.DATA_DEFAULT_PICTURE_ALPHA;
         private float cornerRadiusRatio = Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_RATIO;
+        private int cornerRadiusMask = Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_MASK;
         private float edgeFeatherRatio = Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_RATIO;
+        private int edgeFeatherMask = Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_MASK;
         private int positionX = Config.DATA_DEFAULT_PICTURE_POSITION_X;
         private int positionY = Config.DATA_DEFAULT_PICTURE_POSITION_Y;
         private boolean touchAndMove = Config.DATA_DEFAULT_PICTURE_TOUCH_AND_MOVE;

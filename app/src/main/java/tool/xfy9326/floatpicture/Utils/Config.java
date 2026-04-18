@@ -27,9 +27,23 @@ public class Config {
     public final static String DATA_PICTURE_ALPHA = "ALPHA";
     public final static String DATA_PICTURE_DEGREE = "DEGREE";
     public final static String DATA_PICTURE_CORNER_RADIUS_RATIO = "CORNER_RADIUS_RATIO";
+    public final static String DATA_PICTURE_CORNER_RADIUS_MASK = "CORNER_RADIUS_MASK";
     public final static String DATA_PICTURE_EDGE_FEATHER_RATIO = "EDGE_FEATHER_RATIO";
+    public final static String DATA_PICTURE_EDGE_FEATHER_MASK = "EDGE_FEATHER_MASK";
     public final static String DATA_PICTURE_TOUCH_AND_MOVE = "TOUCH_AND_MOVE";
     public final static String DATA_ALLOW_PICTURE_OVER_LAYOUT = "ALLOW_PICTURE_OVER_LAYOUT";
+
+    public final static int MASK_CORNER_TOP_LEFT = 1;
+    public final static int MASK_CORNER_TOP_RIGHT = 1 << 1;
+    public final static int MASK_CORNER_BOTTOM_RIGHT = 1 << 2;
+    public final static int MASK_CORNER_BOTTOM_LEFT = 1 << 3;
+    public final static int MASK_CORNER_ALL = MASK_CORNER_TOP_LEFT | MASK_CORNER_TOP_RIGHT | MASK_CORNER_BOTTOM_RIGHT | MASK_CORNER_BOTTOM_LEFT;
+
+    public final static int MASK_EDGE_TOP = 1;
+    public final static int MASK_EDGE_BOTTOM = 1 << 1;
+    public final static int MASK_EDGE_LEFT = 1 << 2;
+    public final static int MASK_EDGE_RIGHT = 1 << 3;
+    public final static int MASK_EDGE_ALL = MASK_EDGE_TOP | MASK_EDGE_BOTTOM | MASK_EDGE_LEFT | MASK_EDGE_RIGHT;
 
     public final static boolean DATA_DEFAULT_PICTURE_SHOW_ENABLED = true;
     public final static int DATA_DEFAULT_PICTURE_POSITION_X = 100;
@@ -37,7 +51,9 @@ public class Config {
     public final static float DATA_DEFAULT_PICTURE_ALPHA = 0.5f;
     public final static float DATA_DEFAULT_PICTURE_DEGREE = 0f;
     public final static float DATA_DEFAULT_PICTURE_CORNER_RADIUS_RATIO = 0f;
+    public final static int DATA_DEFAULT_PICTURE_CORNER_RADIUS_MASK = MASK_CORNER_ALL;
     public final static float DATA_DEFAULT_PICTURE_EDGE_FEATHER_RATIO = 0f;
+    public final static int DATA_DEFAULT_PICTURE_EDGE_FEATHER_MASK = MASK_EDGE_ALL;
     public final static boolean DATA_DEFAULT_PICTURE_TOUCH_AND_MOVE = false;
     public final static boolean DATA_DEFAULT_ALLOW_PICTURE_OVER_LAYOUT = false;
 

@@ -309,12 +309,29 @@ public class ManageMethods {
                 Config.DATA_PICTURE_CORNER_RADIUS_RATIO,
                 Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_RATIO
         );
+        int cornerRadiusMask = pictureData.getInt(
+                Config.DATA_PICTURE_CORNER_RADIUS_MASK,
+                Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_MASK
+        );
         float edgeFeatherRatio = pictureData.getFloat(
                 Config.DATA_PICTURE_EDGE_FEATHER_RATIO,
                 Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_RATIO
         );
+        int edgeFeatherMask = pictureData.getInt(
+                Config.DATA_PICTURE_EDGE_FEATHER_MASK,
+                Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_MASK
+        );
         FloatImageView floatImageView = ImageMethods.getFloatImageViewById(mContext, id);
-        Bitmap displayBitmap = ImageMethods.getDisplayBitmap(mContext, id, zoom, pictureDegree, cornerRadiusRatio, edgeFeatherRatio);
+        Bitmap displayBitmap = ImageMethods.getDisplayBitmap(
+                mContext,
+                id,
+                zoom,
+                pictureDegree,
+                cornerRadiusRatio,
+                cornerRadiusMask,
+                edgeFeatherRatio,
+                edgeFeatherMask
+        );
         if (floatImageView == null) {
             float pictureAlpha = pictureData.getFloat(Config.DATA_PICTURE_ALPHA, Config.DATA_DEFAULT_PICTURE_ALPHA);
             boolean touchAndMove = pictureData.getBoolean(Config.DATA_PICTURE_TOUCH_AND_MOVE, Config.DATA_DEFAULT_PICTURE_TOUCH_AND_MOVE);
@@ -364,13 +381,30 @@ public class ManageMethods {
                 Config.DATA_PICTURE_CORNER_RADIUS_RATIO,
                 Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_RATIO
         );
+        int cornerRadiusMask = pictureData.getInt(
+                Config.DATA_PICTURE_CORNER_RADIUS_MASK,
+                Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_MASK
+        );
         float edgeFeatherRatio = pictureData.getFloat(
                 Config.DATA_PICTURE_EDGE_FEATHER_RATIO,
                 Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_RATIO
         );
+        int edgeFeatherMask = pictureData.getInt(
+                Config.DATA_PICTURE_EDGE_FEATHER_MASK,
+                Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_MASK
+        );
         boolean touch_and_move = pictureData.getBoolean(Config.DATA_PICTURE_TOUCH_AND_MOVE, Config.DATA_DEFAULT_PICTURE_TOUCH_AND_MOVE);
         boolean over_layout = pictureData.getBoolean(Config.DATA_ALLOW_PICTURE_OVER_LAYOUT, Config.DATA_DEFAULT_ALLOW_PICTURE_OVER_LAYOUT);
-        Bitmap bitmap = ImageMethods.getDisplayBitmap(mContext, id, zoom, picture_degree, cornerRadiusRatio, edgeFeatherRatio);
+        Bitmap bitmap = ImageMethods.getDisplayBitmap(
+                mContext,
+                id,
+                zoom,
+                picture_degree,
+                cornerRadiusRatio,
+                cornerRadiusMask,
+                edgeFeatherRatio,
+                edgeFeatherMask
+        );
         floatImageView = ImageMethods.createPictureView(mContext, bitmap, touch_and_move, over_layout, picture_alpha);
         ImageMethods.saveFloatImageViewById(mContext, id, floatImageView);
         return floatImageView;

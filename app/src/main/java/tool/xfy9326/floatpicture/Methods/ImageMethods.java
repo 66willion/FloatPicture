@@ -10,6 +10,7 @@ import android.graphics.Canvas;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Point;
+import android.graphics.Path;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Shader;
@@ -250,7 +251,33 @@ public class ImageMethods {
                                                    float edgeFeatherRatio) {
         return createPictureView(
                 mContext,
-                resizeBitmap(bitmap, zoom, degree, cornerRadiusRatio, edgeFeatherRatio),
+                bitmap,
+                touchable,
+                overLayout,
+                pictureAlpha,
+                zoom,
+                degree,
+                cornerRadiusRatio,
+                Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_MASK,
+                edgeFeatherRatio,
+                Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_MASK
+        );
+    }
+
+    public static FloatImageView createPictureView(Context mContext,
+                                                   Bitmap bitmap,
+                                                   boolean touchable,
+                                                   boolean overLayout,
+                                                   float pictureAlpha,
+                                                   float zoom,
+                                                   float degree,
+                                                   float cornerRadiusRatio,
+                                                   int cornerRadiusMask,
+                                                   float edgeFeatherRatio,
+                                                   int edgeFeatherMask) {
+        return createPictureView(
+                mContext,
+                resizeBitmap(bitmap, zoom, degree, cornerRadiusRatio, cornerRadiusMask, edgeFeatherRatio, edgeFeatherMask),
                 touchable,
                 overLayout,
                 pictureAlpha
@@ -281,7 +308,15 @@ public class ImageMethods {
     }
 
     public static Bitmap resizeBitmap(Bitmap bitmap, float zoom, float degree) {
-        return resizeBitmap(bitmap, zoom, degree, Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_RATIO, Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_RATIO);
+        return resizeBitmap(
+                bitmap,
+                zoom,
+                degree,
+                Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_RATIO,
+                Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_MASK,
+                Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_RATIO,
+                Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_MASK
+        );
     }
 
     public static Bitmap resizeBitmap(Bitmap bitmap,
@@ -289,6 +324,24 @@ public class ImageMethods {
                                       float degree,
                                       float cornerRadiusRatio,
                                       float edgeFeatherRatio) {
+        return resizeBitmap(
+                bitmap,
+                zoom,
+                degree,
+                cornerRadiusRatio,
+                Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_MASK,
+                edgeFeatherRatio,
+                Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_MASK
+        );
+    }
+
+    public static Bitmap resizeBitmap(Bitmap bitmap,
+                                      float zoom,
+                                      float degree,
+                                      float cornerRadiusRatio,
+                                      int cornerRadiusMask,
+                                      float edgeFeatherRatio,
+                                      int edgeFeatherMask) {
         int width = bitmap.getWidth();
         int height = bitmap.getHeight();
         Matrix matrix = new Matrix();
@@ -301,7 +354,13 @@ public class ImageMethods {
         }
         synchronized (BITMAP_LOCK) {
             Bitmap transformedBitmap = createBitmap(bitmap, 0, 0, width, height, matrix, true);
-            Bitmap appearanceBitmap = applyAppearanceEffects(transformedBitmap, cornerRadiusRatio, edgeFeatherRatio);
+            Bitmap appearanceBitmap = applyAppearanceEffects(
+                    transformedBitmap,
+                    cornerRadiusRatio,
+                    cornerRadiusMask,
+                    edgeFeatherRatio,
+                    edgeFeatherMask
+            );
             if (appearanceBitmap != transformedBitmap && transformedBitmap != bitmap) {
                 recycleBitmap(transformedBitmap);
             }
@@ -312,7 +371,8 @@ public class ImageMethods {
     public static Bitmap createOutlinePreviewBitmap(Bitmap bitmap,
                                                     float zoom,
                                                     float degree,
-                                                    float cornerRadiusRatio) {
+                                                    float cornerRadiusRatio,
+                                                    int cornerRadiusMask) {
         if (bitmap == null || bitmap.isRecycled()) {
             return null;
         }
@@ -348,6 +408,7 @@ public class ImageMethods {
         float cornerRadiusPx = clampAppearanceRatio(cornerRadiusRatio) * shortEdge;
         float maxCornerRadius = Math.min(drawRect.width(), drawRect.height()) / 2f;
         cornerRadiusPx = Math.min(cornerRadiusPx, maxCornerRadius);
+        float[] radii = buildCornerRadii(cornerRadiusPx, cornerRadiusMask);
 
         Paint outerPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
         outerPaint.setStyle(Paint.Style.STROKE);
@@ -361,8 +422,9 @@ public class ImageMethods {
         innerPaint.setColor(OUTLINE_INNER_COLOR);
         innerPaint.setStrokeJoin(Paint.Join.ROUND);
 
-        canvas.drawRoundRect(drawRect, cornerRadiusPx, cornerRadiusPx, outerPaint);
-        canvas.drawRoundRect(drawRect, cornerRadiusPx, cornerRadiusPx, innerPaint);
+        Path outlinePath = buildRoundRectPath(drawRect, radii);
+        canvas.drawPath(outlinePath, outerPaint);
+        canvas.drawPath(outlinePath, innerPaint);
         return outlineBitmap;
     }
 
@@ -386,7 +448,9 @@ public class ImageMethods {
                                                       float zoom,
                                                       float degree,
                                                       float cornerRadiusRatio,
-                                                      float edgeFeatherRatio) {
+                                                      int cornerRadiusMask,
+                                                      float edgeFeatherRatio,
+                                                      int edgeFeatherMask) {
         if (scaledSourceBitmap == null || scaledSourceBitmap.isRecycled()) {
             return null;
         }
@@ -398,7 +462,9 @@ public class ImageMethods {
                 zoom * sourceScale,
                 degree,
                 cornerRadiusRatio,
-                edgeFeatherRatio
+                cornerRadiusMask,
+                edgeFeatherRatio,
+                edgeFeatherMask
         );
     }
 
@@ -424,7 +490,9 @@ public class ImageMethods {
                 zoom,
                 degree,
                 Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_RATIO,
-                Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_RATIO
+                Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_MASK,
+                Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_RATIO,
+                Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_MASK
         );
     }
 
@@ -434,11 +502,39 @@ public class ImageMethods {
                                           float degree,
                                           float cornerRadiusRatio,
                                           float edgeFeatherRatio) {
+        return getDisplayBitmap(
+                mContext,
+                id,
+                zoom,
+                degree,
+                cornerRadiusRatio,
+                Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_MASK,
+                edgeFeatherRatio,
+                Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_MASK
+        );
+    }
+
+    public static Bitmap getDisplayBitmap(Context mContext,
+                                          String id,
+                                          float zoom,
+                                          float degree,
+                                          float cornerRadiusRatio,
+                                          int cornerRadiusMask,
+                                          float edgeFeatherRatio,
+                                          int edgeFeatherMask) {
         Bitmap displayBitmap = getBitmapFromFile(getDisplayPictureFile(id));
         if (displayBitmap != null) {
             return displayBitmap;
         }
-        Bitmap renderedBitmap = createAndSaveDisplayBitmap(id, zoom, degree, cornerRadiusRatio, edgeFeatherRatio);
+        Bitmap renderedBitmap = createAndSaveDisplayBitmap(
+                id,
+                zoom,
+                degree,
+                cornerRadiusRatio,
+                cornerRadiusMask,
+                edgeFeatherRatio,
+                edgeFeatherMask
+        );
         return renderedBitmap != null ? renderedBitmap : getEditBitmap(mContext, 50, 50);
     }
 
@@ -449,7 +545,9 @@ public class ImageMethods {
                 zoom,
                 degree,
                 Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_RATIO,
-                Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_RATIO
+                Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_MASK,
+                Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_RATIO,
+                Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_MASK
         );
     }
 
@@ -459,7 +557,35 @@ public class ImageMethods {
                                                     float degree,
                                                     float cornerRadiusRatio,
                                                     float edgeFeatherRatio) {
-        Bitmap renderedBitmap = renderDisplayBitmap(sourceBitmap, zoom, degree, cornerRadiusRatio, edgeFeatherRatio);
+        return createAndSaveDisplayBitmap(
+                id,
+                sourceBitmap,
+                zoom,
+                degree,
+                cornerRadiusRatio,
+                Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_MASK,
+                edgeFeatherRatio,
+                Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_MASK
+        );
+    }
+
+    public static Bitmap createAndSaveDisplayBitmap(String id,
+                                                    Bitmap sourceBitmap,
+                                                    float zoom,
+                                                    float degree,
+                                                    float cornerRadiusRatio,
+                                                    int cornerRadiusMask,
+                                                    float edgeFeatherRatio,
+                                                    int edgeFeatherMask) {
+        Bitmap renderedBitmap = renderDisplayBitmap(
+                sourceBitmap,
+                zoom,
+                degree,
+                cornerRadiusRatio,
+                cornerRadiusMask,
+                edgeFeatherRatio,
+                edgeFeatherMask
+        );
         saveDisplayBitmap(id, renderedBitmap, false);
         return renderedBitmap;
     }
@@ -470,7 +596,9 @@ public class ImageMethods {
                 zoom,
                 degree,
                 Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_RATIO,
-                Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_RATIO
+                Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_MASK,
+                Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_RATIO,
+                Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_MASK
         );
     }
 
@@ -479,7 +607,33 @@ public class ImageMethods {
                                                     float degree,
                                                     float cornerRadiusRatio,
                                                     float edgeFeatherRatio) {
-        Bitmap renderedBitmap = buildDisplayBitmap(id, zoom, degree, cornerRadiusRatio, edgeFeatherRatio);
+        return createAndSaveDisplayBitmap(
+                id,
+                zoom,
+                degree,
+                cornerRadiusRatio,
+                Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_MASK,
+                edgeFeatherRatio,
+                Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_MASK
+        );
+    }
+
+    public static Bitmap createAndSaveDisplayBitmap(String id,
+                                                    float zoom,
+                                                    float degree,
+                                                    float cornerRadiusRatio,
+                                                    int cornerRadiusMask,
+                                                    float edgeFeatherRatio,
+                                                    int edgeFeatherMask) {
+        Bitmap renderedBitmap = buildDisplayBitmap(
+                id,
+                zoom,
+                degree,
+                cornerRadiusRatio,
+                cornerRadiusMask,
+                edgeFeatherRatio,
+                edgeFeatherMask
+        );
         if (renderedBitmap != null) {
             saveDisplayBitmap(id, renderedBitmap, false);
         }
@@ -678,7 +832,9 @@ public class ImageMethods {
                 zoom,
                 degree,
                 Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_RATIO,
-                Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_RATIO
+                Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_MASK,
+                Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_RATIO,
+                Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_MASK
         );
     }
 
@@ -687,6 +843,24 @@ public class ImageMethods {
                                              float degree,
                                              float cornerRadiusRatio,
                                              float edgeFeatherRatio) {
+        return buildDisplayBitmap(
+                id,
+                zoom,
+                degree,
+                cornerRadiusRatio,
+                Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_MASK,
+                edgeFeatherRatio,
+                Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_MASK
+        );
+    }
+
+    private static Bitmap buildDisplayBitmap(String id,
+                                             float zoom,
+                                             float degree,
+                                             float cornerRadiusRatio,
+                                             int cornerRadiusMask,
+                                             float edgeFeatherRatio,
+                                             int edgeFeatherMask) {
         File sourceFile = getAvailableSourceFile(id);
         Point sourceSize = getSourceBitmapSize(id);
         if (sourceFile == null || sourceSize == null) {
@@ -700,7 +874,16 @@ public class ImageMethods {
         if (sourceBitmap == null) {
             return null;
         }
-        Bitmap renderedBitmap = renderDisplayBitmap(sourceBitmap, targetWidth, targetHeight, degree, cornerRadiusRatio, edgeFeatherRatio);
+        Bitmap renderedBitmap = renderDisplayBitmap(
+                sourceBitmap,
+                targetWidth,
+                targetHeight,
+                degree,
+                cornerRadiusRatio,
+                cornerRadiusMask,
+                edgeFeatherRatio,
+                edgeFeatherMask
+        );
         if (renderedBitmap != sourceBitmap) {
             recycleBitmap(sourceBitmap);
         }
@@ -713,7 +896,9 @@ public class ImageMethods {
                 zoom,
                 degree,
                 Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_RATIO,
-                Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_RATIO
+                Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_MASK,
+                Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_RATIO,
+                Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_MASK
         );
     }
 
@@ -722,9 +907,36 @@ public class ImageMethods {
                                               float degree,
                                               float cornerRadiusRatio,
                                               float edgeFeatherRatio) {
+        return renderDisplayBitmap(
+                sourceBitmap,
+                zoom,
+                degree,
+                cornerRadiusRatio,
+                Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_MASK,
+                edgeFeatherRatio,
+                Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_MASK
+        );
+    }
+
+    private static Bitmap renderDisplayBitmap(Bitmap sourceBitmap,
+                                              float zoom,
+                                              float degree,
+                                              float cornerRadiusRatio,
+                                              int cornerRadiusMask,
+                                              float edgeFeatherRatio,
+                                              int edgeFeatherMask) {
         int targetWidth = getDisplayTargetSize(sourceBitmap.getWidth(), zoom);
         int targetHeight = getDisplayTargetSize(sourceBitmap.getHeight(), zoom);
-        return renderDisplayBitmap(sourceBitmap, targetWidth, targetHeight, degree, cornerRadiusRatio, edgeFeatherRatio);
+        return renderDisplayBitmap(
+                sourceBitmap,
+                targetWidth,
+                targetHeight,
+                degree,
+                cornerRadiusRatio,
+                cornerRadiusMask,
+                edgeFeatherRatio,
+                edgeFeatherMask
+        );
     }
 
     private static Bitmap renderDisplayBitmap(Bitmap sourceBitmap, int targetWidth, int targetHeight, float degree) {
@@ -734,7 +946,9 @@ public class ImageMethods {
                 targetHeight,
                 degree,
                 Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_RATIO,
-                Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_RATIO
+                Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_MASK,
+                Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_RATIO,
+                Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_MASK
         );
     }
 
@@ -744,12 +958,38 @@ public class ImageMethods {
                                               float degree,
                                               float cornerRadiusRatio,
                                               float edgeFeatherRatio) {
+        return renderDisplayBitmap(
+                sourceBitmap,
+                targetWidth,
+                targetHeight,
+                degree,
+                cornerRadiusRatio,
+                Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_MASK,
+                edgeFeatherRatio,
+                Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_MASK
+        );
+    }
+
+    private static Bitmap renderDisplayBitmap(Bitmap sourceBitmap,
+                                              int targetWidth,
+                                              int targetHeight,
+                                              float degree,
+                                              float cornerRadiusRatio,
+                                              int cornerRadiusMask,
+                                              float edgeFeatherRatio,
+                                              int edgeFeatherMask) {
         Bitmap scaledBitmap = scaleBitmapMultiPass(sourceBitmap, targetWidth, targetHeight);
         Bitmap rotatedBitmap = applyUserRotation(scaledBitmap, degree);
         if (rotatedBitmap != scaledBitmap) {
             recycleBitmap(scaledBitmap);
         }
-        Bitmap appearanceBitmap = applyAppearanceEffects(rotatedBitmap, cornerRadiusRatio, edgeFeatherRatio);
+        Bitmap appearanceBitmap = applyAppearanceEffects(
+                rotatedBitmap,
+                cornerRadiusRatio,
+                cornerRadiusMask,
+                edgeFeatherRatio,
+                edgeFeatherMask
+        );
         if (appearanceBitmap != rotatedBitmap && rotatedBitmap != sourceBitmap) {
             recycleBitmap(rotatedBitmap);
         }
@@ -847,7 +1087,11 @@ public class ImageMethods {
         return Math.max(targetSize * DISPLAY_DECODE_MULTIPLIER, 1);
     }
 
-    private static Bitmap applyAppearanceEffects(Bitmap bitmap, float cornerRadiusRatio, float edgeFeatherRatio) {
+    private static Bitmap applyAppearanceEffects(Bitmap bitmap,
+                                                 float cornerRadiusRatio,
+                                                 int cornerRadiusMask,
+                                                 float edgeFeatherRatio,
+                                                 int edgeFeatherMask) {
         if (bitmap == null || bitmap.isRecycled()) {
             return bitmap;
         }
@@ -862,16 +1106,18 @@ public class ImageMethods {
         float maxShapeRadius = shortEdge / 2f;
         cornerRadiusPx = Math.min(cornerRadiusPx, maxShapeRadius);
         edgeFeatherPx = Math.min(edgeFeatherPx, maxShapeRadius);
-        if (cornerRadiusPx <= 0f && edgeFeatherPx <= 0f) {
+        float[] cornerRadii = buildCornerRadii(cornerRadiusPx, cornerRadiusMask);
+        if (!hasAnyCornerRadius(cornerRadii) && (edgeFeatherPx <= 0f || edgeFeatherMask == 0)) {
             return bitmap;
         }
-        return edgeFeatherPx > 0f
-                ? applyFeatheredShapeMask(bitmap, cornerRadiusPx, edgeFeatherPx)
-                : applyRoundCorners(bitmap, cornerRadiusPx);
+        if (edgeFeatherPx > 0f && edgeFeatherMask != 0) {
+            return applyFeatheredShapeMask(bitmap, cornerRadii, edgeFeatherPx, edgeFeatherMask);
+        }
+        return applyRoundCorners(bitmap, cornerRadii);
     }
 
-    private static Bitmap applyRoundCorners(Bitmap bitmap, float cornerRadiusPx) {
-        if (cornerRadiusPx <= 0f) {
+    private static Bitmap applyRoundCorners(Bitmap bitmap, float[] cornerRadii) {
+        if (!hasAnyCornerRadius(cornerRadii)) {
             return bitmap;
         }
         Bitmap roundedBitmap = Bitmap.createBitmap(bitmap.getWidth(), bitmap.getHeight(), Bitmap.Config.ARGB_8888);
@@ -879,25 +1125,23 @@ public class ImageMethods {
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG | Paint.DITHER_FLAG);
         paint.setShader(new BitmapShader(bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP));
         RectF rect = new RectF(0f, 0f, bitmap.getWidth(), bitmap.getHeight());
-        canvas.drawRoundRect(rect, cornerRadiusPx, cornerRadiusPx, paint);
+        canvas.drawPath(buildRoundRectPath(rect, cornerRadii), paint);
         return roundedBitmap;
     }
 
-    private static Bitmap applyFeatheredShapeMask(Bitmap bitmap, float cornerRadiusPx, float edgeFeatherPx) {
+    private static Bitmap applyFeatheredShapeMask(Bitmap bitmap,
+                                                  float[] cornerRadii,
+                                                  float edgeFeatherPx,
+                                                  int edgeFeatherMask) {
         int width = bitmap.getWidth();
         int height = bitmap.getHeight();
         int[] sourcePixels = new int[width * height];
         int[] maskedPixels = new int[sourcePixels.length];
         bitmap.getPixels(sourcePixels, 0, width, 0, 0, width, height);
 
-        float halfWidth = width / 2f;
-        float halfHeight = height / 2f;
-        float bodyHalfWidth = Math.max(halfWidth - cornerRadiusPx, 0f);
-        float bodyHalfHeight = Math.max(halfHeight - cornerRadiusPx, 0f);
-
         int index = 0;
         for (int y = 0; y < height; y++) {
-            float py = (y + 0.5f) - halfHeight;
+            float sampleY = y + 0.5f;
             for (int x = 0; x < width; x++) {
                 int color = sourcePixels[index];
                 int sourceAlpha = color >>> 24;
@@ -905,17 +1149,21 @@ public class ImageMethods {
                     index++;
                     continue;
                 }
-                float px = (x + 0.5f) - halfWidth;
-                float signedDistance = signedDistanceToRoundRect(px, py, bodyHalfWidth, bodyHalfHeight, cornerRadiusPx);
-                if (signedDistance >= 0f) {
+                float sampleX = x + 0.5f;
+                if (!isInsideSelectiveRoundRect(sampleX, sampleY, width, height, cornerRadii)) {
                     maskedPixels[index] = 0;
                     index++;
                     continue;
                 }
-                float insideDistance = -signedDistance;
-                float featherAlpha = insideDistance >= edgeFeatherPx
-                        ? 1f
-                        : smoothStep(insideDistance / edgeFeatherPx);
+                float featherAlpha = resolveDirectionalFeatherAlpha(
+                        sampleX,
+                        sampleY,
+                        width,
+                        height,
+                        cornerRadii,
+                        edgeFeatherPx,
+                        edgeFeatherMask
+                );
                 int maskedAlpha = Math.round(sourceAlpha * featherAlpha);
                 maskedPixels[index] = (maskedAlpha << 24) | (color & 0x00FFFFFF);
                 index++;
@@ -927,18 +1175,131 @@ public class ImageMethods {
         return featheredBitmap;
     }
 
-    private static float signedDistanceToRoundRect(float px,
-                                                   float py,
-                                                   float bodyHalfWidth,
-                                                   float bodyHalfHeight,
-                                                   float cornerRadiusPx) {
-        float qx = Math.abs(px) - bodyHalfWidth;
-        float qy = Math.abs(py) - bodyHalfHeight;
-        float outsideX = Math.max(qx, 0f);
-        float outsideY = Math.max(qy, 0f);
-        float outsideDistance = (float) Math.hypot(outsideX, outsideY);
-        float insideDistance = Math.min(Math.max(qx, qy), 0f);
-        return outsideDistance + insideDistance - cornerRadiusPx;
+    private static float[] buildCornerRadii(float cornerRadiusPx, int cornerRadiusMask) {
+        return new float[]{
+                (cornerRadiusMask & Config.MASK_CORNER_TOP_LEFT) != 0 ? cornerRadiusPx : 0f,
+                (cornerRadiusMask & Config.MASK_CORNER_TOP_RIGHT) != 0 ? cornerRadiusPx : 0f,
+                (cornerRadiusMask & Config.MASK_CORNER_BOTTOM_RIGHT) != 0 ? cornerRadiusPx : 0f,
+                (cornerRadiusMask & Config.MASK_CORNER_BOTTOM_LEFT) != 0 ? cornerRadiusPx : 0f
+        };
+    }
+
+    private static boolean hasAnyCornerRadius(float[] cornerRadii) {
+        return cornerRadii[0] > 0f || cornerRadii[1] > 0f || cornerRadii[2] > 0f || cornerRadii[3] > 0f;
+    }
+
+    private static Path buildRoundRectPath(RectF rect, float[] cornerRadii) {
+        Path path = new Path();
+        if (!hasAnyCornerRadius(cornerRadii)) {
+            path.addRect(rect, Path.Direction.CW);
+        } else {
+            path.addRoundRect(rect, buildAndroidCornerRadii(cornerRadii), Path.Direction.CW);
+        }
+        path.close();
+        return path;
+    }
+
+    private static float[] buildAndroidCornerRadii(float[] cornerRadii) {
+        return new float[]{
+                cornerRadii[0], cornerRadii[0],
+                cornerRadii[1], cornerRadii[1],
+                cornerRadii[2], cornerRadii[2],
+                cornerRadii[3], cornerRadii[3]
+        };
+    }
+
+    private static boolean isInsideSelectiveRoundRect(float x,
+                                                      float y,
+                                                      int width,
+                                                      int height,
+                                                      float[] cornerRadii) {
+        float topLeftRadius = cornerRadii[0];
+        if (topLeftRadius > 0f && x < topLeftRadius && y < topLeftRadius) {
+            return resolveCornerInsideDistance(x, y, topLeftRadius, topLeftRadius, topLeftRadius) >= 0f;
+        }
+        float topRightRadius = cornerRadii[1];
+        if (topRightRadius > 0f && x > (width - topRightRadius) && y < topRightRadius) {
+            return resolveCornerInsideDistance(x, y, width - topRightRadius, topRightRadius, topRightRadius) >= 0f;
+        }
+        float bottomRightRadius = cornerRadii[2];
+        if (bottomRightRadius > 0f && x > (width - bottomRightRadius) && y > (height - bottomRightRadius)) {
+            return resolveCornerInsideDistance(x, y, width - bottomRightRadius, height - bottomRightRadius, bottomRightRadius) >= 0f;
+        }
+        float bottomLeftRadius = cornerRadii[3];
+        if (bottomLeftRadius > 0f && x < bottomLeftRadius && y > (height - bottomLeftRadius)) {
+            return resolveCornerInsideDistance(x, y, bottomLeftRadius, height - bottomLeftRadius, bottomLeftRadius) >= 0f;
+        }
+        return true;
+    }
+
+    private static float resolveDirectionalFeatherAlpha(float x,
+                                                        float y,
+                                                        int width,
+                                                        int height,
+                                                        float[] cornerRadii,
+                                                        float edgeFeatherPx,
+                                                        int edgeFeatherMask) {
+        if (edgeFeatherPx <= 0f || edgeFeatherMask == 0) {
+            return 1f;
+        }
+        float featherAlpha = 1f;
+        if ((edgeFeatherMask & Config.MASK_EDGE_TOP) != 0) {
+            featherAlpha = Math.min(featherAlpha, smoothStep(y / edgeFeatherPx));
+        }
+        if ((edgeFeatherMask & Config.MASK_EDGE_BOTTOM) != 0) {
+            featherAlpha = Math.min(featherAlpha, smoothStep((height - y) / edgeFeatherPx));
+        }
+        if ((edgeFeatherMask & Config.MASK_EDGE_LEFT) != 0) {
+            featherAlpha = Math.min(featherAlpha, smoothStep(x / edgeFeatherPx));
+        }
+        if ((edgeFeatherMask & Config.MASK_EDGE_RIGHT) != 0) {
+            featherAlpha = Math.min(featherAlpha, smoothStep((width - x) / edgeFeatherPx));
+        }
+        featherAlpha = applyCornerFeather(featherAlpha, x, y, width, height, cornerRadii, edgeFeatherPx, edgeFeatherMask);
+        return featherAlpha;
+    }
+
+    private static float applyCornerFeather(float currentAlpha,
+                                            float x,
+                                            float y,
+                                            int width,
+                                            int height,
+                                            float[] cornerRadii,
+                                            float edgeFeatherPx,
+                                            int edgeFeatherMask) {
+        if (cornerRadii[0] > 0f
+                && (edgeFeatherMask & Config.MASK_EDGE_TOP) != 0
+                && (edgeFeatherMask & Config.MASK_EDGE_LEFT) != 0
+                && x < cornerRadii[0]
+                && y < cornerRadii[0]) {
+            currentAlpha = Math.min(currentAlpha, smoothStep(resolveCornerInsideDistance(x, y, cornerRadii[0], cornerRadii[0], cornerRadii[0]) / edgeFeatherPx));
+        }
+        if (cornerRadii[1] > 0f
+                && (edgeFeatherMask & Config.MASK_EDGE_TOP) != 0
+                && (edgeFeatherMask & Config.MASK_EDGE_RIGHT) != 0
+                && x > (width - cornerRadii[1])
+                && y < cornerRadii[1]) {
+            currentAlpha = Math.min(currentAlpha, smoothStep(resolveCornerInsideDistance(x, y, width - cornerRadii[1], cornerRadii[1], cornerRadii[1]) / edgeFeatherPx));
+        }
+        if (cornerRadii[2] > 0f
+                && (edgeFeatherMask & Config.MASK_EDGE_BOTTOM) != 0
+                && (edgeFeatherMask & Config.MASK_EDGE_RIGHT) != 0
+                && x > (width - cornerRadii[2])
+                && y > (height - cornerRadii[2])) {
+            currentAlpha = Math.min(currentAlpha, smoothStep(resolveCornerInsideDistance(x, y, width - cornerRadii[2], height - cornerRadii[2], cornerRadii[2]) / edgeFeatherPx));
+        }
+        if (cornerRadii[3] > 0f
+                && (edgeFeatherMask & Config.MASK_EDGE_BOTTOM) != 0
+                && (edgeFeatherMask & Config.MASK_EDGE_LEFT) != 0
+                && x < cornerRadii[3]
+                && y > (height - cornerRadii[3])) {
+            currentAlpha = Math.min(currentAlpha, smoothStep(resolveCornerInsideDistance(x, y, cornerRadii[3], height - cornerRadii[3], cornerRadii[3]) / edgeFeatherPx));
+        }
+        return currentAlpha;
+    }
+
+    private static float resolveCornerInsideDistance(float x, float y, float centerX, float centerY, float radius) {
+        return radius - (float) Math.hypot(x - centerX, y - centerY);
     }
 
     private static float smoothStep(float value) {

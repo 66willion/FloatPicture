@@ -12,6 +12,7 @@ import android.text.InputType;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.WindowManager;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.SeekBar;
 import android.widget.TextView;
@@ -72,8 +73,12 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
     private float picture_alpha_temp;
     private float picture_corner_radius_ratio;
     private float picture_corner_radius_ratio_temp;
+    private int picture_corner_radius_mask;
+    private int picture_corner_radius_mask_temp;
     private float picture_edge_feather_ratio;
     private float picture_edge_feather_ratio_temp;
+    private int picture_edge_feather_mask;
+    private int picture_edge_feather_mask_temp;
     private int position_x;
     private int position_y;
     private int position_x_temp;
@@ -165,7 +170,9 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                     picture_degree = pictureData.getFloat(Config.DATA_PICTURE_DEGREE, Config.DATA_DEFAULT_PICTURE_DEGREE);
                     picture_alpha = pictureData.getFloat(Config.DATA_PICTURE_ALPHA, Config.DATA_DEFAULT_PICTURE_ALPHA);
                     picture_corner_radius_ratio = pictureData.getFloat(Config.DATA_PICTURE_CORNER_RADIUS_RATIO, Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_RATIO);
+                    picture_corner_radius_mask = pictureData.getInt(Config.DATA_PICTURE_CORNER_RADIUS_MASK, Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_MASK);
                     picture_edge_feather_ratio = pictureData.getFloat(Config.DATA_PICTURE_EDGE_FEATHER_RATIO, Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_RATIO);
+                    picture_edge_feather_mask = pictureData.getInt(Config.DATA_PICTURE_EDGE_FEATHER_MASK, Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_MASK);
                     touch_and_move = pictureData.getBoolean(Config.DATA_PICTURE_TOUCH_AND_MOVE, Config.DATA_DEFAULT_PICTURE_TOUCH_AND_MOVE);
                     allow_picture_over_layout = pictureData.getBoolean(Config.DATA_ALLOW_PICTURE_OVER_LAYOUT, Config.DATA_DEFAULT_ALLOW_PICTURE_OVER_LAYOUT);
                     bitmap = loadCurrentSourceBitmap();
@@ -189,7 +196,9 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                     picture_alpha = Config.DATA_DEFAULT_PICTURE_ALPHA;
                     picture_degree = Config.DATA_DEFAULT_PICTURE_DEGREE;
                     picture_corner_radius_ratio = Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_RATIO;
+                    picture_corner_radius_mask = Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_MASK;
                     picture_edge_feather_ratio = Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_RATIO;
+                    picture_edge_feather_mask = Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_MASK;
                     touch_and_move = Config.DATA_DEFAULT_PICTURE_TOUCH_AND_MOVE;
                     allow_picture_over_layout = Config.DATA_DEFAULT_ALLOW_PICTURE_OVER_LAYOUT;
                     bitmap = ImageMethods.getEditSourceBitmap(requireContext(), PictureId);
@@ -739,30 +748,57 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
     }
 
     private void setPictureCornerRadius() {
-        View mView = inflater.inflate(R.layout.dialog_set_size, requireActivity().findViewById(R.id.layout_dialog_set_size));
+        View mView = inflater.inflate(
+                R.layout.dialog_set_appearance_options,
+                requireActivity().findViewById(R.id.layout_dialog_set_appearance_options)
+        );
         AlertDialog.Builder dialog = new AlertDialog.Builder(requireContext());
         dialog.setTitle(R.string.settings_picture_corner_radius);
         dialog.setCancelable(false);
         TextView name = mView.findViewById(R.id.textview_set_size);
         name.setText(R.string.settings_picture_corner_radius_value);
+        TextView positionsLabel = mView.findViewById(R.id.textview_set_positions);
+        positionsLabel.setText(R.string.settings_picture_corner_radius_positions);
         final SeekBar seekBar = mView.findViewById(R.id.seekbar_set_size);
         seekBar.setMax(MAX_CORNER_RADIUS_PERCENT);
         seekBar.setProgress(toRatioPercentProgress(picture_corner_radius_ratio));
         final EditText editText = mView.findViewById(R.id.edittext_set_size);
         enableIntegerInput(editText);
         editText.setText(String.valueOf(toRatioPercentProgress(picture_corner_radius_ratio)));
+        final CheckBox[] optionCheckBoxes = getAppearanceOptionCheckBoxes(mView);
+        final int[] optionBits = new int[]{
+                Config.MASK_CORNER_TOP_LEFT,
+                Config.MASK_CORNER_TOP_RIGHT,
+                Config.MASK_CORNER_BOTTOM_LEFT,
+                Config.MASK_CORNER_BOTTOM_RIGHT
+        };
+        bindAppearanceOptionCheckBoxes(
+                optionCheckBoxes,
+                new int[]{
+                        R.string.position_top_left,
+                        R.string.position_top_right,
+                        R.string.position_bottom_left,
+                        R.string.position_bottom_right
+                },
+                optionBits,
+                picture_corner_radius_mask
+        );
         picture_corner_radius_ratio_temp = picture_corner_radius_ratio;
+        picture_corner_radius_mask_temp = picture_corner_radius_mask;
         seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 picture_corner_radius_ratio_temp = percentProgressToRatio(progress);
                 editText.setText(String.valueOf(progress));
+                picture_corner_radius_mask_temp = resolveCheckedMask(optionCheckBoxes, optionBits);
                 showPreview(
                         zoom,
                         picture_degree,
                         picture_alpha,
                         picture_corner_radius_ratio_temp,
+                        picture_corner_radius_mask_temp,
                         picture_edge_feather_ratio,
+                        picture_edge_feather_mask,
                         position_x,
                         position_y,
                         touch_and_move,
@@ -784,6 +820,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
             Integer progress = parsePercentProgress(editText);
             if (progress != null && progress >= 0 && progress <= MAX_CORNER_RADIUS_PERCENT) {
                 picture_corner_radius_ratio_temp = percentProgressToRatio(progress);
+                picture_corner_radius_mask_temp = resolveCheckedMask(optionCheckBoxes, optionBits);
                 editText.setText(String.valueOf(progress));
                 if (seekBar.getProgress() != progress) {
                     seekBar.setProgress(progress);
@@ -793,7 +830,9 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                             picture_degree,
                             picture_alpha,
                             picture_corner_radius_ratio_temp,
+                            picture_corner_radius_mask_temp,
                             picture_edge_feather_ratio,
+                            picture_edge_feather_mask,
                             position_x,
                             position_y,
                             touch_and_move,
@@ -807,6 +846,26 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
             }
             return false;
         });
+        for (CheckBox optionCheckBox : optionCheckBoxes) {
+            optionCheckBox.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                picture_corner_radius_mask_temp = resolveCheckedMask(optionCheckBoxes, optionBits);
+                showPreview(
+                        zoom,
+                        picture_degree,
+                        picture_alpha,
+                        picture_corner_radius_ratio_temp,
+                        picture_corner_radius_mask_temp,
+                        picture_edge_feather_ratio,
+                        picture_edge_feather_mask,
+                        position_x,
+                        position_y,
+                        touch_and_move,
+                        allow_picture_over_layout,
+                        false,
+                        touch_and_move
+                );
+            });
+        }
         dialog.setPositiveButton(R.string.done, (__, which) -> {
             Integer progress = parsePercentProgress(editText);
             if (progress != null && progress >= 0 && progress <= MAX_CORNER_RADIUS_PERCENT) {
@@ -814,6 +873,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
             } else {
                 picture_corner_radius_ratio = picture_corner_radius_ratio_temp;
             }
+            picture_corner_radius_mask = resolveCheckedMask(optionCheckBoxes, optionBits);
             updateAppearancePreferenceSummaries();
             showWorkingWindowPreview(picture_alpha);
         });
@@ -824,30 +884,57 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
     }
 
     private void setPictureEdgeFeather() {
-        View mView = inflater.inflate(R.layout.dialog_set_size, requireActivity().findViewById(R.id.layout_dialog_set_size));
+        View mView = inflater.inflate(
+                R.layout.dialog_set_appearance_options,
+                requireActivity().findViewById(R.id.layout_dialog_set_appearance_options)
+        );
         AlertDialog.Builder dialog = new AlertDialog.Builder(requireContext());
         dialog.setTitle(R.string.settings_picture_edge_feather);
         dialog.setCancelable(false);
         TextView name = mView.findViewById(R.id.textview_set_size);
         name.setText(R.string.settings_picture_edge_feather_value);
+        TextView positionsLabel = mView.findViewById(R.id.textview_set_positions);
+        positionsLabel.setText(R.string.settings_picture_edge_feather_edges);
         final SeekBar seekBar = mView.findViewById(R.id.seekbar_set_size);
         seekBar.setMax(MAX_EDGE_FEATHER_PERCENT);
         seekBar.setProgress(toRatioPercentProgress(picture_edge_feather_ratio));
         final EditText editText = mView.findViewById(R.id.edittext_set_size);
         enableIntegerInput(editText);
         editText.setText(String.valueOf(toRatioPercentProgress(picture_edge_feather_ratio)));
+        final CheckBox[] optionCheckBoxes = getAppearanceOptionCheckBoxes(mView);
+        final int[] optionBits = new int[]{
+                Config.MASK_EDGE_TOP,
+                Config.MASK_EDGE_BOTTOM,
+                Config.MASK_EDGE_LEFT,
+                Config.MASK_EDGE_RIGHT
+        };
+        bindAppearanceOptionCheckBoxes(
+                optionCheckBoxes,
+                new int[]{
+                        R.string.position_top,
+                        R.string.position_bottom,
+                        R.string.position_left,
+                        R.string.position_right
+                },
+                optionBits,
+                picture_edge_feather_mask
+        );
         picture_edge_feather_ratio_temp = picture_edge_feather_ratio;
+        picture_edge_feather_mask_temp = picture_edge_feather_mask;
         seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 picture_edge_feather_ratio_temp = percentProgressToRatio(progress);
                 editText.setText(String.valueOf(progress));
+                picture_edge_feather_mask_temp = resolveCheckedMask(optionCheckBoxes, optionBits);
                 showPreview(
                         zoom,
                         picture_degree,
                         picture_alpha,
                         picture_corner_radius_ratio,
+                        picture_corner_radius_mask,
                         picture_edge_feather_ratio_temp,
+                        picture_edge_feather_mask_temp,
                         position_x,
                         position_y,
                         touch_and_move,
@@ -869,6 +956,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
             Integer progress = parsePercentProgress(editText);
             if (progress != null && progress >= 0 && progress <= MAX_EDGE_FEATHER_PERCENT) {
                 picture_edge_feather_ratio_temp = percentProgressToRatio(progress);
+                picture_edge_feather_mask_temp = resolveCheckedMask(optionCheckBoxes, optionBits);
                 editText.setText(String.valueOf(progress));
                 if (seekBar.getProgress() != progress) {
                     seekBar.setProgress(progress);
@@ -878,7 +966,9 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                             picture_degree,
                             picture_alpha,
                             picture_corner_radius_ratio,
+                            picture_corner_radius_mask,
                             picture_edge_feather_ratio_temp,
+                            picture_edge_feather_mask_temp,
                             position_x,
                             position_y,
                             touch_and_move,
@@ -892,6 +982,26 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
             }
             return false;
         });
+        for (CheckBox optionCheckBox : optionCheckBoxes) {
+            optionCheckBox.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                picture_edge_feather_mask_temp = resolveCheckedMask(optionCheckBoxes, optionBits);
+                showPreview(
+                        zoom,
+                        picture_degree,
+                        picture_alpha,
+                        picture_corner_radius_ratio,
+                        picture_corner_radius_mask,
+                        picture_edge_feather_ratio_temp,
+                        picture_edge_feather_mask_temp,
+                        position_x,
+                        position_y,
+                        touch_and_move,
+                        allow_picture_over_layout,
+                        false,
+                        touch_and_move
+                );
+            });
+        }
         dialog.setPositiveButton(R.string.done, (__, which) -> {
             Integer progress = parsePercentProgress(editText);
             if (progress != null && progress >= 0 && progress <= MAX_EDGE_FEATHER_PERCENT) {
@@ -899,6 +1009,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
             } else {
                 picture_edge_feather_ratio = picture_edge_feather_ratio_temp;
             }
+            picture_edge_feather_mask = resolveCheckedMask(optionCheckBoxes, optionBits);
             updateAppearancePreferenceSummaries();
             showWorkingWindowPreview(picture_alpha);
         });
@@ -1198,12 +1309,106 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
     private void updateAppearancePreferenceSummaries() {
         Preference cornerRadiusPreference = findPreference(Config.PREFERENCE_PICTURE_CORNER_RADIUS);
         if (cornerRadiusPreference != null) {
-            cornerRadiusPreference.setSummary(formatRatioPercent(picture_corner_radius_ratio));
+            cornerRadiusPreference.setSummary(getString(
+                    R.string.appearance_summary_format,
+                    formatRatioPercent(picture_corner_radius_ratio),
+                    formatCornerMaskSummary(picture_corner_radius_mask)
+            ));
         }
         Preference edgeFeatherPreference = findPreference(Config.PREFERENCE_PICTURE_EDGE_FEATHER);
         if (edgeFeatherPreference != null) {
-            edgeFeatherPreference.setSummary(formatRatioPercent(picture_edge_feather_ratio));
+            edgeFeatherPreference.setSummary(getString(
+                    R.string.appearance_summary_format,
+                    formatRatioPercent(picture_edge_feather_ratio),
+                    formatEdgeMaskSummary(picture_edge_feather_mask)
+            ));
         }
+    }
+
+    private String formatCornerMaskSummary(int mask) {
+        return formatSelectionSummary(
+                mask,
+                new int[]{
+                        Config.MASK_CORNER_TOP_LEFT,
+                        Config.MASK_CORNER_TOP_RIGHT,
+                        Config.MASK_CORNER_BOTTOM_LEFT,
+                        Config.MASK_CORNER_BOTTOM_RIGHT
+                },
+                new int[]{
+                        R.string.position_top_left,
+                        R.string.position_top_right,
+                        R.string.position_bottom_left,
+                        R.string.position_bottom_right
+                }
+        );
+    }
+
+    private String formatEdgeMaskSummary(int mask) {
+        return formatSelectionSummary(
+                mask,
+                new int[]{
+                        Config.MASK_EDGE_TOP,
+                        Config.MASK_EDGE_BOTTOM,
+                        Config.MASK_EDGE_LEFT,
+                        Config.MASK_EDGE_RIGHT
+                },
+                new int[]{
+                        R.string.position_top,
+                        R.string.position_bottom,
+                        R.string.position_left,
+                        R.string.position_right
+                }
+        );
+    }
+
+    private String formatSelectionSummary(int mask, int[] optionBits, int[] labelResIds) {
+        int fullMask = 0;
+        for (int optionBit : optionBits) {
+            fullMask |= optionBit;
+        }
+        if ((mask & fullMask) == 0) {
+            return getString(R.string.selection_none);
+        }
+        if ((mask & fullMask) == fullMask) {
+            return getString(R.string.selection_all);
+        }
+        StringBuilder summaryBuilder = new StringBuilder();
+        for (int index = 0; index < optionBits.length; index++) {
+            if ((mask & optionBits[index]) == 0) {
+                continue;
+            }
+            if (summaryBuilder.length() > 0) {
+                summaryBuilder.append(' ');
+            }
+            summaryBuilder.append(getString(labelResIds[index]));
+        }
+        return summaryBuilder.toString();
+    }
+
+    private CheckBox[] getAppearanceOptionCheckBoxes(View mView) {
+        return new CheckBox[]{
+                mView.findViewById(R.id.checkbox_option_1),
+                mView.findViewById(R.id.checkbox_option_2),
+                mView.findViewById(R.id.checkbox_option_3),
+                mView.findViewById(R.id.checkbox_option_4)
+        };
+    }
+
+    private void bindAppearanceOptionCheckBoxes(CheckBox[] checkBoxes, int[] labelResIds, int[] optionBits, int mask) {
+        for (int index = 0; index < checkBoxes.length; index++) {
+            checkBoxes[index].setText(labelResIds[index]);
+            checkBoxes[index].setChecked((mask & optionBits[index]) != 0);
+        }
+    }
+
+    private int resolveCheckedMask(CheckBox[] checkBoxes, int[] optionBits) {
+        int mask = 0;
+        for (int index = 0; index < checkBoxes.length; index++) {
+            if (checkBoxes[index].isChecked()) {
+                mask |= optionBits[index];
+            }
+        }
+        return mask;
     }
 
     private void showWorkingWindowPreview(float alpha) {
@@ -1216,6 +1421,10 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                 zoom,
                 picture_degree,
                 alpha,
+                picture_corner_radius_ratio,
+                picture_corner_radius_mask,
+                picture_edge_feather_ratio,
+                picture_edge_feather_mask,
                 previewPosition.x,
                 previewPosition.y,
                 touch_and_move,
@@ -1239,6 +1448,10 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                 zoomValue,
                 degreeValue,
                 alphaValue,
+                picture_corner_radius_ratio,
+                picture_corner_radius_mask,
+                picture_edge_feather_ratio,
+                picture_edge_feather_mask,
                 positionX,
                 positionY,
                 touchAndMove,
@@ -1264,7 +1477,9 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                 degreeValue,
                 alphaValue,
                 picture_corner_radius_ratio,
+                picture_corner_radius_mask,
                 picture_edge_feather_ratio,
+                picture_edge_feather_mask,
                 positionX,
                 positionY,
                 touchAndMove,
@@ -1279,7 +1494,9 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                              float degreeValue,
                              float alphaValue,
                              float cornerRadiusRatio,
+                             int cornerRadiusMask,
                              float edgeFeatherRatio,
+                             int edgeFeatherMask,
                              int positionX,
                              int positionY,
                              boolean touchAndMove,
@@ -1291,7 +1508,9 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                 degreeValue,
                 alphaValue,
                 cornerRadiusRatio,
+                cornerRadiusMask,
                 edgeFeatherRatio,
+                edgeFeatherMask,
                 positionX,
                 positionY,
                 touchAndMove,
@@ -1306,7 +1525,9 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                              float degreeValue,
                              float alphaValue,
                              float cornerRadiusRatio,
+                             int cornerRadiusMask,
                              float edgeFeatherRatio,
+                             int edgeFeatherMask,
                              int positionX,
                              int positionY,
                              boolean touchAndMove,
@@ -1331,7 +1552,9 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                 degreeValue,
                 alphaValue,
                 cornerRadiusRatio,
+                cornerRadiusMask,
                 edgeFeatherRatio,
+                edgeFeatherMask,
                 resolvedPositionX,
                 resolvedPositionY,
                 touchAndMove,
@@ -1355,7 +1578,9 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         pictureData.put(Config.DATA_PICTURE_DEFAULT_ZOOM, default_zoom);
         pictureData.put(Config.DATA_PICTURE_ALPHA, picture_alpha);
         pictureData.put(Config.DATA_PICTURE_CORNER_RADIUS_RATIO, picture_corner_radius_ratio);
+        pictureData.put(Config.DATA_PICTURE_CORNER_RADIUS_MASK, picture_corner_radius_mask);
         pictureData.put(Config.DATA_PICTURE_EDGE_FEATHER_RATIO, picture_edge_feather_ratio);
+        pictureData.put(Config.DATA_PICTURE_EDGE_FEATHER_MASK, picture_edge_feather_mask);
         if (touch_and_move) {
             Point previewPosition = getPreviewPosition(position_x, position_y);
             position_x = previewPosition.x;
@@ -1373,7 +1598,9 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         final float snapshotDegree = picture_degree;
         final float snapshotAlpha = picture_alpha;
         final float snapshotCornerRadiusRatio = picture_corner_radius_ratio;
+        final int snapshotCornerRadiusMask = picture_corner_radius_mask;
         final float snapshotEdgeFeatherRatio = picture_edge_feather_ratio;
+        final int snapshotEdgeFeatherMask = picture_edge_feather_mask;
         final int snapshotX = position_x;
         final int snapshotY = position_y;
         final boolean snapshotTouchAndMove = touch_and_move;
@@ -1404,7 +1631,9 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                     snapshotZoom,
                     snapshotDegree,
                     snapshotCornerRadiusRatio,
-                    snapshotEdgeFeatherRatio
+                    snapshotCornerRadiusMask,
+                    snapshotEdgeFeatherRatio,
+                    snapshotEdgeFeatherMask
             );
             OverlayRuntimeController.finishPreview(appContext, snapshotPictureId);
             if (shouldAbortFragmentWork()) {
@@ -1420,7 +1649,9 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                 allow_picture_over_layout = snapshotOverLayout;
                 picture_alpha = snapshotAlpha;
                 picture_corner_radius_ratio = snapshotCornerRadiusRatio;
+                picture_corner_radius_mask = snapshotCornerRadiusMask;
                 picture_edge_feather_ratio = snapshotEdgeFeatherRatio;
+                picture_edge_feather_mask = snapshotEdgeFeatherMask;
                 position_x = snapshotX;
                 position_y = snapshotY;
                 wasHidden = snapshotWasHidden;

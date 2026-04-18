@@ -41,7 +41,9 @@ public final class OverlayRuntimeController {
     public static final String EXTRA_ZOOM = "extra_zoom";
     public static final String EXTRA_DEGREE = "extra_degree";
     public static final String EXTRA_CORNER_RADIUS_RATIO = "extra_corner_radius_ratio";
+    public static final String EXTRA_CORNER_RADIUS_MASK = "extra_corner_radius_mask";
     public static final String EXTRA_EDGE_FEATHER_RATIO = "extra_edge_feather_ratio";
+    public static final String EXTRA_EDGE_FEATHER_MASK = "extra_edge_feather_mask";
     public static final String EXTRA_POSITION_X = "extra_position_x";
     public static final String EXTRA_POSITION_Y = "extra_position_y";
     public static final String EXTRA_PREVIEW_MODE = "extra_preview_mode";
@@ -115,7 +117,9 @@ public final class OverlayRuntimeController {
                                      float degree,
                                      float alpha,
                                      float cornerRadiusRatio,
+                                     int cornerRadiusMask,
                                      float edgeFeatherRatio,
+                                     int edgeFeatherMask,
                                      int positionX,
                                      int positionY,
                                      boolean touchAndMove,
@@ -131,7 +135,9 @@ public final class OverlayRuntimeController {
         intent.putExtra(EXTRA_DEGREE, degree);
         intent.putExtra(EXTRA_ALPHA, alpha);
         intent.putExtra(EXTRA_CORNER_RADIUS_RATIO, cornerRadiusRatio);
+        intent.putExtra(EXTRA_CORNER_RADIUS_MASK, cornerRadiusMask);
         intent.putExtra(EXTRA_EDGE_FEATHER_RATIO, edgeFeatherRatio);
+        intent.putExtra(EXTRA_EDGE_FEATHER_MASK, edgeFeatherMask);
         intent.putExtra(EXTRA_POSITION_X, positionX);
         intent.putExtra(EXTRA_POSITION_Y, positionY);
         intent.putExtra(EXTRA_TOUCH_AND_MOVE, touchAndMove);

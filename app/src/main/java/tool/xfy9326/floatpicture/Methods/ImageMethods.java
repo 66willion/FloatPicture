@@ -34,7 +34,14 @@ import tool.xfy9326.floatpicture.View.FloatImageView;
 public class ImageMethods {
     private static final int DEFAULT_PREVIEW_SIZE_DP = 120;
     private static final int DISPLAY_DECODE_MULTIPLIER = 2;
+    private static final int TEMP_PREVIEW_SOURCE_MAX_SIDE = 512;
     private static final float MIN_ZOOM = 0.01f;
+    private static final float OUTLINE_OUTER_STROKE_MIN_PX = 3f;
+    private static final float OUTLINE_OUTER_STROKE_MAX_PX = 8f;
+    private static final float OUTLINE_INNER_STROKE_MIN_PX = 1.5f;
+    private static final float OUTLINE_INNER_STROKE_MAX_PX = 4f;
+    private static final int OUTLINE_OUTER_COLOR = 0xB0000000;
+    private static final int OUTLINE_INNER_COLOR = 0xF2FFFFFF;
     private static final Object BITMAP_LOCK = new Object();
 
     private static Bitmap getBitmapFromFile(File imageFile) {
@@ -300,6 +307,99 @@ public class ImageMethods {
             }
             return appearanceBitmap;
         }
+    }
+
+    public static Bitmap createOutlinePreviewBitmap(Bitmap bitmap,
+                                                    float zoom,
+                                                    float degree,
+                                                    float cornerRadiusRatio) {
+        if (bitmap == null || bitmap.isRecycled()) {
+            return null;
+        }
+        int targetWidth = getDisplayTargetSize(bitmap.getWidth(), zoom);
+        int targetHeight = getDisplayTargetSize(bitmap.getHeight(), zoom);
+        float shortEdge = Math.max(Math.min(targetWidth, targetHeight), 1);
+        float outerStrokeWidth = clampValue(shortEdge * 0.01f, OUTLINE_OUTER_STROKE_MIN_PX, OUTLINE_OUTER_STROKE_MAX_PX);
+        float innerStrokeWidth = clampValue(shortEdge * 0.005f, OUTLINE_INNER_STROKE_MIN_PX, OUTLINE_INNER_STROKE_MAX_PX);
+        float normalizedDegree = normalizeDegree(degree);
+
+        RectF sourceRect = new RectF(-targetWidth / 2f, -targetHeight / 2f, targetWidth / 2f, targetHeight / 2f);
+        RectF boundsRect = new RectF();
+        Matrix matrix = new Matrix();
+        matrix.setRotate(normalizedDegree);
+        matrix.mapRect(boundsRect, sourceRect);
+
+        int padding = Math.max(4, (int) Math.ceil(outerStrokeWidth) + 2);
+        int bitmapWidth = Math.max((int) Math.ceil(boundsRect.width()) + (padding * 2), 1);
+        int bitmapHeight = Math.max((int) Math.ceil(boundsRect.height()) + (padding * 2), 1);
+        Bitmap outlineBitmap = Bitmap.createBitmap(bitmapWidth, bitmapHeight, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(outlineBitmap);
+        canvas.translate(bitmapWidth / 2f, bitmapHeight / 2f);
+        if (normalizedDegree != 0f) {
+            canvas.rotate(normalizedDegree);
+        }
+
+        RectF drawRect = new RectF(
+                sourceRect.left + (outerStrokeWidth / 2f),
+                sourceRect.top + (outerStrokeWidth / 2f),
+                sourceRect.right - (outerStrokeWidth / 2f),
+                sourceRect.bottom - (outerStrokeWidth / 2f)
+        );
+        float cornerRadiusPx = clampAppearanceRatio(cornerRadiusRatio) * shortEdge;
+        float maxCornerRadius = Math.min(drawRect.width(), drawRect.height()) / 2f;
+        cornerRadiusPx = Math.min(cornerRadiusPx, maxCornerRadius);
+
+        Paint outerPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
+        outerPaint.setStyle(Paint.Style.STROKE);
+        outerPaint.setStrokeWidth(outerStrokeWidth);
+        outerPaint.setColor(OUTLINE_OUTER_COLOR);
+        outerPaint.setStrokeJoin(Paint.Join.ROUND);
+
+        Paint innerPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
+        innerPaint.setStyle(Paint.Style.STROKE);
+        innerPaint.setStrokeWidth(innerStrokeWidth);
+        innerPaint.setColor(OUTLINE_INNER_COLOR);
+        innerPaint.setStrokeJoin(Paint.Join.ROUND);
+
+        canvas.drawRoundRect(drawRect, cornerRadiusPx, cornerRadiusPx, outerPaint);
+        canvas.drawRoundRect(drawRect, cornerRadiusPx, cornerRadiusPx, innerPaint);
+        return outlineBitmap;
+    }
+
+    public static Bitmap createPreviewSourceBitmap(Bitmap bitmap) {
+        if (bitmap == null || bitmap.isRecycled()) {
+            return null;
+        }
+        int maxSide = Math.max(bitmap.getWidth(), bitmap.getHeight());
+        if (maxSide <= TEMP_PREVIEW_SOURCE_MAX_SIDE) {
+            return bitmap;
+        }
+        float scale = TEMP_PREVIEW_SOURCE_MAX_SIDE / (float) maxSide;
+        int previewWidth = Math.max(Math.round(bitmap.getWidth() * scale), 1);
+        int previewHeight = Math.max(Math.round(bitmap.getHeight() * scale), 1);
+        return createScaledBitmapHighQuality(bitmap, previewWidth, previewHeight);
+    }
+
+    public static Bitmap resizeBitmapFromScaledSource(Bitmap scaledSourceBitmap,
+                                                      int originalWidth,
+                                                      int originalHeight,
+                                                      float zoom,
+                                                      float degree,
+                                                      float cornerRadiusRatio,
+                                                      float edgeFeatherRatio) {
+        if (scaledSourceBitmap == null || scaledSourceBitmap.isRecycled()) {
+            return null;
+        }
+        float widthScale = originalWidth > 0 ? originalWidth / (float) scaledSourceBitmap.getWidth() : 1f;
+        float heightScale = originalHeight > 0 ? originalHeight / (float) scaledSourceBitmap.getHeight() : 1f;
+        float sourceScale = Math.max(1f, Math.max(widthScale, heightScale));
+        return resizeBitmap(
+                scaledSourceBitmap,
+                zoom * sourceScale,
+                degree,
+                cornerRadiusRatio,
+                edgeFeatherRatio
+        );
     }
 
     public static float getDefaultZoom(Context mContext, Bitmap bitmap, boolean isMax) {
@@ -848,6 +948,10 @@ public class ImageMethods {
 
     private static float clampAppearanceRatio(float ratio) {
         return Math.max(0f, Math.min(1f, ratio));
+    }
+
+    private static float clampValue(float value, float minValue, float maxValue) {
+        return Math.max(minValue, Math.min(maxValue, value));
     }
 
     private static float clampToUnit(float value) {

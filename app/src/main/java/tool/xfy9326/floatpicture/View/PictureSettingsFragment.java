@@ -502,7 +502,18 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                 if (progress > 0) {
                     zoom_temp = roundToThreeDecimals(((float) progress) / THREE_DECIMAL_SCALE);
                     editText.setText(formatThreeDecimal(zoom_temp));
-                    showPreview(zoom_temp, picture_degree, picture_alpha, position_x, position_y, touch_and_move, allow_picture_over_layout, false, touch_and_move);
+                    showPreview(
+                            zoom_temp,
+                            picture_degree,
+                            picture_alpha,
+                            position_x,
+                            position_y,
+                            touch_and_move,
+                            allow_picture_over_layout,
+                            fromUser ? OverlayRuntimeController.PREVIEW_MODE_OUTLINE : OverlayRuntimeController.PREVIEW_MODE_FULL,
+                            false,
+                            touch_and_move
+                    );
                 }
             }
 
@@ -512,6 +523,20 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
 
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {
+                if (seekBar.getProgress() > 0) {
+                    showPreview(
+                            zoom_temp,
+                            picture_degree,
+                            picture_alpha,
+                            position_x,
+                            position_y,
+                            touch_and_move,
+                            allow_picture_over_layout,
+                            OverlayRuntimeController.PREVIEW_MODE_FULL,
+                            false,
+                            touch_and_move
+                    );
+                }
             }
         });
         editText.setOnEditorActionListener((v, actionId, event) -> {
@@ -577,7 +602,18 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 picture_degree_temp = roundToThreeDecimals(((float) progress) / THREE_DECIMAL_SCALE);
                 editText.setText(formatThreeDecimal(picture_degree_temp));
-                showPreview(zoom, picture_degree_temp, picture_alpha, position_x, position_y, touch_and_move, allow_picture_over_layout, false, touch_and_move);
+                showPreview(
+                        zoom,
+                        picture_degree_temp,
+                        picture_alpha,
+                        position_x,
+                        position_y,
+                        touch_and_move,
+                        allow_picture_over_layout,
+                        fromUser ? OverlayRuntimeController.PREVIEW_MODE_LOW_RES : OverlayRuntimeController.PREVIEW_MODE_FULL,
+                        false,
+                        touch_and_move
+                );
             }
 
             @Override
@@ -586,6 +622,18 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
 
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {
+                showPreview(
+                        zoom,
+                        picture_degree_temp,
+                        picture_alpha,
+                        position_x,
+                        position_y,
+                        touch_and_move,
+                        allow_picture_over_layout,
+                        OverlayRuntimeController.PREVIEW_MODE_FULL,
+                        false,
+                        touch_and_move
+                );
             }
         });
         editText.setOnEditorActionListener((v, actionId, event) -> {
@@ -866,7 +914,18 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         }
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(requireContext());
         final boolean touchable_edit = (touch_and_move || sharedPreferences.getBoolean(Config.PREFERENCE_TOUCHABLE_POSITION_EDIT, false));
-        showPreview(zoom, picture_degree, picture_alpha, position_x, position_y, touchable_edit, allow_picture_over_layout, false, false);
+        showPreview(
+                zoom,
+                picture_degree,
+                picture_alpha,
+                position_x,
+                position_y,
+                touchable_edit,
+                allow_picture_over_layout,
+                OverlayRuntimeController.PREVIEW_MODE_MOVE_ONLY,
+                false,
+                false
+        );
 
         View mView = inflater.inflate(R.layout.dialog_set_position, requireActivity().findViewById(R.id.layout_dialog_set_position));
         AlertDialog.Builder dialog = new AlertDialog.Builder(requireContext());
@@ -900,7 +959,18 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 position_x_temp = progress;
                 editText_x.setText(String.valueOf(progress));
-                showPreview(zoom, picture_degree, picture_alpha, position_x_temp, position_y_temp, touchable_edit, allow_picture_over_layout, false, false);
+                showPreview(
+                        zoom,
+                        picture_degree,
+                        picture_alpha,
+                        position_x_temp,
+                        position_y_temp,
+                        touchable_edit,
+                        allow_picture_over_layout,
+                        OverlayRuntimeController.PREVIEW_MODE_MOVE_ONLY,
+                        false,
+                        false
+                );
             }
 
             @Override
@@ -919,7 +989,18 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                     if (!allow_picture_over_layout) {
                         seekBar_x.setProgress(edittext_temp);
                     }
-                    showPreview(zoom, picture_degree, picture_alpha, position_x_temp, position_y_temp, touchable_edit, allow_picture_over_layout, false, false);
+                    showPreview(
+                            zoom,
+                            picture_degree,
+                            picture_alpha,
+                            position_x_temp,
+                            position_y_temp,
+                            touchable_edit,
+                            allow_picture_over_layout,
+                            OverlayRuntimeController.PREVIEW_MODE_MOVE_ONLY,
+                            false,
+                            false
+                    );
                 } else {
                     Toast.makeText(requireContext(), R.string.settings_picture_position_warn, Toast.LENGTH_SHORT).show();
                 }
@@ -933,7 +1014,18 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 position_y_temp = progress;
                 editText_y.setText(String.valueOf(progress));
-                showPreview(zoom, picture_degree, picture_alpha, position_x_temp, position_y_temp, touchable_edit, allow_picture_over_layout, false, false);
+                showPreview(
+                        zoom,
+                        picture_degree,
+                        picture_alpha,
+                        position_x_temp,
+                        position_y_temp,
+                        touchable_edit,
+                        allow_picture_over_layout,
+                        OverlayRuntimeController.PREVIEW_MODE_MOVE_ONLY,
+                        false,
+                        false
+                );
             }
 
             @Override
@@ -952,7 +1044,18 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                     if (!allow_picture_over_layout) {
                         seekBar_y.setProgress(edittext_temp);
                     }
-                    showPreview(zoom, picture_degree, picture_alpha, position_x_temp, position_y_temp, touchable_edit, allow_picture_over_layout, false, false);
+                    showPreview(
+                            zoom,
+                            picture_degree,
+                            picture_alpha,
+                            position_x_temp,
+                            position_y_temp,
+                            touchable_edit,
+                            allow_picture_over_layout,
+                            OverlayRuntimeController.PREVIEW_MODE_MOVE_ONLY,
+                            false,
+                            false
+                    );
                 } else {
                     Toast.makeText(requireContext(), R.string.settings_picture_position_warn, Toast.LENGTH_SHORT).show();
                 }
@@ -1109,7 +1212,18 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
 
     private void showWorkingWindowPreview(float alpha, boolean reloadSource) {
         Point previewPosition = touch_and_move ? getPreviewPosition(position_x, position_y) : new Point(position_x, position_y);
-        showPreview(zoom, picture_degree, alpha, previewPosition.x, previewPosition.y, touch_and_move, allow_picture_over_layout, reloadSource, false);
+        showPreview(
+                zoom,
+                picture_degree,
+                alpha,
+                previewPosition.x,
+                previewPosition.y,
+                touch_and_move,
+                allow_picture_over_layout,
+                OverlayRuntimeController.PREVIEW_MODE_FULL,
+                reloadSource,
+                false
+        );
     }
 
     private void showPreview(float zoomValue,
@@ -1125,12 +1239,37 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                 zoomValue,
                 degreeValue,
                 alphaValue,
+                positionX,
+                positionY,
+                touchAndMove,
+                overLayout,
+                OverlayRuntimeController.PREVIEW_MODE_FULL,
+                reloadSource,
+                useRuntimePosition
+        );
+    }
+
+    private void showPreview(float zoomValue,
+                             float degreeValue,
+                             float alphaValue,
+                             int positionX,
+                             int positionY,
+                             boolean touchAndMove,
+                             boolean overLayout,
+                             int previewMode,
+                             boolean reloadSource,
+                             boolean useRuntimePosition) {
+        showPreview(
+                zoomValue,
+                degreeValue,
+                alphaValue,
                 picture_corner_radius_ratio,
                 picture_edge_feather_ratio,
                 positionX,
                 positionY,
                 touchAndMove,
                 overLayout,
+                previewMode,
                 reloadSource,
                 useRuntimePosition
         );
@@ -1145,6 +1284,34 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                              int positionY,
                              boolean touchAndMove,
                              boolean overLayout,
+                             boolean reloadSource,
+                             boolean useRuntimePosition) {
+        showPreview(
+                zoomValue,
+                degreeValue,
+                alphaValue,
+                cornerRadiusRatio,
+                edgeFeatherRatio,
+                positionX,
+                positionY,
+                touchAndMove,
+                overLayout,
+                OverlayRuntimeController.PREVIEW_MODE_FULL,
+                reloadSource,
+                useRuntimePosition
+        );
+    }
+
+    private void showPreview(float zoomValue,
+                             float degreeValue,
+                             float alphaValue,
+                             float cornerRadiusRatio,
+                             float edgeFeatherRatio,
+                             int positionX,
+                             int positionY,
+                             boolean touchAndMove,
+                             boolean overLayout,
+                             int previewMode,
                              boolean reloadSource,
                              boolean useRuntimePosition) {
         if (PictureId == null || shouldAbortFragmentWork()) {
@@ -1169,6 +1336,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                 resolvedPositionY,
                 touchAndMove,
                 overLayout,
+                previewMode,
                 reloadSource
         );
     }

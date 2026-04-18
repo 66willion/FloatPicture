@@ -44,9 +44,15 @@ public final class OverlayRuntimeController {
     public static final String EXTRA_EDGE_FEATHER_RATIO = "extra_edge_feather_ratio";
     public static final String EXTRA_POSITION_X = "extra_position_x";
     public static final String EXTRA_POSITION_Y = "extra_position_y";
+    public static final String EXTRA_PREVIEW_MODE = "extra_preview_mode";
     public static final String EXTRA_RELOAD_SOURCE = "extra_reload_source";
     public static final String EXTRA_RESULT_RECEIVER = "extra_result_receiver";
     public static final String EXTRA_RELEASED_WINDOW_COUNT = "extra_released_window_count";
+
+    public static final int PREVIEW_MODE_FULL = 0;
+    public static final int PREVIEW_MODE_MOVE_ONLY = 1;
+    public static final int PREVIEW_MODE_OUTLINE = 2;
+    public static final int PREVIEW_MODE_LOW_RES = 3;
 
     private static final long RELEASE_MEMORY_TIMEOUT_MS = 4000L;
 
@@ -114,6 +120,7 @@ public final class OverlayRuntimeController {
                                      int positionY,
                                      boolean touchAndMove,
                                      boolean overLayout,
+                                     int previewMode,
                                      boolean reloadSource) {
         if (pictureId == null || pictureId.isEmpty()) {
             return;
@@ -129,6 +136,7 @@ public final class OverlayRuntimeController {
         intent.putExtra(EXTRA_POSITION_Y, positionY);
         intent.putExtra(EXTRA_TOUCH_AND_MOVE, touchAndMove);
         intent.putExtra(EXTRA_OVER_LAYOUT, overLayout);
+        intent.putExtra(EXTRA_PREVIEW_MODE, previewMode);
         intent.putExtra(EXTRA_RELOAD_SOURCE, reloadSource);
         dispatchCommand(getAppContext(context), intent);
     }

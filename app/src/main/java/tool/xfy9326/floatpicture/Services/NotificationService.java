@@ -264,11 +264,20 @@ public class NotificationService extends Service {
             previewSession = new PreviewSession(pictureId);
             previewSessions.put(pictureId, previewSession);
         }
-        boolean reloadSource = intent.getBooleanExtra(OverlayRuntimeController.EXTRA_RELOAD_SOURCE, false) || previewSession.sourceBitmap == null;
+        previewSession.previewMode = intent.getIntExtra(
+                OverlayRuntimeController.EXTRA_PREVIEW_MODE,
+                OverlayRuntimeController.PREVIEW_MODE_FULL
+        );
+        FloatImageView floatImageView = ImageMethods.getFloatImageViewById(this, pictureId);
+        boolean needsBitmap = previewSession.previewMode != OverlayRuntimeController.PREVIEW_MODE_MOVE_ONLY || floatImageView == null;
+        boolean reloadSource = needsBitmap && (
+                intent.getBooleanExtra(OverlayRuntimeController.EXTRA_RELOAD_SOURCE, false)
+                        || previewSession.sourceBitmap == null
+        );
         if (reloadSource) {
             previewSession.reloadSource(this);
         }
-        if (previewSession.sourceBitmap == null) {
+        if (needsBitmap && previewSession.sourceBitmap == null) {
             previewSessions.remove(pictureId);
             return;
         }
@@ -376,14 +385,28 @@ public class NotificationService extends Service {
     }
 
     private void applyPreviewSession(@NonNull PreviewSession previewSession) {
-        Bitmap renderedBitmap = ImageMethods.resizeBitmap(
-                previewSession.sourceBitmap,
-                previewSession.zoom,
-                previewSession.degree,
-                previewSession.cornerRadiusRatio,
-                previewSession.edgeFeatherRatio
-        );
         FloatImageView floatImageView = ImageMethods.getFloatImageViewById(this, previewSession.pictureId);
+        if (previewSession.previewMode == OverlayRuntimeController.PREVIEW_MODE_MOVE_ONLY && floatImageView != null) {
+            floatImageView.setMoveable(previewSession.touchAndMove);
+            floatImageView.setOverLayout(previewSession.overLayout);
+            floatImageView.setPictureAlpha(previewSession.alpha);
+            WindowsMethods.updateWindow(
+                    WindowsMethods.getWindowManager(this),
+                    floatImageView,
+                    previewSession.touchAndMove,
+                    previewSession.overLayout,
+                    previewSession.alpha,
+                    previewSession.positionX,
+                    previewSession.positionY
+            );
+            OverlayRuntimeStateStore.saveWindowPosition(this, previewSession.pictureId, previewSession.positionX, previewSession.positionY);
+            return;
+        }
+
+        Bitmap renderedBitmap = buildPreviewBitmap(previewSession);
+        if (renderedBitmap == null) {
+            return;
+        }
         if (floatImageView == null) {
             floatImageView = ImageMethods.createPictureView(this, renderedBitmap, previewSession.touchAndMove, previewSession.overLayout, previewSession.alpha);
             ImageMethods.saveFloatImageViewById(this, previewSession.pictureId, floatImageView);
@@ -403,6 +426,39 @@ public class NotificationService extends Service {
                 previewSession.positionY
         );
         OverlayRuntimeStateStore.saveWindowPosition(this, previewSession.pictureId, previewSession.positionX, previewSession.positionY);
+    }
+
+    @Nullable
+    private Bitmap buildPreviewBitmap(@NonNull PreviewSession previewSession) {
+        if (previewSession.sourceBitmap == null) {
+            return null;
+        }
+        return switch (previewSession.previewMode) {
+            case OverlayRuntimeController.PREVIEW_MODE_OUTLINE ->
+                    ImageMethods.createOutlinePreviewBitmap(
+                            previewSession.sourceBitmap,
+                            previewSession.zoom,
+                            previewSession.degree,
+                            previewSession.cornerRadiusRatio
+                    );
+            case OverlayRuntimeController.PREVIEW_MODE_LOW_RES ->
+                    ImageMethods.resizeBitmapFromScaledSource(
+                            previewSession.getLowResSourceBitmap(),
+                            previewSession.sourceBitmap.getWidth(),
+                            previewSession.sourceBitmap.getHeight(),
+                            previewSession.zoom,
+                            previewSession.degree,
+                            previewSession.cornerRadiusRatio,
+                            previewSession.edgeFeatherRatio
+                    );
+            default -> ImageMethods.resizeBitmap(
+                    previewSession.sourceBitmap,
+                    previewSession.zoom,
+                    previewSession.degree,
+                    previewSession.cornerRadiusRatio,
+                    previewSession.edgeFeatherRatio
+            );
+        };
     }
 
     private void reapplyPreviewSessions() {
@@ -437,6 +493,7 @@ public class NotificationService extends Service {
     private static final class PreviewSession {
         private final String pictureId;
         private Bitmap sourceBitmap;
+        private Bitmap lowResSourceBitmap;
         private float zoom = 1f;
         private float degree = Config.DATA_DEFAULT_PICTURE_DEGREE;
         private float alpha = Config.DATA_DEFAULT_PICTURE_ALPHA;
@@ -446,6 +503,7 @@ public class NotificationService extends Service {
         private int positionY = Config.DATA_DEFAULT_PICTURE_POSITION_Y;
         private boolean touchAndMove = Config.DATA_DEFAULT_PICTURE_TOUCH_AND_MOVE;
         private boolean overLayout = Config.DATA_DEFAULT_ALLOW_PICTURE_OVER_LAYOUT;
+        private int previewMode = OverlayRuntimeController.PREVIEW_MODE_FULL;
 
         private PreviewSession(@NonNull String pictureId) {
             this.pictureId = pictureId;
@@ -459,7 +517,22 @@ public class NotificationService extends Service {
             }
         }
 
+        @Nullable
+        private Bitmap getLowResSourceBitmap() {
+            if (sourceBitmap == null) {
+                return null;
+            }
+            if (lowResSourceBitmap == null || lowResSourceBitmap.isRecycled()) {
+                lowResSourceBitmap = ImageMethods.createPreviewSourceBitmap(sourceBitmap);
+            }
+            return lowResSourceBitmap;
+        }
+
         private void recycle() {
+            if (lowResSourceBitmap != null && lowResSourceBitmap != sourceBitmap) {
+                ImageMethods.recycleBitmap(lowResSourceBitmap);
+            }
+            lowResSourceBitmap = null;
             ImageMethods.recycleBitmap(sourceBitmap);
             sourceBitmap = null;
         }

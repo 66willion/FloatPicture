@@ -32,6 +32,10 @@
     <string name="action_warn_edit_hided_window">你不能编辑一个已经隐藏的窗口！</string>
     <string name="action_delete_window">成功删除窗口！</string>
     <string name="action_add_window">成功添加窗口！</string>
+    <string name="action_random_window_success">已随机显示一张图片</string>
+    <string name="action_random_window_no_candidate">没有可随机显示的图片</string>
+    <string name="action_random_window_failed">随机显示失败，请重试</string>
+    <string name="action_close_all_windows_success">已关闭所有图片</string>
     <string name="new_picture_name">新图片</string>
     <string name="settings_global_label">全局设置</string>
     <string name="action_back_to_launcher">返回桌面</string>
@@ -105,6 +109,10 @@
     <string name="settings_global_show_notification_control">显示通知栏控制面板</string>
     <string name="restart_to_apply_changes">重启程序以应用更改！</string>
     <string name="loading">正在加载中 ··· ···</string>
+    <string name="main_random_window">随机显示一张</string>
+    <string name="main_close_all_windows">关闭所有图片</string>
+    <string name="dialog_close_all_windows_title">关闭所有图片？</string>
+    <string name="dialog_close_all_windows_message">确认后会隐藏当前所有正在显示的图片悬浮窗。</string>
     <string name="notification_channel">默认</string>
     <string name="notification_channel_des">默认通知</string>
     <string name="settings_allow_picture_over_layout">允许悬浮窗超出屏幕</string>

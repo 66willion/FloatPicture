@@ -17,6 +17,7 @@ import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.ActionBarDrawerToggle;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import androidx.activity.result.ActivityResult;
@@ -49,6 +50,8 @@ public class MainActivity extends AppCompatActivity {
 
     private ManageListAdapter manageListAdapter;
     private AdvancedRecyclerView recyclerView;
+    private FloatingActionButton randomWindowButton;
+    private FloatingActionButton releaseMemoryButton;
     private FloatingActionButton pureOverlayButton;
     private FloatingActionButton trustedOverlayButton;
     private boolean pureOverlayToggleInProgress = false;
@@ -148,57 +151,33 @@ public class MainActivity extends AppCompatActivity {
         recyclerView.setItemViewCacheSize(MAIN_LIST_VIEW_CACHE_SIZE);
         recyclerView.setEmptyView(findViewById(R.id.layout_widget_empty_view));
 
+        randomWindowButton = findViewById(R.id.main_button_random_window);
+        if (randomWindowButton != null) {
+            randomWindowButton.setOnClickListener(view -> showRandomWindow());
+        }
+
         FloatingActionButton floatingActionButton = findViewById(R.id.main_button_add);
-        floatingActionButton.setOnClickListener(view -> {
-            if (PermissionMethods.hasOverlayPermission(MainActivity.this)) {
-                picturePickerLauncher.launch("image/*");
-            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                PermissionMethods.askOverlayPermission(MainActivity.this, this::launchOverlayPermissionRequest);
-            }
-        });
+        if (floatingActionButton != null) {
+            floatingActionButton.setOnClickListener(view -> {
+                if (PermissionMethods.hasOverlayPermission(MainActivity.this)) {
+                    picturePickerLauncher.launch("image/*");
+                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    PermissionMethods.askOverlayPermission(MainActivity.this, this::launchOverlayPermissionRequest);
+                }
+            });
+        }
 
         pureOverlayButton = findViewById(R.id.main_button_pure_overlay);
-        pureOverlayButton.bringToFront();
         pureOverlayButton.setOnClickListener(view -> togglePureOverlayMode());
         updatePureOverlayButtonState();
 
         trustedOverlayButton = findViewById(R.id.main_button_trusted_overlay);
-        trustedOverlayButton.bringToFront();
         trustedOverlayButton.setOnClickListener(view ->
                 trustedOverlaySettingsLauncher.launch(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         );
         refreshTrustedOverlayButtonState();
 
-        FloatingActionButton releaseMemoryButton = findViewById(R.id.main_button_release_memory);
-        releaseMemoryButton.bringToFront();
-        releaseMemoryButton.setOnClickListener(view -> {
-            view.setEnabled(false);
-            trimRecyclerPreviewCache();
-            new Thread(() -> {
-                ApplicationMethods.MemoryReleaseResult result = ApplicationMethods.releaseMemory(getApplicationContext());
-                runOnUiThread(() -> {
-                    view.setEnabled(true);
-                    if (isFinishing() || isDestroyed()) {
-                        return;
-                    }
-                    CoordinatorLayout coordinatorLayout = findViewById(R.id.main_layout_content);
-                    View anchorView = findViewById(R.id.main_layout_actions);
-                    Snackbar snackbar = Snackbar.make(
-                            coordinatorLayout,
-                            getString(
-                                    R.string.action_release_memory_result,
-                                    result.getReleasedWindowCount(),
-                                    result.getDeletedTempFileCount()
-                            ),
-                            Snackbar.LENGTH_SHORT
-                    );
-                    if (anchorView != null) {
-                        snackbar.setAnchorView(anchorView);
-                    }
-                    snackbar.show();
-                });
-            }).start();
-        });
+        releaseMemoryButton = null;
 
         final DrawerLayout drawerLayout = findViewById(R.id.main_drawer_layout);
         ActionBarDrawerToggle actionBarDrawerToggle = new ActionBarDrawerToggle(this, drawerLayout, toolbar, R.string.open, R.string.close);
@@ -212,6 +191,10 @@ public class MainActivity extends AppCompatActivity {
             int itemId = item.getItemId();
             if (itemId == R.id.menu_global_settings) {
                 startActivity(new Intent(MainActivity.this, GlobalSettingsActivity.class));
+            } else if (itemId == R.id.menu_close_all_windows) {
+                drawerLayout.post(this::confirmHideAllWindows);
+            } else if (itemId == R.id.menu_release_memory) {
+                drawerLayout.post(this::releaseMemory);
             } else if (itemId == R.id.menu_about) {
                 startActivity(new Intent(MainActivity.this, AboutActivity.class));
             } else if (itemId == R.id.menu_back_to_launcher) {
@@ -324,6 +307,96 @@ public class MainActivity extends AppCompatActivity {
 
     private void launchPictureSettingsForEdit(Intent intent) {
         editPictureSettingsLauncher.launch(intent);
+    }
+
+    private void showRandomWindow() {
+        if (randomWindowButton == null || pureOverlayToggleInProgress) {
+            return;
+        }
+        if (!PermissionMethods.hasOverlayPermission(this)) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                PermissionMethods.askOverlayPermission(this, this::launchOverlayPermissionRequest);
+            }
+            return;
+        }
+        randomWindowButton.setEnabled(false);
+        new Thread(() -> {
+            int result = OverlayRuntimeController.showRandomWindow(getApplicationContext());
+            runOnUiThread(() -> {
+                if (randomWindowButton != null) {
+                    randomWindowButton.setEnabled(true);
+                }
+                if (isFinishing() || isDestroyed()) {
+                    return;
+                }
+                if (result == OverlayRuntimeController.RANDOM_WINDOW_RESULT_SUCCESS) {
+                    SnackShow(this, R.string.action_random_window_success);
+                } else if (result == OverlayRuntimeController.RANDOM_WINDOW_RESULT_NO_CANDIDATE) {
+                    SnackShow(this, R.string.action_random_window_no_candidate);
+                } else {
+                    SnackShow(this, R.string.action_random_window_failed);
+                }
+            });
+        }).start();
+    }
+
+    private void confirmHideAllWindows() {
+        if (pureOverlayToggleInProgress) {
+            return;
+        }
+        if (!PermissionMethods.hasOverlayPermission(this)) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                PermissionMethods.askOverlayPermission(this, this::launchOverlayPermissionRequest);
+            }
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.dialog_close_all_windows_title)
+                .setMessage(R.string.dialog_close_all_windows_message)
+                .setPositiveButton(R.string.done, (dialogInterface, which) -> hideAllWindows())
+                .setNegativeButton(R.string.cancel, null)
+                .show();
+    }
+
+    private void hideAllWindows() {
+        OverlayRuntimeController.hideAllWindows(getApplicationContext());
+        SnackShow(this, R.string.action_close_all_windows_success);
+    }
+
+    private void releaseMemory() {
+        if (releaseMemoryButton != null && !releaseMemoryButton.isEnabled()) {
+            return;
+        }
+        if (releaseMemoryButton != null) {
+            releaseMemoryButton.setEnabled(false);
+        }
+        trimRecyclerPreviewCache();
+        new Thread(() -> {
+            ApplicationMethods.MemoryReleaseResult result = ApplicationMethods.releaseMemory(getApplicationContext());
+            runOnUiThread(() -> {
+                if (releaseMemoryButton != null) {
+                    releaseMemoryButton.setEnabled(true);
+                }
+                if (isFinishing() || isDestroyed()) {
+                    return;
+                }
+                CoordinatorLayout coordinatorLayout = findViewById(R.id.main_layout_content);
+                View anchorView = findViewById(R.id.main_layout_actions);
+                Snackbar snackbar = Snackbar.make(
+                        coordinatorLayout,
+                        getString(
+                                R.string.action_release_memory_result,
+                                result.getReleasedWindowCount(),
+                                result.getDeletedTempFileCount()
+                        ),
+                        Snackbar.LENGTH_SHORT
+                );
+                if (anchorView != null) {
+                    snackbar.setAnchorView(anchorView);
+                }
+                snackbar.show();
+            });
+        }).start();
     }
 
     private void trimRecyclerPreviewCache() {

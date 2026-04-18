@@ -10,6 +10,14 @@
             android:icon="@drawable/ic_settings"
             android:title="@string/settings_global_label" />
         <item
+            android:id="@+id/menu_close_all_windows"
+            android:icon="@drawable/ic_close_all"
+            android:title="@string/drawer_close_all_pictures" />
+        <item
+            android:id="@+id/menu_release_memory"
+            android:icon="@drawable/ic_memory_clean"
+            android:title="@string/drawer_release_memory" />
+        <item
             android:id="@+id/menu_about"
             android:icon="@drawable/ic_about"
             android:title="@string/about" />

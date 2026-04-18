@@ -31,6 +31,10 @@
     <string name="action_warn_edit_hided_window">You can\'t edit a hided window!</string>
     <string name="action_delete_window">Delete window success!</string>
     <string name="action_add_window">Add window success!</string>
+    <string name="action_random_window_success">Random picture window shown.</string>
+    <string name="action_random_window_no_candidate">No picture available for random display.</string>
+    <string name="action_random_window_failed">Random display failed. Please try again.</string>
+    <string name="action_close_all_windows_success">All picture windows closed.</string>
     <string name="new_picture_name">New Picture</string>
     <string name="settings_global_label">Global Settings</string>
     <string name="action_warn_double_click_close_application">Double click to close application.</string>
@@ -104,6 +108,10 @@
     <string name="settings_global_show_notification_control_sum">Can set windows\' visibility by this.</string>
     <string name="restart_to_apply_changes">Restart the application to apply this change!</string>
     <string name="loading">Loading &#8230; &#8230;</string>
+    <string name="main_random_window">Random show one picture</string>
+    <string name="main_close_all_windows">Close all pictures</string>
+    <string name="dialog_close_all_windows_title">Close all picture windows?</string>
+    <string name="dialog_close_all_windows_message">This will hide every currently visible picture window.</string>
     <string name="notification_channel">Default</string>
     <string name="notification_channel_des">Default Notification</string>
     <string name="settings_allow_picture_over_layout">Allow picture over layout</string>

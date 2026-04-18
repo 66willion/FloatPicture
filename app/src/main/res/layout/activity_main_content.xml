@@ -50,6 +50,7 @@
         android:id="@+id/main_layout_actions"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layoutDirection="ltr"
         android:layout_gravity="bottom|end"
         android:layout_marginEnd="20dp"
         android:layout_marginBottom="24dp"
@@ -58,32 +59,34 @@
         android:orientation="vertical"
         android:translationZ="16dp">
 
-        <com.google.android.material.floatingactionbutton.FloatingActionButton
-            android:id="@+id/main_button_add"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:clickable="true"
-            android:contentDescription="@string/main_add_overlay"
-            android:focusable="true"
-            app:backgroundTint="@color/colorFloatingActionButtonBackGround"
-            app:elevation="8dp"
-            app:fabSize="normal"
-            app:pressedTranslationZ="12dp"
-            app:srcCompat="@drawable/ic_add" />
-
         <LinearLayout
             android:id="@+id/main_layout_secondary_actions"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="18dp"
+            android:layoutDirection="ltr"
             android:gravity="center_vertical|end"
             android:orientation="horizontal">
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/main_button_random_window"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:layout_marginEnd="6dp"
+                android:contentDescription="@string/main_random_window"
+                app:backgroundTint="@color/colorRandomAction"
+                app:elevation="8dp"
+                app:fabSize="normal"
+                app:pressedTranslationZ="12dp"
+                app:srcCompat="@drawable/ic_random_window"
+                app:tint="@color/white" />
 
             <com.google.android.material.floatingactionbutton.FloatingActionButton
                 android:id="@+id/main_button_pure_overlay"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginEnd="12dp"
+                android:layout_marginStart="6dp"
+                android:layout_marginEnd="6dp"
                 android:contentDescription="@string/main_pure_overlay_off"
                 android:focusable="true"
                 app:backgroundTint="@color/colorPureOverlayOff"
@@ -97,7 +100,8 @@
                 android:id="@+id/main_button_trusted_overlay"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginEnd="12dp"
+                android:layout_marginStart="6dp"
+                android:layout_marginEnd="6dp"
                 android:contentDescription="@string/main_trusted_overlay_off"
                 app:backgroundTint="@color/colorTrustedOverlayOff"
                 app:elevation="8dp"
@@ -107,16 +111,19 @@
                 app:tint="@color/white" />
 
             <com.google.android.material.floatingactionbutton.FloatingActionButton
-                android:id="@+id/main_button_release_memory"
+                android:id="@+id/main_button_add"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:contentDescription="@string/main_release_memory"
-                app:backgroundTint="@color/colorPrimary"
+                android:layout_marginStart="6dp"
+                android:layout_marginEnd="6dp"
+                android:clickable="true"
+                android:contentDescription="@string/main_add_overlay"
+                android:focusable="true"
+                app:backgroundTint="@color/colorFloatingActionButtonBackGround"
                 app:elevation="8dp"
                 app:fabSize="normal"
                 app:pressedTranslationZ="12dp"
-                app:srcCompat="@drawable/ic_memory_clean"
-                app:tint="@color/white" />
+                app:srcCompat="@drawable/ic_add" />
 
         </LinearLayout>
 

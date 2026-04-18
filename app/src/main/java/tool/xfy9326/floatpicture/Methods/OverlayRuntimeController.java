@@ -25,8 +25,10 @@ public final class OverlayRuntimeController {
     public static final String ACTION_RUNTIME_RECREATE_WINDOWS = "tool.xfy9326.floatpicture.action.RUNTIME_RECREATE_WINDOWS";
     public static final String ACTION_RUNTIME_SET_WINDOW_VISIBLE = "tool.xfy9326.floatpicture.action.RUNTIME_SET_WINDOW_VISIBLE";
     public static final String ACTION_RUNTIME_SET_ALL_WINDOWS_VISIBLE = "tool.xfy9326.floatpicture.action.RUNTIME_SET_ALL_WINDOWS_VISIBLE";
+    public static final String ACTION_RUNTIME_HIDE_ALL_WINDOWS = "tool.xfy9326.floatpicture.action.RUNTIME_HIDE_ALL_WINDOWS";
     public static final String ACTION_RUNTIME_SYNC_PICTURE = "tool.xfy9326.floatpicture.action.RUNTIME_SYNC_PICTURE";
     public static final String ACTION_RUNTIME_DELETE_PICTURE = "tool.xfy9326.floatpicture.action.RUNTIME_DELETE_PICTURE";
+    public static final String ACTION_RUNTIME_SHOW_RANDOM_WINDOW = "tool.xfy9326.floatpicture.action.RUNTIME_SHOW_RANDOM_WINDOW";
     public static final String ACTION_RUNTIME_UPDATE_PREVIEW = "tool.xfy9326.floatpicture.action.RUNTIME_UPDATE_PREVIEW";
     public static final String ACTION_RUNTIME_CANCEL_PREVIEW = "tool.xfy9326.floatpicture.action.RUNTIME_CANCEL_PREVIEW";
     public static final String ACTION_RUNTIME_FINISH_PREVIEW = "tool.xfy9326.floatpicture.action.RUNTIME_FINISH_PREVIEW";
@@ -56,7 +58,11 @@ public final class OverlayRuntimeController {
     public static final int PREVIEW_MODE_OUTLINE = 2;
     public static final int PREVIEW_MODE_LOW_RES = 3;
 
-    private static final long RELEASE_MEMORY_TIMEOUT_MS = 4000L;
+    public static final int RANDOM_WINDOW_RESULT_SUCCESS = 1;
+    public static final int RANDOM_WINDOW_RESULT_NO_CANDIDATE = 2;
+    public static final int RANDOM_WINDOW_RESULT_ERROR = 3;
+
+    private static final long RUNTIME_RESULT_TIMEOUT_MS = 4000L;
 
     private OverlayRuntimeController() {
     }
@@ -109,6 +115,31 @@ public final class OverlayRuntimeController {
         Intent intent = createIntent(context, ACTION_RUNTIME_SET_ALL_WINDOWS_VISIBLE);
         intent.putExtra(EXTRA_VISIBLE, visible);
         dispatchCommand(getAppContext(context), intent);
+    }
+
+    public static void hideAllWindows(@NonNull Context context) {
+        dispatchCommand(getAppContext(context), createIntent(context, ACTION_RUNTIME_HIDE_ALL_WINDOWS));
+    }
+
+    public static int showRandomWindow(@NonNull Context context) {
+        AtomicInteger resultCode = new AtomicInteger(RANDOM_WINDOW_RESULT_ERROR);
+        CountDownLatch countDownLatch = new CountDownLatch(1);
+        ResultReceiver receiver = new ResultReceiver(new Handler(Looper.getMainLooper())) {
+            @Override
+            protected void onReceiveResult(int code, Bundle resultData) {
+                resultCode.set(code);
+                countDownLatch.countDown();
+            }
+        };
+        Intent intent = createIntent(context, ACTION_RUNTIME_SHOW_RANDOM_WINDOW);
+        intent.putExtra(EXTRA_RESULT_RECEIVER, receiver);
+        dispatchCommand(getAppContext(context), intent);
+        try {
+            countDownLatch.await(RUNTIME_RESULT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return resultCode.get();
     }
 
     public static void updatePreview(@NonNull Context context,
@@ -181,7 +212,7 @@ public final class OverlayRuntimeController {
         intent.putExtra(EXTRA_RESULT_RECEIVER, receiver);
         dispatchCommand(getAppContext(context), intent);
         try {
-            countDownLatch.await(RELEASE_MEMORY_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            countDownLatch.await(RUNTIME_RESULT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }

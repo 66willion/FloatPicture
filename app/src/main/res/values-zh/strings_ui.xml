@@ -13,6 +13,8 @@
     <string name="drawer_subtitle">悬浮窗管理</string>
     <string name="settings_appearance">外观</string>
     <string name="settings_theme_mode">主题模式</string>
+    <string name="drawer_close_all_pictures">全部关闭图片</string>
+    <string name="drawer_release_memory">释放内存</string>
     <string name="main_add_overlay">新增悬浮窗</string>
     <string name="main_release_memory">释放内存</string>
     <string name="main_pure_overlay_on">纯悬浮开</string>

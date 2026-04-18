@@ -187,12 +187,18 @@ public class NotificationService extends Service {
                     OverlayRuntimeController.notifyRuntimeStateChanged(this);
                 }
                 return true;
+            case OverlayRuntimeController.ACTION_RUNTIME_HIDE_ALL_WINDOWS:
+                ManageMethods.setAllWindowsVisible(this, false);
+                OverlayRuntimeController.notifyRuntimeStateChanged(this);
+                return true;
             case OverlayRuntimeController.ACTION_RUNTIME_SYNC_PICTURE:
                 handleSyncPicture(intent);
                 return true;
             case OverlayRuntimeController.ACTION_RUNTIME_DELETE_PICTURE:
                 handleDeletePicture(intent);
                 return true;
+            case OverlayRuntimeController.ACTION_RUNTIME_SHOW_RANDOM_WINDOW:
+                return handleShowRandomWindow(intent);
             case OverlayRuntimeController.ACTION_RUNTIME_UPDATE_PREVIEW:
                 handlePreviewUpdate(intent);
                 return false;
@@ -251,6 +257,28 @@ public class NotificationService extends Service {
         ManageMethods.DeleteWin(this, pictureId);
         OverlayRuntimeStateStore.clearWindowPosition(this, pictureId);
         OverlayRuntimeController.notifyRuntimeStateChanged(this);
+    }
+
+    private boolean handleShowRandomWindow(@Nullable Intent intent) {
+        String pictureId = ManageMethods.showOnlyRandomWindow(this);
+        ResultReceiver resultReceiver = OverlayRuntimeController.getResultReceiver(intent);
+        if (resultReceiver != null) {
+            Bundle resultData = new Bundle();
+            if (pictureId != null && !pictureId.isEmpty()) {
+                resultData.putString(OverlayRuntimeController.EXTRA_PICTURE_ID, pictureId);
+            }
+            resultReceiver.send(
+                    pictureId != null && !pictureId.isEmpty()
+                            ? OverlayRuntimeController.RANDOM_WINDOW_RESULT_SUCCESS
+                            : OverlayRuntimeController.RANDOM_WINDOW_RESULT_NO_CANDIDATE,
+                    resultData
+            );
+        }
+        if (pictureId == null || pictureId.isEmpty()) {
+            return false;
+        }
+        OverlayRuntimeController.notifyRuntimeStateChanged(this);
+        return true;
     }
 
     private void handlePreviewUpdate(@Nullable Intent intent) {

@@ -8,10 +8,12 @@ import android.graphics.Bitmap;
 import android.view.View;
 import android.view.WindowManager;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 
 import tool.xfy9326.floatpicture.MainApplication;
@@ -23,6 +25,8 @@ import tool.xfy9326.floatpicture.View.FloatImageView;
 
 
 public class ManageMethods {
+    private static final Random RANDOM = new Random();
+
     public static void RunWin(Context mContext) {
         if (!PermissionMethods.hasOverlayPermission(mContext)) {
             return;
@@ -245,6 +249,64 @@ public class ManageMethods {
         return visiblePictureIds;
     }
 
+    public static LinkedHashSet<String> getConfiguredPictureIds() {
+        LinkedHashMap<String, String> linkedHashMap = new PictureData().getListArray();
+        if (linkedHashMap == null || linkedHashMap.isEmpty()) {
+            return new LinkedHashSet<>();
+        }
+        return new LinkedHashSet<>(linkedHashMap.keySet());
+    }
+
+    public static LinkedHashSet<String> getValidConfiguredPictureIds() {
+        LinkedHashSet<String> configuredPictureIds = getConfiguredPictureIds();
+        LinkedHashSet<String> validPictureIds = new LinkedHashSet<>();
+        for (String pictureId : configuredPictureIds) {
+            if (pictureId == null || pictureId.isEmpty()) {
+                continue;
+            }
+            if (ImageMethods.hasAvailablePictureContent(pictureId)) {
+                validPictureIds.add(pictureId);
+            }
+        }
+        return validPictureIds;
+    }
+
+    public static String showOnlyRandomWindow(Context context) {
+        LinkedHashSet<String> validPictureIds = getValidConfiguredPictureIds();
+        if (validPictureIds.isEmpty()) {
+            return null;
+        }
+        LinkedHashSet<String> visiblePictureIds = getVisibleConfiguredPictureIds(context);
+        String targetPictureId = pickRandomPictureId(validPictureIds, visiblePictureIds);
+        if (targetPictureId == null || targetPictureId.isEmpty()) {
+            return null;
+        }
+
+        PictureData pictureData = new PictureData();
+        for (String visiblePictureId : visiblePictureIds) {
+            if (visiblePictureId == null || visiblePictureId.isEmpty()) {
+                continue;
+            }
+            pictureData.setDataControl(visiblePictureId);
+            if (!pictureData.getBoolean(Config.DATA_PICTURE_SHOW_ENABLED, Config.DATA_DEFAULT_PICTURE_SHOW_ENABLED)) {
+                continue;
+            }
+            if (releaseWindowById(context, visiblePictureId, false)) {
+                pictureData.put(Config.DATA_PICTURE_SHOW_ENABLED, false);
+                pictureData.commit(null);
+            }
+        }
+
+        pictureData.setDataControl(targetPictureId);
+        if (!pictureData.getBoolean(Config.DATA_PICTURE_SHOW_ENABLED, Config.DATA_DEFAULT_PICTURE_SHOW_ENABLED)) {
+            pictureData.put(Config.DATA_PICTURE_SHOW_ENABLED, true);
+            pictureData.commit(null);
+        }
+        showWindowById(context, targetPictureId);
+        updateGlobalVisibleState(context);
+        return targetPictureId;
+    }
+
     public static void setAllWindowsVisible(Context context, boolean visible) {
         PictureData pictureData = new PictureData();
         LinkedHashMap<String, String> linkedHashMap = pictureData.getListArray();
@@ -439,6 +501,25 @@ public class ManageMethods {
         floatImageView.setMoveable(touchAndMove);
         floatImageView.setOverLayout(overLayout);
         floatImageView.setPictureAlpha(pictureAlpha);
+    }
+
+    private static String pickRandomPictureId(Set<String> candidateIds, Set<String> excludeIds) {
+        if (candidateIds == null || candidateIds.isEmpty()) {
+            return null;
+        }
+        ArrayList<String> randomCandidates = new ArrayList<>(candidateIds);
+        if (excludeIds != null && !excludeIds.isEmpty() && randomCandidates.size() > 1) {
+            ArrayList<String> filteredCandidates = new ArrayList<>();
+            for (String candidateId : randomCandidates) {
+                if (!excludeIds.contains(candidateId)) {
+                    filteredCandidates.add(candidateId);
+                }
+            }
+            if (!filteredCandidates.isEmpty()) {
+                randomCandidates = filteredCandidates;
+            }
+        }
+        return randomCandidates.get(RANDOM.nextInt(randomCandidates.size()));
     }
 
     private static void cleanupRegisteredWindows(Context context, LinkedHashMap<String, String> pictureList) {

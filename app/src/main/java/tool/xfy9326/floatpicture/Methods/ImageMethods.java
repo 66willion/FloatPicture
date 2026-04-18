@@ -719,6 +719,10 @@ public class ImageMethods {
         return getOriginalPictureFile(id).exists() || getLegacyPictureFile(id).exists();
     }
 
+    public static boolean hasAvailablePictureContent(String id) {
+        return isPictureFileExist(id) || getDisplayPictureFile(id).exists();
+    }
+
     public static void setPictureBitmap(FloatImageView imageView, Bitmap bitmap) {
         Bitmap previousBitmap = getBitmapFromDrawable(imageView.getDrawable());
         imageView.setImageBitmap(bitmap);

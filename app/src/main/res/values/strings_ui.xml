@@ -13,6 +13,8 @@
     <string name="drawer_subtitle">Overlay window manager</string>
     <string name="settings_appearance">Appearance</string>
     <string name="settings_theme_mode">Theme mode</string>
+    <string name="drawer_close_all_pictures">Close all pictures</string>
+    <string name="drawer_release_memory">Free memory</string>
     <string name="main_add_overlay">Add overlay</string>
     <string name="main_release_memory">Free memory</string>
     <string name="main_pure_overlay_on">Pure overlay mode on</string>

@@ -26,6 +26,8 @@
     <string name="settings_picture_resize_size">大小:</string>
     <string name="settings_picture_resize_sum">等比例缩放窗口与图片</string>
     <string name="settings_picture_resize_warn">请输入一个正确的图片大小！</string>
+    <string name="settings_picture_fit_screen_height">充满屏幕高度</string>
+    <string name="settings_picture_fit_screen_height_sum">按当前角度自动缩放到顶住屏幕上下边，并将 Y 坐标设为 0</string>
     <string name="settings_picture_replace">替换图片</string>
     <string name="settings_picture_replace_sum">保留当前参数，直接替换这个项目使用的图片</string>
     <string name="settings_window">窗口设置</string>

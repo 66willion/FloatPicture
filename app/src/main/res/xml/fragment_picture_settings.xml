@@ -26,6 +26,13 @@
         <Preference
             android:selectAllOnFocus="true"
             app:iconSpaceReserved="false"
+            app:key="settings_picture_fit_screen_height"
+            app:singleLine="true"
+            app:summary="@string/settings_picture_fit_screen_height_sum"
+            app:title="@string/settings_picture_fit_screen_height" />
+        <Preference
+            android:selectAllOnFocus="true"
+            app:iconSpaceReserved="false"
             app:key="settings_picture_replace"
             app:singleLine="true"
             app:summary="@string/settings_picture_replace_sum"

@@ -2,10 +2,13 @@ package tool.xfy9326.floatpicture.Methods;
 
 
 import android.app.Activity;
+import android.content.SharedPreferences;
 import android.content.Context;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
 import android.os.Build;
+import android.util.Log;
 import android.view.View;
 
 import androidx.coordinatorlayout.widget.CoordinatorLayout;
@@ -20,12 +23,17 @@ import java.io.File;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import tool.xfy9326.floatpicture.R;
 import tool.xfy9326.floatpicture.Utils.Config;
 import tool.xfy9326.floatpicture.Utils.PictureData;
 
 public class ApplicationMethods {
+    private static final String PREF_DISPLAY_CACHE_VERSION = "display_cache_version";
+    private static final int DISPLAY_CACHE_VERSION_PNG = 1;
+    private static final int DISPLAY_CACHE_VERSION_WEBP_LOSSLESS = 3;
+    private static final AtomicBoolean STARTUP_MAINTENANCE_RUNNING = new AtomicBoolean(false);
     private static volatile boolean waitDoubleClick;
 
     public static final class MemoryReleaseResult {
@@ -147,6 +155,21 @@ public class ApplicationMethods {
         new Thread(() -> clearUselessTempSync(mContext)).start();
     }
 
+    public static void runStartupMaintenance(final Context context) {
+        Context appContext = context.getApplicationContext();
+        if (!STARTUP_MAINTENANCE_RUNNING.compareAndSet(false, true)) {
+            return;
+        }
+        new Thread(() -> {
+            try {
+                clearUselessTempSync(appContext);
+                migrateDisplayCacheIfNeeded(appContext);
+            } finally {
+                STARTUP_MAINTENANCE_RUNNING.set(false);
+            }
+        }, "startup-maintenance").start();
+    }
+
     public static MemoryReleaseResult releaseMemory(Context context) {
         int releasedWindowCount = OverlayRuntimeController.releaseMemory(context);
         int deletedTempFileCount = clearUselessTempSync(context);
@@ -169,6 +192,82 @@ public class ApplicationMethods {
         deletedCount += clearOrphanFiles(new File(Config.getPictureDir()), validIds);
         deletedCount += clearOrphanFiles(new File(Config.getPictureTempDir()), validIds);
         return deletedCount;
+    }
+
+    private static void migrateDisplayCacheIfNeeded(Context context) {
+        int targetVersion = getTargetDisplayCacheVersion();
+        SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context);
+        int cachedVersion = sharedPreferences.getInt(PREF_DISPLAY_CACHE_VERSION, DISPLAY_CACHE_VERSION_PNG);
+        if (cachedVersion >= targetVersion) {
+            return;
+        }
+
+        PictureData pictureData = new PictureData();
+        LinkedHashMap<String, String> pictureList = pictureData.getListArray();
+        boolean completed = false;
+        int rebuiltCount = 0;
+        try {
+            if (pictureList != null) {
+                for (String pictureId : pictureList.keySet()) {
+                    if (pictureId == null || pictureId.isEmpty() || !ImageMethods.isPictureFileExist(pictureId)) {
+                        continue;
+                    }
+                    pictureData.setDataControl(pictureId);
+                    float defaultZoom = pictureData.getFloat(
+                            Config.DATA_PICTURE_DEFAULT_ZOOM,
+                            ImageMethods.getDefaultZoom(context, pictureId, false)
+                    );
+                    float zoom = pictureData.getFloat(Config.DATA_PICTURE_ZOOM, defaultZoom);
+                    float degree = pictureData.getFloat(Config.DATA_PICTURE_DEGREE, Config.DATA_DEFAULT_PICTURE_DEGREE);
+                    float cornerRadiusRatio = pictureData.getFloat(
+                            Config.DATA_PICTURE_CORNER_RADIUS_RATIO,
+                            Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_RATIO
+                    );
+                    int cornerRadiusMask = pictureData.getInt(
+                            Config.DATA_PICTURE_CORNER_RADIUS_MASK,
+                            Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_MASK
+                    );
+                    float edgeFeatherRatio = pictureData.getFloat(
+                            Config.DATA_PICTURE_EDGE_FEATHER_RATIO,
+                            Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_RATIO
+                    );
+                    int edgeFeatherMask = pictureData.getInt(
+                            Config.DATA_PICTURE_EDGE_FEATHER_MASK,
+                            Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_MASK
+                    );
+                    Bitmap rebuiltBitmap = ImageMethods.createAndSaveDisplayBitmap(
+                            pictureId,
+                            zoom,
+                            degree,
+                            cornerRadiusRatio,
+                            cornerRadiusMask,
+                            edgeFeatherRatio,
+                            edgeFeatherMask
+                    );
+                    if (rebuiltBitmap == null) {
+                        Log.w("ApplicationMethods", "Failed to rebuild display cache for picture: " + pictureId);
+                        continue;
+                    }
+                    rebuiltCount++;
+                    ImageMethods.recycleBitmap(rebuiltBitmap);
+                }
+            }
+            completed = true;
+        } catch (Exception e) {
+            Log.e("ApplicationMethods", "Startup display cache migration failed", e);
+        }
+
+        if (completed) {
+            sharedPreferences.edit().putInt(PREF_DISPLAY_CACHE_VERSION, targetVersion).commit();
+            Log.i("ApplicationMethods", "Display cache migration completed: " + rebuiltCount + " item(s)");
+        }
+    }
+
+    private static int getTargetDisplayCacheVersion() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            return DISPLAY_CACHE_VERSION_WEBP_LOSSLESS;
+        }
+        return DISPLAY_CACHE_VERSION_PNG;
     }
 
     private static int clearOrphanFiles(File directory, Set<String> validIds) {

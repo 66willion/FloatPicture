@@ -92,7 +92,7 @@ public class MainActivity extends AppCompatActivity {
         init(savedInstanceState);
         ApplicationMethods.startNotificationControl(this);
         requestNotificationPermissionIfNeeded();
-        ApplicationMethods.ClearUselessTemp(this);
+        ApplicationMethods.runStartupMaintenance(this);
     }
 
     @Override

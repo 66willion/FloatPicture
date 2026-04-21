@@ -20,6 +20,8 @@
     <string name="settings_picture_resize_sum">Scaling the size of window and picture.</string>
     <string name="settings_picture_resize_warn">Please input a correct picture size!</string>
     <string name="settings_picture_resize_size">Size:</string>
+    <string name="settings_picture_fit_screen_height">Fill screen height</string>
+    <string name="settings_picture_fit_screen_height_sum">Resize the picture to touch the top and bottom of the screen and set Y to 0.</string>
     <string name="settings_picture_replace">Replace picture</string>
     <string name="settings_picture_replace_sum">Replace the image for this item while keeping current settings.</string>
     <string name="settings_window">Window Settings</string>

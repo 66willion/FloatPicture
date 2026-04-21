@@ -5,6 +5,7 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
+import android.os.Build;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -19,6 +20,20 @@ import java.util.Objects;
 import tool.xfy9326.floatpicture.Utils.Config;
 
 public class IOMethods {
+    @SuppressWarnings("deprecation")
+    private static Bitmap.CompressFormat getLossyCompressFormat() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            return Bitmap.CompressFormat.WEBP_LOSSY;
+        }
+        return Bitmap.CompressFormat.WEBP;
+    }
+
+    private static Bitmap.CompressFormat getLosslessCompressFormat() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            return Bitmap.CompressFormat.WEBP_LOSSLESS;
+        }
+        return Bitmap.CompressFormat.PNG;
+    }
 
     static Bitmap readImageByUri(Context context, Uri uri) {
         ContentResolver contentResolver = context.getContentResolver();
@@ -47,7 +62,7 @@ public class IOMethods {
         try {
             if (!CheckFile(file, true)) {
                 try (OutputStream outputStream = new FileOutputStream(file)) {
-                    bitmap.compress(Bitmap.CompressFormat.WEBP_LOSSY, quality, outputStream);
+                    bitmap.compress(getLossyCompressFormat(), quality, outputStream);
                 }
                 if (recycle) {
                     bitmap.recycle();
@@ -114,7 +129,7 @@ public class IOMethods {
         try {
             if (!CheckFile(file, true)) {
                 try (OutputStream outputStream = new FileOutputStream(file)) {
-                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream);
+                    bitmap.compress(getLosslessCompressFormat(), 100, outputStream);
                 }
                 if (recycle) {
                     bitmap.recycle();

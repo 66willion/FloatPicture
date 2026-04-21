@@ -247,6 +247,10 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
             setPictureSize();
             return true;
         });
+        requirePreference(Config.PREFERENCE_PICTURE_FIT_SCREEN_HEIGHT).setOnPreferenceClickListener(preference -> {
+            fitPictureToScreenHeight();
+            return true;
+        });
         requirePreference(Config.PREFERENCE_PICTURE_DEGREE).setOnPreferenceClickListener(preference -> {
             setPictureDegree();
             return true;
@@ -586,6 +590,31 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         dialog.setView(mView);
         AlertDialog alertDialog = dialog.show();
         alertDialog.setOnDismissListener(d -> showWorkingWindowPreview(picture_alpha));
+    }
+
+    private void fitPictureToScreenHeight() {
+        if (!ensureSourceBitmapLoaded()) {
+            return;
+        }
+        float fittedZoom = resolveScreenHeightZoom(bitmap, picture_degree);
+        if (fittedZoom <= 0f) {
+            return;
+        }
+        Point currentPosition = touch_and_move ? getPreviewPosition(position_x, position_y) : new Point(position_x, position_y);
+        zoom = fittedZoom;
+        position_x = currentPosition.x;
+        position_y = 0;
+        showPreview(
+                zoom,
+                picture_degree,
+                picture_alpha,
+                position_x,
+                position_y,
+                touch_and_move,
+                allow_picture_over_layout,
+                false,
+                false
+        );
     }
 
     private void setPictureDegree() {
@@ -1222,6 +1251,20 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         return size;
     }
 
+    private float resolveScreenHeightZoom(@NonNull Bitmap sourceBitmap, float degreeValue) {
+        Point windowSize = getWindowSize();
+        if (windowSize.y <= 0) {
+            return 0f;
+        }
+        double radians = Math.toRadians(degreeValue);
+        double rotatedBaseHeight = (Math.abs(sourceBitmap.getHeight() * Math.cos(radians))
+                + Math.abs(sourceBitmap.getWidth() * Math.sin(radians)));
+        if (rotatedBaseHeight <= 0d) {
+            return 0f;
+        }
+        return Math.max(roundToThreeDecimals((float) (windowSize.y / rotatedBaseHeight)), 0.01f);
+    }
+
     private boolean removeViewIfAttached(FloatImageView imageView) {
         return WindowsMethods.removeWindowIfAttached(imageView);
     }
@@ -1625,7 +1668,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
             }
             // JSON 序列化写磁盘（阻塞 IO）
             pictureData.commit(snapshotPictureName);
-            // Bitmap 缩放 + PNG 压缩写磁盘（CPU + IO 密集）
+            // Bitmap 缩放 + 显示缓存压缩写磁盘（CPU + IO 密集）
             ImageMethods.createAndSaveDisplayBitmap(
                     snapshotPictureId,
                     snapshotZoom,

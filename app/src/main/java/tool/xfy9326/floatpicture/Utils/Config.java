@@ -61,6 +61,7 @@ public class Config {
     public final static String PREFERENCE_PICTURE_REPLACE = "settings_picture_replace";
     public final static String PREFERENCE_ALLOW_PICTURE_OVER_LAYOUT = "settings_allow_picture_over_layout";
     public final static String PREFERENCE_PICTURE_RESIZE = "settings_picture_resize";
+    public final static String PREFERENCE_PICTURE_FIT_SCREEN_HEIGHT = "settings_picture_fit_screen_height";
     public final static String PREFERENCE_PICTURE_ALPHA = "settings_picture_alpha";
     public final static String PREFERENCE_PICTURE_CORNER_RADIUS = "settings_picture_corner_radius";
     public final static String PREFERENCE_PICTURE_EDGE_FEATHER = "settings_picture_edge_feather";

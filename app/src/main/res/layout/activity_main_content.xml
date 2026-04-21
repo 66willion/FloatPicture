@@ -35,7 +35,7 @@
             android:clipToPadding="false"
             android:paddingStart="16dp"
             android:paddingTop="12dp"
-            android:paddingEnd="16dp"
+            android:paddingEnd="96dp"
             android:paddingBottom="152dp"
             android:scrollbars="none"
             app:layoutManager="LinearLayoutManager" />
@@ -43,6 +43,22 @@
         <include
             android:id="@+id/layout_widget_empty_view"
             layout="@layout/widget_list_empty" />
+
+        <tool.xfy9326.floatpicture.View.RecyclerFastScrollerView
+            android:id="@+id/main_fast_scroller"
+            android:layout_width="60dp"
+            android:layout_height="match_parent"
+            android:background="@drawable/bg_fast_scroller_panel"
+            android:elevation="18dp"
+            android:layout_gravity="end"
+            android:layout_marginTop="12dp"
+            android:layout_marginEnd="6dp"
+            android:layout_marginBottom="20dp"
+            android:paddingStart="4dp"
+            android:paddingEnd="4dp"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp"
+            android:translationZ="18dp" />
 
     </FrameLayout>
 
@@ -52,7 +68,7 @@
         android:layout_height="wrap_content"
         android:layoutDirection="ltr"
         android:layout_gravity="bottom|end"
-        android:layout_marginEnd="20dp"
+        android:layout_marginEnd="104dp"
         android:layout_marginBottom="24dp"
         android:elevation="16dp"
         android:gravity="end"

@@ -33,6 +33,7 @@ public class ApplicationMethods {
     private static final String PREF_DISPLAY_CACHE_VERSION = "display_cache_version";
     private static final int DISPLAY_CACHE_VERSION_PNG = 1;
     private static final int DISPLAY_CACHE_VERSION_WEBP_LOSSLESS = 3;
+    private static final int DOUBLE_CLICK_SNACKBAR_DURATION_MS = 1000;
     private static final AtomicBoolean STARTUP_MAINTENANCE_RUNNING = new AtomicBoolean(false);
     private static volatile boolean waitDoubleClick;
 
@@ -129,14 +130,11 @@ public class ApplicationMethods {
             CloseMainUiOrApplication(mActivity);
         } else {
             CoordinatorLayout coordinatorLayout = mActivity.findViewById(R.id.main_layout_content);
-            View anchorView = mActivity.findViewById(R.id.main_layout_actions);
             int messageResId = isPureOverlayModeEnabled(mActivity)
                     ? R.string.action_warn_double_click_close_management
                     : R.string.action_warn_double_click_close_application;
             Snackbar snackbar = Snackbar.make(coordinatorLayout, messageResId, Snackbar.LENGTH_SHORT);
-            if (anchorView != null) {
-                snackbar.setAnchorView(anchorView);
-            }
+            snackbar.setDuration(DOUBLE_CLICK_SNACKBAR_DURATION_MS);
             snackbar.setAction(R.string.action_back_to_launcher, v -> mActivity.moveTaskToBack(true));
             snackbar.setActionTextColor(ContextCompat.getColor(mActivity, R.color.colorPrimary));
             snackbar.addCallback(new BaseTransientBottomBar.BaseCallback<>() {

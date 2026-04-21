@@ -19,6 +19,7 @@ import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.util.DisplayMetrics;
 import android.util.Log;
+import android.util.LruCache;
 import android.widget.ImageView;
 
 import androidx.core.content.ContextCompat;
@@ -26,6 +27,9 @@ import androidx.exifinterface.media.ExifInterface;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Collections;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import tool.xfy9326.floatpicture.MainApplication;
 import tool.xfy9326.floatpicture.R;
@@ -35,6 +39,7 @@ import tool.xfy9326.floatpicture.View.FloatImageView;
 public class ImageMethods {
     private static final int MANAGE_PREVIEW_WIDTH_DP = 72;
     private static final int MANAGE_PREVIEW_HEIGHT_DP = 96;
+    private static final int MANAGE_PREVIEW_CACHE_SIZE = 24;
     private static final int DISPLAY_DECODE_MULTIPLIER = 2;
     private static final int TEMP_PREVIEW_SOURCE_MAX_SIDE = 512;
     private static final float MIN_ZOOM = 0.01f;
@@ -45,6 +50,16 @@ public class ImageMethods {
     private static final int OUTLINE_OUTER_COLOR = 0xB0000000;
     private static final int OUTLINE_INNER_COLOR = 0xF2FFFFFF;
     private static final Object BITMAP_LOCK = new Object();
+    private static final Object MANAGE_PREVIEW_CACHE_LOCK = new Object();
+    private static final Set<Bitmap> MANAGE_PREVIEW_BITMAP_SET = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private static final LruCache<String, Bitmap> MANAGE_PREVIEW_CACHE = new LruCache<String, Bitmap>(MANAGE_PREVIEW_CACHE_SIZE) {
+        @Override
+        protected void entryRemoved(boolean evicted, String key, Bitmap oldValue, Bitmap newValue) {
+            if (oldValue != null && oldValue != newValue) {
+                MANAGE_PREVIEW_BITMAP_SET.remove(oldValue);
+            }
+        }
+    };
 
     private static Bitmap getBitmapFromFile(File imageFile) {
         return getBitmapFromFile(imageFile, null);
@@ -213,6 +228,7 @@ public class ImageMethods {
         }
         deleteFileIfExists(getLegacyPictureFile(id));
         deleteFileIfExists(getDisplayPictureFile(id));
+        invalidateManagePreviewCache(id);
         deleteFileIfExists(pendingFile);
         deleteFileIfExists(backupFile);
         return originalFile.exists() && !pendingFile.exists();
@@ -672,21 +688,70 @@ public class ImageMethods {
     }
 
     public static Bitmap getPreviewBitmap(Context mContext, String id) {
+        Bitmap cachedPreview = getCachedPreviewBitmap(id);
+        if (cachedPreview != null) {
+            return cachedPreview;
+        }
         DisplayMetrics displayMetrics = mContext.getResources().getDisplayMetrics();
         int previewWidth = Math.max(Math.round(displayMetrics.density * MANAGE_PREVIEW_WIDTH_DP), 1);
         int previewHeight = Math.max(Math.round(displayMetrics.density * MANAGE_PREVIEW_HEIGHT_DP), 1);
         Bitmap preview = decodeSampledBitmap(getDisplayPictureFile(id), previewWidth, previewHeight, true);
         if (preview != null) {
+            cachePreviewBitmap(id, preview);
             return preview;
         }
         File sourceFile = getAvailableSourceFile(id);
         if (sourceFile != null) {
             preview = decodeSourceBitmap(sourceFile, previewWidth, previewHeight, true);
             if (preview != null) {
+                cachePreviewBitmap(id, preview);
                 return preview;
             }
         }
         return getEditBitmap(mContext, 50, 50);
+    }
+
+    public static Bitmap getCachedPreviewBitmap(String id) {
+        synchronized (MANAGE_PREVIEW_CACHE_LOCK) {
+            Bitmap previewBitmap = MANAGE_PREVIEW_CACHE.get(id);
+            if (previewBitmap == null) {
+                return null;
+            }
+            if (previewBitmap.isRecycled()) {
+                MANAGE_PREVIEW_CACHE.remove(id);
+                MANAGE_PREVIEW_BITMAP_SET.remove(previewBitmap);
+                return null;
+            }
+            return previewBitmap;
+        }
+    }
+
+    public static long getManagePreviewVersion(String id) {
+        File displayFile = getDisplayPictureFile(id);
+        if (displayFile.exists()) {
+            return buildFileVersion(displayFile);
+        }
+        File sourceFile = getAvailableSourceFile(id);
+        if (sourceFile != null && sourceFile.exists()) {
+            return buildFileVersion(sourceFile);
+        }
+        return 0L;
+    }
+
+    public static void invalidateManagePreviewCache(String id) {
+        synchronized (MANAGE_PREVIEW_CACHE_LOCK) {
+            Bitmap removedBitmap = MANAGE_PREVIEW_CACHE.remove(id);
+            if (removedBitmap != null) {
+                MANAGE_PREVIEW_BITMAP_SET.remove(removedBitmap);
+            }
+        }
+    }
+
+    public static void clearManagePreviewCache() {
+        synchronized (MANAGE_PREVIEW_CACHE_LOCK) {
+            MANAGE_PREVIEW_CACHE.evictAll();
+            MANAGE_PREVIEW_BITMAP_SET.clear();
+        }
     }
 
     public static Bitmap getEditSourceBitmap(Context mContext, String id) {
@@ -735,6 +800,9 @@ public class ImageMethods {
         }
         Bitmap bitmap = getBitmapFromDrawable(imageView.getDrawable());
         imageView.setImageDrawable(null);
+        if (bitmap != null && MANAGE_PREVIEW_BITMAP_SET.contains(bitmap)) {
+            return;
+        }
         recycleBitmap(bitmap, null);
     }
 
@@ -752,6 +820,7 @@ public class ImageMethods {
             releasePictureView(floatImageView);
         }
         mainApplication.unregisterView(id);
+        invalidateManagePreviewCache(id);
         deleteFileIfExists(getStagedPendingOriginalPictureFile(id));
         deleteFileIfExists(getPendingOriginalPictureFile(id));
         deleteFileIfExists(getOriginalPictureFile(id));
@@ -1339,6 +1408,24 @@ public class ImageMethods {
 
     private static void saveDisplayBitmap(String id, Bitmap bitmap, boolean recycle) {
         IOMethods.saveBitmapLossless(bitmap, Config.getPictureTempDir() + id, recycle);
+        invalidateManagePreviewCache(id);
+    }
+
+    private static void cachePreviewBitmap(String id, Bitmap previewBitmap) {
+        if (previewBitmap == null || previewBitmap.isRecycled()) {
+            return;
+        }
+        synchronized (MANAGE_PREVIEW_CACHE_LOCK) {
+            Bitmap previousBitmap = MANAGE_PREVIEW_CACHE.put(id, previewBitmap);
+            if (previousBitmap != null && previousBitmap != previewBitmap) {
+                MANAGE_PREVIEW_BITMAP_SET.remove(previousBitmap);
+            }
+            MANAGE_PREVIEW_BITMAP_SET.add(previewBitmap);
+        }
+    }
+
+    private static long buildFileVersion(File file) {
+        return file.lastModified() ^ file.length();
     }
 
     private static void deleteFileIfExists(File file) {

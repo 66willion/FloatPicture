@@ -112,6 +112,8 @@
     <string name="loading">Loading &#8230; &#8230;</string>
     <string name="main_random_window">Random show one picture</string>
     <string name="main_close_all_windows">Close all pictures</string>
+    <string name="main_fast_scroll_to_top">Scroll to top</string>
+    <string name="main_fast_scroll_to_bottom">Scroll to bottom</string>
     <string name="dialog_close_all_windows_title">Close all picture windows?</string>
     <string name="dialog_close_all_windows_message">This will hide every currently visible picture window.</string>
     <string name="notification_channel">Default</string>

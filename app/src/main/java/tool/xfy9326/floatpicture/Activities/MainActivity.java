@@ -1,7 +1,6 @@
 package tool.xfy9326.floatpicture.Activities;
 
 import android.Manifest;
-import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.BroadcastReceiver;
 import android.content.res.ColorStateList;
@@ -13,11 +12,11 @@ import android.net.Uri;
 import android.provider.Settings;
 import android.view.View;
 
+import androidx.annotation.NonNull;
 import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.ActionBarDrawerToggle;
-import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import androidx.activity.result.ActivityResult;
@@ -25,13 +24,15 @@ import androidx.coordinatorlayout.widget.CoordinatorLayout;
 import androidx.core.content.ContextCompat;
 import androidx.core.view.GravityCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
-import androidx.recyclerview.widget.DefaultItemAnimator;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.navigation.NavigationView;
 import com.google.android.material.snackbar.Snackbar;
 
 import tool.xfy9326.floatpicture.Methods.ApplicationMethods;
+import tool.xfy9326.floatpicture.Methods.ImageMethods;
 import tool.xfy9326.floatpicture.Methods.IOMethods;
 import tool.xfy9326.floatpicture.Methods.ManageMethods;
 import tool.xfy9326.floatpicture.Methods.OverlayRuntimeController;
@@ -42,13 +43,18 @@ import tool.xfy9326.floatpicture.Utils.Config;
 import tool.xfy9326.floatpicture.Utils.OverlayRuntimeStateStore;
 import tool.xfy9326.floatpicture.View.AdvancedRecyclerView;
 import tool.xfy9326.floatpicture.View.ManageListAdapter;
+import tool.xfy9326.floatpicture.View.RecyclerFastScrollerView;
 
 public class MainActivity extends AppCompatActivity {
-    private static final int MAIN_LIST_VIEW_CACHE_SIZE = 2;
+    private static final int MAIN_LIST_VIEW_CACHE_SIZE = 8;
     private static final long PURE_OVERLAY_BUTTON_REENABLE_DELAY_MS = 300L;
+    private static final long MANAGE_LIST_PREVIEW_FALLBACK_FIRST_DELAY_MS = 40L;
+    private static final long MANAGE_LIST_PREVIEW_FALLBACK_SECOND_DELAY_MS = 140L;
+    private static final int OPERATION_SNACKBAR_DURATION_MS = 200;
 
     private ManageListAdapter manageListAdapter;
     private AdvancedRecyclerView recyclerView;
+    private RecyclerFastScrollerView fastScrollerView;
     private FloatingActionButton randomWindowButton;
     private FloatingActionButton releaseMemoryButton;
     private FloatingActionButton pureOverlayButton;
@@ -62,6 +68,21 @@ public class MainActivity extends AppCompatActivity {
     private ActivityResultLauncher<Intent> trustedOverlaySettingsLauncher;
     private ActivityResultLauncher<String> notificationPermissionLauncher;
     private final Runnable trustedOverlayStateUpdater = this::updateTrustedOverlayButtonState;
+    private final Runnable manageListPreviewFirstFallbackRunnable = this::runManageListPreviewFirstFallback;
+    private final Runnable manageListPreviewSecondFallbackRunnable = this::runManageListPreviewSecondFallback;
+    private final RecyclerView.OnScrollListener manageListPreviewScrollListener = new RecyclerView.OnScrollListener() {
+        @Override
+        public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
+            updateManageListPreviewViewport(recyclerView, false);
+            handleManageListPreviewFallbackScheduling(recyclerView);
+        }
+
+        @Override
+        public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
+            updateManageListPreviewViewport(recyclerView, newState == RecyclerView.SCROLL_STATE_IDLE);
+            handleManageListPreviewFallbackScheduling(recyclerView);
+        }
+    };
     private final BroadcastReceiver overlayRuntimeStateReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(android.content.Context context, Intent intent) {
@@ -74,11 +95,8 @@ public class MainActivity extends AppCompatActivity {
 
     public static void SnackShow(Activity mActivity, int resourceId) {
         CoordinatorLayout coordinatorLayout = mActivity.findViewById(R.id.main_layout_content);
-        View anchorView = mActivity.findViewById(R.id.main_layout_actions);
         Snackbar snackbar = Snackbar.make(coordinatorLayout, mActivity.getString(resourceId), Snackbar.LENGTH_SHORT);
-        if (anchorView != null) {
-            snackbar.setAnchorView(anchorView);
-        }
+        snackbar.setDuration(OPERATION_SNACKBAR_DURATION_MS);
         snackbar.show();
     }
 
@@ -122,10 +140,16 @@ public class MainActivity extends AppCompatActivity {
             trustedOverlayButton.removeCallbacks(trustedOverlayStateUpdater);
         }
         if (recyclerView != null) {
+            cancelManageListPreviewFallbacks(recyclerView);
+            recyclerView.removeOnScrollListener(manageListPreviewScrollListener);
             recyclerView.setAdapter(null);
+        }
+        if (fastScrollerView != null) {
+            fastScrollerView.attachToRecyclerView(null);
         }
         manageListAdapter = null;
         recyclerView = null;
+        fastScrollerView = null;
         randomWindowButton = null;
         releaseMemoryButton = null;
         pureOverlayButton = null;
@@ -154,9 +178,17 @@ public class MainActivity extends AppCompatActivity {
         manageListAdapter = new ManageListAdapter(this, this::launchPictureSettingsForEdit);
         recyclerView = findViewById(R.id.main_list_manage);
         recyclerView.setAdapter(manageListAdapter);
-        recyclerView.setItemAnimator(new DefaultItemAnimator());
+        recyclerView.setItemAnimator(null);
         recyclerView.setItemViewCacheSize(MAIN_LIST_VIEW_CACHE_SIZE);
         recyclerView.setEmptyView(findViewById(R.id.layout_widget_empty_view));
+        recyclerView.addOnScrollListener(manageListPreviewScrollListener);
+        recyclerView.post(() -> updateManageListPreviewViewport(recyclerView, true));
+        fastScrollerView = findViewById(R.id.main_fast_scroller);
+        if (fastScrollerView != null) {
+            fastScrollerView.attachToRecyclerView(recyclerView);
+            fastScrollerView.bringToFront();
+            fastScrollerView.setTranslationZ(getResources().getDisplayMetrics().density * 18f);
+        }
 
         randomWindowButton = findViewById(R.id.main_button_random_window);
         if (randomWindowButton != null) {
@@ -199,7 +231,7 @@ public class MainActivity extends AppCompatActivity {
             if (itemId == R.id.menu_global_settings) {
                 startActivity(new Intent(MainActivity.this, GlobalSettingsActivity.class));
             } else if (itemId == R.id.menu_close_all_windows) {
-                drawerLayout.post(this::confirmHideAllWindows);
+                drawerLayout.post(this::hideAllWindowsSafely);
             } else if (itemId == R.id.menu_release_memory) {
                 drawerLayout.post(this::releaseMemory);
             } else if (itemId == R.id.menu_about) {
@@ -252,7 +284,6 @@ public class MainActivity extends AppCompatActivity {
 
     private void initBackPressedCallback() {
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
-            @SuppressLint("NotifyDataSetChanged")
             @Override
             public void handleOnBackPressed() {
                 handleBackPressed();
@@ -271,23 +302,13 @@ public class MainActivity extends AppCompatActivity {
         addPictureSettingsLauncher.launch(intent);
     }
 
-    @SuppressLint("NotifyDataSetChanged")
     private void onAddPictureSettingsResult(ActivityResult result) {
         if (result.getResultCode() != RESULT_OK) {
             return;
         }
-        int previousItemCount = manageListAdapter.getItemCount();
-        manageListAdapter.updateData();
-        int currentItemCount = manageListAdapter.getItemCount();
-        if (currentItemCount <= 0) {
-            return;
-        }
-        if (previousItemCount == 0) {
-            manageListAdapter.notifyDataSetChanged();
-        } else if (currentItemCount > previousItemCount) {
-            manageListAdapter.notifyItemInserted(currentItemCount - 1);
-        } else {
-            manageListAdapter.notifyDataSetChanged();
+        manageListAdapter.refreshData();
+        if (recyclerView != null) {
+            recyclerView.post(() -> updateManageListPreviewViewport(recyclerView, true));
         }
         SnackShow(this, R.string.action_add_window);
         OverlayRuntimeController.refreshNotification(this);
@@ -297,12 +318,9 @@ public class MainActivity extends AppCompatActivity {
         if (result.getResultCode() != RESULT_OK || result.getData() == null) {
             return;
         }
-        int position = result.getData().getIntExtra(Config.INTENT_PICTURE_EDIT_POSITION, -1);
-        manageListAdapter.updateData();
-        if (position >= 0) {
-            manageListAdapter.notifyItemChanged(position);
-        } else {
-            manageListAdapter.notifyDataSetChanged();
+        manageListAdapter.refreshData();
+        if (recyclerView != null) {
+            recyclerView.post(() -> updateManageListPreviewViewport(recyclerView, true));
         }
     }
 
@@ -347,7 +365,7 @@ public class MainActivity extends AppCompatActivity {
         }).start();
     }
 
-    private void confirmHideAllWindows() {
+    private void hideAllWindowsSafely() {
         if (pureOverlayToggleInProgress) {
             return;
         }
@@ -357,12 +375,7 @@ public class MainActivity extends AppCompatActivity {
             }
             return;
         }
-        new AlertDialog.Builder(this)
-                .setTitle(R.string.dialog_close_all_windows_title)
-                .setMessage(R.string.dialog_close_all_windows_message)
-                .setPositiveButton(R.string.done, (dialogInterface, which) -> hideAllWindows())
-                .setNegativeButton(R.string.cancel, null)
-                .show();
+        hideAllWindows();
     }
 
     private void hideAllWindows() {
@@ -388,7 +401,6 @@ public class MainActivity extends AppCompatActivity {
                     return;
                 }
                 CoordinatorLayout coordinatorLayout = findViewById(R.id.main_layout_content);
-                View anchorView = findViewById(R.id.main_layout_actions);
                 Snackbar snackbar = Snackbar.make(
                         coordinatorLayout,
                         getString(
@@ -398,9 +410,7 @@ public class MainActivity extends AppCompatActivity {
                         ),
                         Snackbar.LENGTH_SHORT
                 );
-                if (anchorView != null) {
-                    snackbar.setAnchorView(anchorView);
-                }
+                snackbar.setDuration(OPERATION_SNACKBAR_DURATION_MS);
                 snackbar.show();
             });
         }).start();
@@ -410,6 +420,7 @@ public class MainActivity extends AppCompatActivity {
         if (recyclerView == null) {
             return;
         }
+        ImageMethods.clearManagePreviewCache();
         recyclerView.setItemViewCacheSize(0);
         recyclerView.getRecycledViewPool().clear();
         recyclerView.post(() -> recyclerView.setItemViewCacheSize(MAIN_LIST_VIEW_CACHE_SIZE));
@@ -530,13 +541,79 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    @SuppressLint("NotifyDataSetChanged")
     private void refreshManageListData() {
         if (manageListAdapter == null) {
             return;
         }
-        manageListAdapter.updateData();
-        manageListAdapter.notifyDataSetChanged();
+        manageListAdapter.refreshData();
+        if (recyclerView != null) {
+            recyclerView.post(() -> updateManageListPreviewViewport(recyclerView, true));
+        }
+        if (fastScrollerView != null) {
+            fastScrollerView.refreshScrollerState();
+        }
+    }
+
+    private void updateManageListPreviewViewport(@NonNull RecyclerView targetRecyclerView, boolean idle) {
+        if (manageListAdapter == null) {
+            return;
+        }
+        RecyclerView.LayoutManager layoutManager = targetRecyclerView.getLayoutManager();
+        if (!(layoutManager instanceof LinearLayoutManager)) {
+            return;
+        }
+        LinearLayoutManager linearLayoutManager = (LinearLayoutManager) layoutManager;
+        int firstVisiblePosition = linearLayoutManager.findFirstVisibleItemPosition();
+        int lastVisiblePosition = linearLayoutManager.findLastVisibleItemPosition();
+        manageListAdapter.updatePreviewViewport(firstVisiblePosition, lastVisiblePosition, idle);
+    }
+
+    private void handleManageListPreviewFallbackScheduling(@NonNull RecyclerView targetRecyclerView) {
+        if (targetRecyclerView.getScrollState() == RecyclerView.SCROLL_STATE_IDLE) {
+            scheduleManageListPreviewFallbacks(targetRecyclerView);
+        } else {
+            cancelManageListPreviewFallbacks(targetRecyclerView);
+        }
+    }
+
+    private void scheduleManageListPreviewFallbacks(@NonNull RecyclerView targetRecyclerView) {
+        cancelManageListPreviewFallbacks(targetRecyclerView);
+        targetRecyclerView.postDelayed(
+                manageListPreviewFirstFallbackRunnable,
+                MANAGE_LIST_PREVIEW_FALLBACK_FIRST_DELAY_MS
+        );
+    }
+
+    private void cancelManageListPreviewFallbacks(@NonNull RecyclerView targetRecyclerView) {
+        targetRecyclerView.removeCallbacks(manageListPreviewFirstFallbackRunnable);
+        targetRecyclerView.removeCallbacks(manageListPreviewSecondFallbackRunnable);
+    }
+
+    private void runManageListPreviewFirstFallback() {
+        if (manageListAdapter == null || recyclerView == null || recyclerView.getScrollState() != RecyclerView.SCROLL_STATE_IDLE) {
+            return;
+        }
+        int remainingBlankCount = manageListAdapter.refreshVisiblePreviewFallback(recyclerView);
+        if (fastScrollerView != null) {
+            fastScrollerView.refreshScrollerState();
+        }
+        recyclerView.removeCallbacks(manageListPreviewSecondFallbackRunnable);
+        if (remainingBlankCount > 0) {
+            recyclerView.postDelayed(
+                    manageListPreviewSecondFallbackRunnable,
+                    MANAGE_LIST_PREVIEW_FALLBACK_SECOND_DELAY_MS
+            );
+        }
+    }
+
+    private void runManageListPreviewSecondFallback() {
+        if (manageListAdapter == null || recyclerView == null || recyclerView.getScrollState() != RecyclerView.SCROLL_STATE_IDLE) {
+            return;
+        }
+        manageListAdapter.refreshVisiblePreviewFallback(recyclerView);
+        if (fastScrollerView != null) {
+            fastScrollerView.refreshScrollerState();
+        }
     }
 
     private void registerOverlayRuntimeReceiver() {

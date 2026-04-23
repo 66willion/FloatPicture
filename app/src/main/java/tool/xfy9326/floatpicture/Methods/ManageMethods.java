@@ -9,10 +9,12 @@ import android.view.View;
 import android.view.WindowManager;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
 
@@ -26,6 +28,9 @@ import tool.xfy9326.floatpicture.View.FloatImageView;
 
 public class ManageMethods {
     private static final Random RANDOM = new Random();
+    private static final ArrayList<String> RANDOM_BAG = new ArrayList<>();
+    private static final LinkedHashSet<String> RANDOM_BAG_SNAPSHOT = new LinkedHashSet<>();
+    private static String lastRandomPictureId = null;
 
     public static void RunWin(Context mContext) {
         if (!PermissionMethods.hasOverlayPermission(mContext)) {
@@ -503,23 +508,42 @@ public class ManageMethods {
         floatImageView.setPictureAlpha(pictureAlpha);
     }
 
-    private static String pickRandomPictureId(Set<String> candidateIds, Set<String> excludeIds) {
+    private static synchronized String pickRandomPictureId(Set<String> candidateIds, Set<String> excludeIds) {
         if (candidateIds == null || candidateIds.isEmpty()) {
             return null;
         }
-        ArrayList<String> randomCandidates = new ArrayList<>(candidateIds);
-        if (excludeIds != null && !excludeIds.isEmpty() && randomCandidates.size() > 1) {
-            ArrayList<String> filteredCandidates = new ArrayList<>();
-            for (String candidateId : randomCandidates) {
-                if (!excludeIds.contains(candidateId)) {
-                    filteredCandidates.add(candidateId);
+
+        ensureRandomBag(candidateIds);
+
+        int selectedIndex = 0;
+        if (excludeIds != null && !excludeIds.isEmpty() && RANDOM_BAG.size() > 1) {
+            for (int index = 0; index < RANDOM_BAG.size(); index++) {
+                if (!excludeIds.contains(RANDOM_BAG.get(index))) {
+                    selectedIndex = index;
+                    break;
                 }
             }
-            if (!filteredCandidates.isEmpty()) {
-                randomCandidates = filteredCandidates;
-            }
         }
-        return randomCandidates.get(RANDOM.nextInt(randomCandidates.size()));
+        String selectedPictureId = RANDOM_BAG.remove(selectedIndex);
+        lastRandomPictureId = selectedPictureId;
+        return selectedPictureId;
+    }
+
+    private static void ensureRandomBag(Set<String> candidateIds) {
+        if (!RANDOM_BAG.isEmpty() && RANDOM_BAG_SNAPSHOT.equals(candidateIds)) {
+            return;
+        }
+
+        RANDOM_BAG.clear();
+        RANDOM_BAG.addAll(candidateIds);
+        Collections.shuffle(RANDOM_BAG, RANDOM);
+        if (RANDOM_BAG.size() > 1 && Objects.equals(RANDOM_BAG.get(0), lastRandomPictureId)) {
+            int swapIndex = 1 + RANDOM.nextInt(RANDOM_BAG.size() - 1);
+            Collections.swap(RANDOM_BAG, 0, swapIndex);
+        }
+
+        RANDOM_BAG_SNAPSHOT.clear();
+        RANDOM_BAG_SNAPSHOT.addAll(candidateIds);
     }
 
     private static void cleanupRegisteredWindows(Context context, LinkedHashMap<String, String> pictureList) {

@@ -13,6 +13,7 @@ import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.FrameLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -144,10 +145,20 @@ public class ApplicationMethods {
     private static void styleSnackbar(Activity activity, Snackbar snackbar) {
         View snackbarView = snackbar.getView();
         snackbarView.setBackgroundResource(R.drawable.bg_snackbar_status);
+        snackbarView.setBackgroundTintList(null);
+        snackbarView.setPadding(dp(activity, 14), 0, dp(activity, 14), 0);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            snackbarView.setElevation(dp(activity, 12));
+            snackbarView.setClipToOutline(true);
+        }
         ViewGroup.LayoutParams layoutParams = snackbarView.getLayoutParams();
         if (layoutParams instanceof ViewGroup.MarginLayoutParams) {
             ViewGroup.MarginLayoutParams marginLayoutParams = (ViewGroup.MarginLayoutParams) layoutParams;
-            marginLayoutParams.setMargins(0, 0, 0, 0);
+            int horizontalMargin = dp(activity, 12);
+            marginLayoutParams.setMargins(horizontalMargin, 0, horizontalMargin, dp(activity, 12));
+            if (marginLayoutParams instanceof FrameLayout.LayoutParams) {
+                ((FrameLayout.LayoutParams) marginLayoutParams).gravity = Gravity.BOTTOM;
+            }
             snackbarView.setLayoutParams(marginLayoutParams);
         }
         TextView snackbarText = snackbarView.findViewById(com.google.android.material.R.id.snackbar_text);
@@ -169,6 +180,7 @@ public class ApplicationMethods {
         }
     }
 
+    @SuppressWarnings("deprecation")
     public static void showToast(Context context, CharSequence message) {
         if (context == null || message == null) {
             return;

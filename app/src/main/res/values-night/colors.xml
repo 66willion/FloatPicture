@@ -16,6 +16,7 @@
     <color name="colorTextSecondary">#A7B3C7</color>
     <color name="colorPromptBackground">#000000</color>
     <color name="colorPromptText">#FFFFFF</color>
+    <color name="colorFloatingBlurSurface">#B3000000</color>
     <color name="colorPreviewBackground">#000000</color>
     <color name="colorCodeBackGround">#000000</color>
     <color name="colorImageViewEditBackground">#7834465E</color>

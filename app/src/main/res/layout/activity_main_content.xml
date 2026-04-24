@@ -57,37 +57,52 @@
 
     </LinearLayout>
 
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/main_button_drawer"
+    <FrameLayout
+        android:id="@+id/main_button_drawer_container"
         android:layout_width="54dp"
         android:layout_height="54dp"
         android:layout_gravity="top|start"
         android:layout_marginStart="12dp"
         android:layout_marginTop="12dp"
-        android:contentDescription="@string/open"
+        android:background="@drawable/bg_floating_blur_circle"
+        android:clipToOutline="true"
         android:elevation="18dp"
-        android:insetLeft="0dp"
-        android:insetTop="0dp"
-        android:insetRight="0dp"
-        android:insetBottom="0dp"
-        android:minWidth="0dp"
-        android:minHeight="0dp"
-        android:padding="0dp"
-        android:translationZ="18dp"
-        app:backgroundTint="@color/colorPromptBackground"
-        app:cornerRadius="27dp"
-        app:icon="@drawable/ic_menu"
-        app:iconGravity="textStart"
-        app:iconPadding="0dp"
-        app:iconSize="24dp"
-        app:iconTint="@color/colorPromptText"
-        app:strokeColor="@color/colorPromptText"
-        app:strokeWidth="1dp" />
+        android:translationZ="18dp">
+
+        <View
+            android:id="@+id/main_button_drawer_blur"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/bg_floating_blur_circle" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/main_button_drawer"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:contentDescription="@string/open"
+            android:insetLeft="0dp"
+            android:insetTop="0dp"
+            android:insetRight="0dp"
+            android:insetBottom="0dp"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:padding="0dp"
+            app:backgroundTint="@android:color/transparent"
+            app:cornerRadius="27dp"
+            app:icon="@drawable/ic_menu"
+            app:iconGravity="textStart"
+            app:iconPadding="0dp"
+            app:iconSize="24dp"
+            app:iconTint="@color/colorPromptText"
+            app:strokeColor="@color/colorPromptText"
+            app:strokeWidth="1dp" />
+
+    </FrameLayout>
 
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/main_layout_actions"
         android:layout_width="144dp"
-        android:layout_height="wrap_content"
+        android:layout_height="144dp"
         android:layout_gravity="bottom|end"
         android:layout_marginEnd="64dp"
         android:layout_marginBottom="18dp"
@@ -96,12 +111,20 @@
         app:cardBackgroundColor="@android:color/transparent"
         app:cardCornerRadius="22dp"
         app:cardElevation="10dp"
+        app:cardPreventCornerOverlap="false"
+        app:cardUseCompatPadding="false"
         app:strokeWidth="0dp">
+
+        <View
+            android:id="@+id/main_layout_actions_blur"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/bg_home_action_blur_surface" />
 
         <GridLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="@drawable/bg_home_action_black_double_stroke"
+            android:layout_height="match_parent"
+            android:background="@drawable/bg_home_action_double_stroke_outline"
             android:columnCount="2"
             android:padding="12dp"
             android:rowCount="2">

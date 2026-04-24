@@ -7,6 +7,9 @@ import android.content.res.Configuration;
 import android.content.res.ColorStateList;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.graphics.Rect;
+import android.graphics.RenderEffect;
+import android.graphics.Shader;
 import android.os.Build;
 import android.os.Bundle;
 import android.net.Uri;
@@ -52,6 +55,8 @@ public class MainActivity extends AppCompatActivity {
     private static final long MANAGE_LIST_PREVIEW_FALLBACK_SECOND_DELAY_MS = 140L;
     private static final int OPERATION_SNACKBAR_DURATION_MS = 200;
     private static final int MANAGE_LIST_LANDSCAPE_SPAN_COUNT = 2;
+    private static final int MANAGE_LIST_LANDSCAPE_ITEM_GAP_DP = 8;
+    private static final float FLOATING_BLUR_RADIUS_DP = 18f;
 
     private ManageListAdapter manageListAdapter;
     private AdvancedRecyclerView recyclerView;
@@ -60,6 +65,7 @@ public class MainActivity extends AppCompatActivity {
     private FloatingActionButton releaseMemoryButton;
     private FloatingActionButton pureOverlayButton;
     private FloatingActionButton trustedOverlayButton;
+    private RecyclerView.ItemDecoration manageListSpacingDecoration;
     private boolean pureOverlayToggleInProgress = false;
     private long BackClickTime;
     private ActivityResultLauncher<String> picturePickerLauncher;
@@ -177,10 +183,12 @@ public class MainActivity extends AppCompatActivity {
         View actionsLayout = findViewById(R.id.main_layout_actions);
         actionsLayout.bringToFront();
         actionsLayout.setTranslationZ(18f);
+        applyFloatingBackgroundBlur(findViewById(R.id.main_layout_actions_blur));
 
         manageListAdapter = new ManageListAdapter(this, this::launchPictureSettingsForEdit);
         recyclerView = findViewById(R.id.main_list_manage);
         recyclerView.setLayoutManager(createManageListLayoutManager());
+        applyManageListSpacingDecoration();
         recyclerView.setAdapter(manageListAdapter);
         recyclerView.setItemAnimator(null);
         recyclerView.setItemViewCacheSize(MAIN_LIST_VIEW_CACHE_SIZE);
@@ -229,6 +237,7 @@ public class MainActivity extends AppCompatActivity {
             drawerButton.setTranslationZ(18f);
             drawerButton.setOnClickListener(view -> drawerLayout.openDrawer(GravityCompat.START));
         }
+        applyFloatingBackgroundBlur(findViewById(R.id.main_button_drawer_blur));
 
         NavigationView navigationView = findViewById(R.id.main_navigation_view);
         ApplicationMethods.disableNavigationViewScrollbars(navigationView);
@@ -257,6 +266,38 @@ public class MainActivity extends AppCompatActivity {
             return new GridLayoutManager(this, MANAGE_LIST_LANDSCAPE_SPAN_COUNT);
         }
         return new LinearLayoutManager(this);
+    }
+
+    private void applyManageListSpacingDecoration() {
+        if (recyclerView == null) {
+            return;
+        }
+        if (manageListSpacingDecoration != null) {
+            recyclerView.removeItemDecoration(manageListSpacingDecoration);
+            manageListSpacingDecoration = null;
+        }
+        if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE) {
+            manageListSpacingDecoration = new LandscapeGridSpacingDecoration(dpToPx(MANAGE_LIST_LANDSCAPE_ITEM_GAP_DP));
+            recyclerView.addItemDecoration(manageListSpacingDecoration);
+        }
+    }
+
+    private int dpToPx(int dp) {
+        return Math.round(dp * getResources().getDisplayMetrics().density);
+    }
+
+    private void applyFloatingBackgroundBlur(View backgroundView) {
+        if (backgroundView == null) {
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            backgroundView.setClipToOutline(true);
+        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            return;
+        }
+        float radius = FLOATING_BLUR_RADIUS_DP * getResources().getDisplayMetrics().density;
+        backgroundView.setRenderEffect(RenderEffect.createBlurEffect(radius, radius, Shader.TileMode.CLAMP));
     }
 
     private void registerLaunchers() {
@@ -645,5 +686,29 @@ public class MainActivity extends AppCompatActivity {
         }
         unregisterReceiver(overlayRuntimeStateReceiver);
         overlayRuntimeReceiverRegistered = false;
+    }
+
+    private static final class LandscapeGridSpacingDecoration extends RecyclerView.ItemDecoration {
+        private final int halfGap;
+
+        private LandscapeGridSpacingDecoration(int gapPx) {
+            halfGap = Math.max(gapPx / 2, 0);
+        }
+
+        @Override
+        public void getItemOffsets(@NonNull Rect outRect,
+                                   @NonNull View view,
+                                   @NonNull RecyclerView parent,
+                                   @NonNull RecyclerView.State state) {
+            int position = parent.getChildAdapterPosition(view);
+            if (position == RecyclerView.NO_POSITION) {
+                return;
+            }
+            if ((position % MANAGE_LIST_LANDSCAPE_SPAN_COUNT) == 0) {
+                outRect.right = halfGap;
+            } else {
+                outRect.left = halfGap;
+            }
+        }
     }
 }

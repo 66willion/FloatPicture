@@ -44,13 +44,11 @@ import tool.xfy9326.floatpicture.Utils.OverlayRuntimeStateStore;
 import tool.xfy9326.floatpicture.Utils.PictureData;
 
 public class PictureSettingsFragment extends PreferenceFragmentCompat {
-    private final static String WINDOW_CREATED = "WINDOW_CREATED";
     private static final int THREE_DECIMAL_SCALE = 1000;
     private static final int PERCENT_SCALE = 100;
     private static final int MAX_CORNER_RADIUS_PERCENT = 25;
     private static final int MAX_EDGE_FEATHER_PERCENT = 15;
     private boolean Edit_Mode;
-    private boolean Window_Created;
     private boolean onUseEditPicture = false;
     private boolean changesSaved = false;
     private LayoutInflater inflater;
@@ -91,7 +89,6 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        Window_Created = false;
         Edit_Mode = false;
         changesSaved = false;
         pictureData = new PictureData();
@@ -109,7 +106,6 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
         fragmentClosing = false;
-        restoreData(savedInstanceState);
         PreferenceSet();
         setMode();
     }
@@ -127,18 +123,6 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         super.onDestroy();
     }
 
-    @Override
-    public void onSaveInstanceState(Bundle outState) {
-        outState.putBoolean(WINDOW_CREATED, true);
-        super.onSaveInstanceState(outState);
-    }
-
-    private void restoreData(Bundle savedInstanceState) {
-        if (savedInstanceState != null) {
-            Window_Created = savedInstanceState.getBoolean(WINDOW_CREATED, false);
-        }
-    }
-
     private void setMode() {
         Intent intent = Objects.requireNonNull(requireActivity().getIntent());
         Edit_Mode = intent.getBooleanExtra(Config.INTENT_PICTURE_EDIT_MODE, false);
@@ -150,7 +134,6 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         loading.setView(mView);
         final AlertDialog alertDialog = loading.show();
         new Thread(() -> {
-            if (!Window_Created) {
                 if (Edit_Mode) {
                     //Edit
                     PictureId = intent.getStringExtra(Config.INTENT_PICTURE_EDIT_ID);
@@ -223,7 +206,6 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                     showWorkingWindowPreview(picture_alpha);
                     dismissDialogIfShowing(alertDialog);
                 });
-            }
         }).start();
     }
 

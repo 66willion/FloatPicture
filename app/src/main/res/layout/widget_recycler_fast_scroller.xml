@@ -3,11 +3,11 @@
 
     <androidx.appcompat.widget.AppCompatImageButton
         android:id="@+id/fast_scroller_button_top"
-        android:layout_width="50dp"
-        android:layout_height="50dp"
+        android:layout_width="42dp"
+        android:layout_height="42dp"
         android:background="@drawable/bg_fast_scroller_button"
         android:contentDescription="@string/main_fast_scroll_to_top"
-        android:padding="10dp"
+        android:padding="9dp"
         android:tint="@color/white"
         app:srcCompat="@drawable/ic_fast_scroll_top" />
 
@@ -15,17 +15,17 @@
         android:id="@+id/fast_scroller_track"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_marginTop="10dp"
-        android:layout_marginBottom="10dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="8dp"
         android:layout_weight="1" />
 
     <androidx.appcompat.widget.AppCompatImageButton
         android:id="@+id/fast_scroller_button_bottom"
-        android:layout_width="50dp"
-        android:layout_height="50dp"
+        android:layout_width="42dp"
+        android:layout_height="42dp"
         android:background="@drawable/bg_fast_scroller_button"
         android:contentDescription="@string/main_fast_scroll_to_bottom"
-        android:padding="10dp"
+        android:padding="9dp"
         android:tint="@color/white"
         app:srcCompat="@drawable/ic_fast_scroll_bottom" />
 

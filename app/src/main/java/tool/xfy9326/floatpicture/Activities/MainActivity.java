@@ -3,6 +3,7 @@ package tool.xfy9326.floatpicture.Activities;
 import android.Manifest;
 import android.app.Activity;
 import android.content.BroadcastReceiver;
+import android.content.res.Configuration;
 import android.content.res.ColorStateList;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -16,14 +17,13 @@ import androidx.annotation.NonNull;
 import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
-import androidx.appcompat.app.ActionBarDrawerToggle;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.appcompat.widget.Toolbar;
 import androidx.activity.result.ActivityResult;
 import androidx.coordinatorlayout.widget.CoordinatorLayout;
 import androidx.core.content.ContextCompat;
 import androidx.core.view.GravityCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
+import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -51,6 +51,7 @@ public class MainActivity extends AppCompatActivity {
     private static final long MANAGE_LIST_PREVIEW_FALLBACK_FIRST_DELAY_MS = 40L;
     private static final long MANAGE_LIST_PREVIEW_FALLBACK_SECOND_DELAY_MS = 140L;
     private static final int OPERATION_SNACKBAR_DURATION_MS = 200;
+    private static final int MANAGE_LIST_LANDSCAPE_SPAN_COUNT = 2;
 
     private ManageListAdapter manageListAdapter;
     private AdvancedRecyclerView recyclerView;
@@ -95,8 +96,12 @@ public class MainActivity extends AppCompatActivity {
 
     public static void SnackShow(Activity mActivity, int resourceId) {
         CoordinatorLayout coordinatorLayout = mActivity.findViewById(R.id.main_layout_content);
-        Snackbar snackbar = Snackbar.make(coordinatorLayout, mActivity.getString(resourceId), Snackbar.LENGTH_SHORT);
-        snackbar.setDuration(OPERATION_SNACKBAR_DURATION_MS);
+        Snackbar snackbar = ApplicationMethods.makeStyledSnackbar(
+                mActivity,
+                coordinatorLayout,
+                resourceId,
+                OPERATION_SNACKBAR_DURATION_MS
+        );
         snackbar.show();
     }
 
@@ -169,14 +174,13 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void ViewSet() {
-        Toolbar toolbar = findViewById(R.id.toolbar);
-        setSupportActionBar(toolbar);
         View actionsLayout = findViewById(R.id.main_layout_actions);
         actionsLayout.bringToFront();
-        actionsLayout.setTranslationZ(16f);
+        actionsLayout.setTranslationZ(18f);
 
         manageListAdapter = new ManageListAdapter(this, this::launchPictureSettingsForEdit);
         recyclerView = findViewById(R.id.main_list_manage);
+        recyclerView.setLayoutManager(createManageListLayoutManager());
         recyclerView.setAdapter(manageListAdapter);
         recyclerView.setItemAnimator(null);
         recyclerView.setItemViewCacheSize(MAIN_LIST_VIEW_CACHE_SIZE);
@@ -219,9 +223,12 @@ public class MainActivity extends AppCompatActivity {
         releaseMemoryButton = null;
 
         final DrawerLayout drawerLayout = findViewById(R.id.main_drawer_layout);
-        ActionBarDrawerToggle actionBarDrawerToggle = new ActionBarDrawerToggle(this, drawerLayout, toolbar, R.string.open, R.string.close);
-        drawerLayout.addDrawerListener(actionBarDrawerToggle);
-        actionBarDrawerToggle.syncState();
+        View drawerButton = findViewById(R.id.main_button_drawer);
+        if (drawerButton != null) {
+            drawerButton.bringToFront();
+            drawerButton.setTranslationZ(18f);
+            drawerButton.setOnClickListener(view -> drawerLayout.openDrawer(GravityCompat.START));
+        }
 
         NavigationView navigationView = findViewById(R.id.main_navigation_view);
         ApplicationMethods.disableNavigationViewScrollbars(navigationView);
@@ -243,6 +250,13 @@ public class MainActivity extends AppCompatActivity {
             }
             return false;
         });
+    }
+
+    private RecyclerView.LayoutManager createManageListLayoutManager() {
+        if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE) {
+            return new GridLayoutManager(this, MANAGE_LIST_LANDSCAPE_SPAN_COUNT);
+        }
+        return new LinearLayoutManager(this);
     }
 
     private void registerLaunchers() {
@@ -401,16 +415,16 @@ public class MainActivity extends AppCompatActivity {
                     return;
                 }
                 CoordinatorLayout coordinatorLayout = findViewById(R.id.main_layout_content);
-                Snackbar snackbar = Snackbar.make(
+                Snackbar snackbar = ApplicationMethods.makeStyledSnackbar(
+                        this,
                         coordinatorLayout,
                         getString(
                                 R.string.action_release_memory_result,
                                 result.getReleasedWindowCount(),
                                 result.getDeletedTempFileCount()
                         ),
-                        Snackbar.LENGTH_SHORT
+                        OPERATION_SNACKBAR_DURATION_MS
                 );
-                snackbar.setDuration(OPERATION_SNACKBAR_DURATION_MS);
                 snackbar.show();
             });
         }).start();

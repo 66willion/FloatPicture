@@ -17,6 +17,16 @@
     <string name="drawer_release_memory">Free memory</string>
     <string name="main_add_overlay">Add overlay</string>
     <string name="main_release_memory">Free memory</string>
+    <string name="main_overview_title">Overlay console</string>
+    <string name="main_overview_summary">%1$d pictures · %2$d visible · %3$d issue(s)</string>
+    <string name="main_count_all">All %1$d</string>
+    <string name="main_count_visible">Visible %1$d</string>
+    <string name="main_count_hidden">Hidden %1$d</string>
+    <string name="main_count_issue">Issues %1$d</string>
+    <string name="main_mode_pure_on">Pure On</string>
+    <string name="main_mode_pure_off">Pure Off</string>
+    <string name="main_mode_trusted_on">Trusted On</string>
+    <string name="main_mode_trusted_off">Trusted Off</string>
     <string name="main_pure_overlay_on">Pure overlay mode on</string>
     <string name="main_pure_overlay_off">Pure overlay mode off</string>
     <string name="main_trusted_overlay_on">Trusted On</string>

@@ -2,43 +2,50 @@
 <com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/adapter_picture_card"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginBottom="12dp"
-    app:cardBackgroundColor="@color/colorSurface"
-    app:cardCornerRadius="24dp"
+    android:layout_marginBottom="10dp"
+    app:cardBackgroundColor="@android:color/transparent"
+    app:cardCornerRadius="16dp"
     app:cardElevation="0dp"
-    app:strokeColor="@color/colorCardStroke"
-    app:strokeWidth="1dp">
+    app:strokeWidth="0dp">
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="248dp"
+        android:background="@drawable/bg_home_black_double_stroke"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:padding="16dp">
+        android:paddingStart="5dp"
+        android:paddingTop="5dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="5dp">
 
-        <FrameLayout
-            android:layout_width="92dp"
-            android:layout_height="116dp"
-            android:background="@drawable/bg_preview_surface">
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="114dp"
+            android:layout_height="238dp"
+            app:cardBackgroundColor="@color/colorPromptBackground"
+            app:cardCornerRadius="28dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="0dp">
 
             <ImageView
                 android:id="@+id/adapter_picture_preview"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:layout_margin="10dp"
                 android:contentDescription="@string/adapter_image_description"
-                android:scaleType="fitCenter"
+                android:scaleType="centerCrop"
                 tools:ignore="PrivateResource" />
 
-        </FrameLayout>
+        </com.google.android.material.card.MaterialCardView>
 
         <LinearLayout
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="16dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="18dp"
             android:layout_weight="1"
+            android:gravity="center_vertical"
             android:orientation="vertical">
 
             <LinearLayout
@@ -54,108 +61,82 @@
                     android:layout_weight="1"
                     android:ellipsize="end"
                     android:fontFamily="sans-serif-medium"
-                    android:maxLines="1"
+                    android:includeFontPadding="false"
+                    android:maxLines="2"
                     android:textColor="@color/colorTextPrimary"
-                    android:textSize="18sp" />
+                    android:textSize="20sp" />
 
                 <com.google.android.material.materialswitch.MaterialSwitch
                     android:id="@+id/adapter_picture_show"
                     android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
-
-            </LinearLayout>
-
-            <TextView
-                android:id="@+id/adapter_picture_id"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:ellipsize="middle"
-                android:fontFamily="monospace"
-                android:maxLines="1"
-                android:textColor="@color/colorTextSecondary"
-                android:textSize="12sp" />
-
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:orientation="horizontal">
-
-                <TextView
-                    android:id="@+id/adapter_picture_visible"
-                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:paddingStart="10dp"
-                    android:paddingTop="6dp"
-                    android:paddingEnd="10dp"
-                    android:paddingBottom="6dp"
-                    android:textSize="12sp"
-                    tools:text="Visible" />
-
-                <TextView
-                    android:id="@+id/adapter_picture_touch_mode"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:paddingStart="10dp"
-                    android:paddingTop="6dp"
-                    android:paddingEnd="10dp"
-                    android:paddingBottom="6dp"
-                    android:textSize="12sp"
-                    tools:text="Click-through" />
-
-                <TextView
-                    android:id="@+id/adapter_picture_boundary"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:paddingStart="10dp"
-                    android:paddingTop="6dp"
-                    android:paddingEnd="10dp"
-                    android:paddingBottom="6dp"
-                    android:textSize="12sp"
-                    tools:text="Screen-bound" />
+                    android:layout_marginStart="10dp"
+                    android:minWidth="48dp" />
 
             </LinearLayout>
 
             <TextView
                 android:id="@+id/adapter_picture_error"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
+                android:layout_width="wrap_content"
+                android:layout_height="30dp"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bg_chip_danger"
+                android:gravity="center"
+                android:includeFontPadding="false"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
                 android:text="@string/error_picture_not_found"
                 android:textColor="@color/colorStatusDangerText"
-                android:textSize="13sp"
+                android:textSize="12sp"
                 android:visibility="gone" />
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
+                android:layout_marginTop="8dp"
                 android:gravity="end"
                 android:orientation="horizontal">
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/adapter_picture_edit"
                     style="@style/Widget.Material3.Button.OutlinedButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
+                    android:layout_width="42dp"
+                    android:layout_height="42dp"
                     android:minWidth="0dp"
-                    android:text="@string/manage_action_edit"
-                    android:textAllCaps="false" />
+                    android:minHeight="0dp"
+                    android:padding="0dp"
+                    android:text=""
+                    android:textAllCaps="false"
+                    app:backgroundTint="@color/colorPromptBackground"
+                    app:cornerRadius="21dp"
+                    app:icon="@drawable/ic_edit"
+                    app:iconGravity="textStart"
+                    app:iconPadding="0dp"
+                    app:iconSize="19dp"
+                    app:iconTint="@color/colorPromptText"
+                    app:strokeColor="@color/colorPromptText"
+                    app:strokeWidth="1dp" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/adapter_picture_delete"
                     style="@style/Widget.Material3.Button.OutlinedButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
+                    android:layout_width="42dp"
+                    android:layout_height="42dp"
+                    android:layout_marginStart="10dp"
                     android:minWidth="0dp"
-                    android:text="@string/manage_action_delete"
+                    android:minHeight="0dp"
+                    android:padding="0dp"
+                    android:text=""
                     android:textAllCaps="false"
-                    android:textColor="@color/colorStatusDangerText"
-                    app:strokeColor="@color/colorStatusDangerText" />
+                    app:backgroundTint="@color/colorPromptBackground"
+                    app:cornerRadius="21dp"
+                    app:icon="@drawable/ic_delete"
+                    app:iconGravity="textStart"
+                    app:iconPadding="0dp"
+                    app:iconSize="19dp"
+                    app:iconTint="@color/colorPromptText"
+                    app:strokeColor="@color/colorPromptText"
+                    app:strokeWidth="1dp" />
 
             </LinearLayout>
 

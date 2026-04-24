@@ -19,7 +19,9 @@
         <item name="android:textColorSecondary">@color/colorTextSecondary</item>
         <item name="toolbarStyle">@style/AppTheme.Toolbar</item>
         <item name="preferenceTheme">@style/PreferenceThemeOverlay.v14.Material</item>
-        <item name="materialAlertDialogTheme">@style/ThemeOverlay.Material3.MaterialAlertDialog</item>
+        <item name="materialAlertDialogTheme">@style/AppTheme.AlertDialog</item>
+        <item name="alertDialogTheme">@style/AppTheme.AlertDialog</item>
+        <item name="android:alertDialogTheme">@style/AppTheme.AlertDialog</item>
     </style>
 
     <style name="DrawerActivity" parent="AppTheme"></style>
@@ -33,6 +35,37 @@
         <item name="titleTextColor">@color/colorTextPrimary</item>
         <item name="subtitleTextColor">@color/colorTextSecondary</item>
         <item name="navigationIconTint">@color/colorTextPrimary</item>
+    </style>
+
+    <style name="AppTheme.AlertDialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
+        <item name="android:windowBackground">@drawable/bg_dialog_black_double_stroke</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="colorSurface">@color/colorPromptBackground</item>
+        <item name="colorOnSurface">@color/colorPromptText</item>
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="shapeAppearanceOverlay">@style/AppTheme.AlertDialog.Shape</item>
+        <item name="materialAlertDialogTitleTextStyle">@style/AppTheme.AlertDialog.Title</item>
+        <item name="materialAlertDialogBodyTextStyle">@style/AppTheme.AlertDialog.Body</item>
+        <item name="buttonBarPositiveButtonStyle">@style/AppTheme.AlertDialog.Button</item>
+        <item name="buttonBarNegativeButtonStyle">@style/AppTheme.AlertDialog.Button</item>
+    </style>
+
+    <style name="AppTheme.AlertDialog.Shape">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">24dp</item>
+    </style>
+
+    <style name="AppTheme.AlertDialog.Title" parent="MaterialAlertDialog.Material3.Title.Text">
+        <item name="android:textColor">@color/colorPromptText</item>
+    </style>
+
+    <style name="AppTheme.AlertDialog.Body" parent="MaterialAlertDialog.Material3.Body.Text">
+        <item name="android:textColor">@color/colorPromptText</item>
+    </style>
+
+    <style name="AppTheme.AlertDialog.Button" parent="Widget.Material3.Button.TextButton.Dialog">
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textColor">@color/colorPromptText</item>
     </style>
 
 </resources>

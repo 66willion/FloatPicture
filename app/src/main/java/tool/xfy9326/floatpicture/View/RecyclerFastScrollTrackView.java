@@ -2,6 +2,7 @@ package tool.xfy9326.floatpicture.View;
 
 import android.content.Context;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.RectF;
 import android.util.AttributeSet;
@@ -9,7 +10,6 @@ import android.view.MotionEvent;
 import android.view.View;
 
 import androidx.annotation.Nullable;
-import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
 import tool.xfy9326.floatpicture.R;
@@ -25,13 +25,13 @@ public class RecyclerFastScrollTrackView extends View {
         void onTrackReleased();
     }
 
-    private static final float TRACK_WIDTH_DP = 8f;
-    private static final float THUMB_WIDTH_DP = 20f;
-    private static final float THUMB_MIN_HEIGHT_DP = 52f;
+    private static final float TRACK_WIDTH_DP = 5f;
+    private static final float THUMB_WIDTH_DP = 14f;
+    private static final float THUMB_MIN_HEIGHT_DP = 54f;
     private static final float CONTENT_VERTICAL_PADDING_DP = 10f;
-    private static final float THUMB_GRIP_WIDTH_DP = 10f;
-    private static final float THUMB_GRIP_HEIGHT_DP = 3f;
-    private static final float THUMB_GRIP_GAP_DP = 5f;
+    private static final float THUMB_GRIP_WIDTH_DP = 0f;
+    private static final float THUMB_GRIP_HEIGHT_DP = 0f;
+    private static final float THUMB_GRIP_GAP_DP = 0f;
 
     private final Paint trackPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint thumbPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -61,9 +61,9 @@ public class RecyclerFastScrollTrackView extends View {
 
     private void init() {
         setClickable(true);
-        trackPaint.setColor(ContextCompat.getColor(getContext(), R.color.colorPrimaryContainer));
-        thumbPaint.setColor(ContextCompat.getColor(getContext(), R.color.colorPrimary));
-        thumbGripPaint.setColor(ContextCompat.getColor(getContext(), R.color.colorSurface));
+        trackPaint.setColor(Color.rgb(48, 48, 48));
+        thumbPaint.setColor(Color.WHITE);
+        thumbGripPaint.setColor(Color.WHITE);
     }
 
     public void attachToRecyclerView(@Nullable RecyclerView recyclerView) {
@@ -93,7 +93,6 @@ public class RecyclerFastScrollTrackView extends View {
         }
         thumbPaint.setAlpha(dragging ? 255 : 230);
         canvas.drawRoundRect(thumbRect, thumbRect.width() / 2f, thumbRect.width() / 2f, thumbPaint);
-        drawThumbGrip(canvas);
     }
 
     private void drawThumbGrip(Canvas canvas) {
@@ -122,11 +121,8 @@ public class RecyclerFastScrollTrackView extends View {
                 if (!isWithinInteractiveTrack(y)) {
                     return false;
                 }
-                if (thumbRect.contains(event.getX(), y)) {
-                    dragging = true;
-                    dragThumbOffsetY = y - thumbRect.top;
-                    getParent().requestDisallowInterceptTouchEvent(true);
-                    invalidate();
+                if (thumbRect.contains(event.getX(), y) || isWithinRightDragArea(event.getX())) {
+                    beginDrag(event.getX(), y);
                     return true;
                 }
                 performTrackPageJump(y);
@@ -212,6 +208,23 @@ public class RecyclerFastScrollTrackView extends View {
 
     private boolean isWithinInteractiveTrack(float y) {
         return y >= trackRect.top && y <= trackRect.bottom;
+    }
+
+    private boolean isWithinRightDragArea(float x) {
+        return x >= trackRect.right && x <= getWidth();
+    }
+
+    private void beginDrag(float x, float y) {
+        dragging = true;
+        if (thumbRect.contains(x, y)) {
+            dragThumbOffsetY = y - thumbRect.top;
+        } else {
+            dragThumbOffsetY = thumbRect.height() / 2f;
+            scrollToThumbPosition(y - dragThumbOffsetY);
+            notifyTrackMoved();
+        }
+        getParent().requestDisallowInterceptTouchEvent(true);
+        invalidate();
     }
 
     private void updateGeometry() {

@@ -9,7 +9,6 @@ import android.view.View;
 import android.widget.EditText;
 import android.widget.SeekBar;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -22,9 +21,10 @@ import androidx.preference.SwitchPreferenceCompat;
 import java.util.Objects;
 
 import tool.xfy9326.floatpicture.R;
+import tool.xfy9326.floatpicture.Methods.ApplicationMethods;
+import tool.xfy9326.floatpicture.Methods.ThemeMethods;
 import tool.xfy9326.floatpicture.Services.TrustedOverlayAccessibilityService;
 import tool.xfy9326.floatpicture.Utils.Config;
-import tool.xfy9326.floatpicture.Methods.ThemeMethods;
 
 public class GlobalSettingsFragment extends PreferenceFragmentCompat {
     private LayoutInflater inflater;
@@ -74,7 +74,7 @@ public class GlobalSettingsFragment extends PreferenceFragmentCompat {
             return false;
         });
         requirePreference(Config.PREFERENCE_SHOW_NOTIFICATION_CONTROL).setOnPreferenceChangeListener((preference, newValue) -> {
-            Toast.makeText(getActivity(), R.string.restart_to_apply_changes, Toast.LENGTH_SHORT).show();
+            ApplicationMethods.showToast(requireContext(), R.string.restart_to_apply_changes);
             return true;
         });
     }
@@ -127,7 +127,7 @@ public class GlobalSettingsFragment extends PreferenceFragmentCompat {
             if (edittext_temp > 0) {
                 seekBar.setProgress(edittext_temp);
             } else {
-                Toast.makeText(getActivity(), R.string.settings_global_picture_quality_warn, Toast.LENGTH_SHORT).show();
+                ApplicationMethods.showToast(requireContext(), R.string.settings_global_picture_quality_warn);
             }
             return false;
         });
@@ -139,7 +139,7 @@ public class GlobalSettingsFragment extends PreferenceFragmentCompat {
                 editor.putInt(Config.PREFERENCE_NEW_PICTURE_QUALITY, quality);
                 editor.apply();
             } else {
-                Toast.makeText(getActivity(), R.string.settings_global_picture_quality_warn, Toast.LENGTH_SHORT).show();
+                ApplicationMethods.showToast(requireContext(), R.string.settings_global_picture_quality_warn);
             }
         });
         dialog.setNegativeButton(R.string.cancel, null);

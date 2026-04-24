@@ -16,7 +16,6 @@ import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.SeekBar;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import android.util.Log;
 
@@ -35,6 +34,7 @@ import java.util.Locale;
 import java.util.Objects;
 
 import tool.xfy9326.floatpicture.MainApplication;
+import tool.xfy9326.floatpicture.Methods.ApplicationMethods;
 import tool.xfy9326.floatpicture.Methods.ImageMethods;
 import tool.xfy9326.floatpicture.Methods.OverlayRuntimeController;
 import tool.xfy9326.floatpicture.Methods.WindowsMethods;
@@ -324,7 +324,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         bitmap = loadCurrentSourceBitmap();
         if (bitmap == null || bitmap.isRecycled()) {
             bitmap = null;
-            Toast.makeText(requireContext(), R.string.picture_settings_open_failed, Toast.LENGTH_SHORT).show();
+            ApplicationMethods.showToast(requireContext(), R.string.picture_settings_open_failed);
             return false;
         }
         return true;
@@ -393,7 +393,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
             }
             dismissDialogIfShowing(alertDialog);
             fragmentClosing = true;
-            Toast.makeText(requireContext(), R.string.picture_settings_open_failed, Toast.LENGTH_SHORT).show();
+            ApplicationMethods.showToast(requireContext(), R.string.picture_settings_open_failed);
             requireActivity().finish();
         });
     }
@@ -406,14 +406,14 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         editText.setText(PictureName);
         dialog.setPositiveButton(R.string.done, (dialog12, which) -> {
             if (editText.getText().toString().isEmpty()) {
-                Toast.makeText(requireContext(), R.string.settings_picture_name_warn, Toast.LENGTH_SHORT).show();
+                ApplicationMethods.showToast(requireContext(), R.string.settings_picture_name_warn);
             } else {
                 PictureName = editText.getText().toString();
             }
         });
         dialog.setNegativeButton(R.string.cancel, (dialog1, which) -> {
             if (editText.getText().toString().isEmpty()) {
-                Toast.makeText(requireContext(), R.string.settings_picture_name_warn, Toast.LENGTH_SHORT).show();
+                ApplicationMethods.showToast(requireContext(), R.string.settings_picture_name_warn);
             }
         });
         dialog.setView(mView);
@@ -469,7 +469,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                 bitmap = replacementBitmap;
                 default_zoom = replacementDefaultZoom;
                 showWorkingWindowPreview(picture_alpha, true);
-                Toast.makeText(requireContext(), R.string.picture_settings_replace_success, Toast.LENGTH_SHORT).show();
+                ApplicationMethods.showToast(requireContext(), R.string.picture_settings_replace_success);
             });
         }).start();
     }
@@ -486,7 +486,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                 return;
             }
             dismissDialogIfShowing(alertDialog);
-            Toast.makeText(requireContext(), R.string.picture_settings_replace_failed, Toast.LENGTH_SHORT).show();
+            ApplicationMethods.showToast(requireContext(), R.string.picture_settings_replace_failed);
         });
     }
 
@@ -570,10 +570,10 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                         showPreview(zoom_temp, picture_degree, picture_alpha, position_x, position_y, touch_and_move, allow_picture_over_layout, false, touch_and_move);
                     }
                 } else {
-                    Toast.makeText(requireContext(), R.string.settings_picture_resize_warn, Toast.LENGTH_SHORT).show();
+                    ApplicationMethods.showToast(requireContext(), R.string.settings_picture_resize_warn);
                 }
             } catch (NumberFormatException ignored) {
-                Toast.makeText(requireContext(), R.string.settings_number_warn, Toast.LENGTH_SHORT).show();
+                ApplicationMethods.showToast(requireContext(), R.string.settings_number_warn);
             }
             return false;
         });
@@ -687,10 +687,10 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                         showPreview(zoom, picture_degree_temp, picture_alpha, position_x, position_y, touch_and_move, allow_picture_over_layout, false, touch_and_move);
                     }
                 } else {
-                    Toast.makeText(requireContext(), R.string.settings_number_warn, Toast.LENGTH_SHORT).show();
+                    ApplicationMethods.showToast(requireContext(), R.string.settings_number_warn);
                 }
             } catch (NumberFormatException ignored) {
-                Toast.makeText(requireContext(), R.string.settings_number_warn, Toast.LENGTH_SHORT).show();
+                ApplicationMethods.showToast(requireContext(), R.string.settings_number_warn);
             }
             return false;
         });
@@ -753,10 +753,10 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                         showWorkingWindowPreview(picture_alpha_temp);
                     }
                 } else {
-                    Toast.makeText(requireContext(), R.string.settings_number_warn, Toast.LENGTH_SHORT).show();
+                    ApplicationMethods.showToast(requireContext(), R.string.settings_number_warn);
                 }
             } catch (NumberFormatException ignored) {
-                Toast.makeText(requireContext(), R.string.settings_number_warn, Toast.LENGTH_SHORT).show();
+                ApplicationMethods.showToast(requireContext(), R.string.settings_number_warn);
             }
             return false;
         });
@@ -871,7 +871,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                     );
                 }
             } else {
-                Toast.makeText(requireContext(), R.string.settings_number_warn, Toast.LENGTH_SHORT).show();
+                ApplicationMethods.showToast(requireContext(), R.string.settings_number_warn);
             }
             return false;
         });
@@ -1007,7 +1007,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                     );
                 }
             } else {
-                Toast.makeText(requireContext(), R.string.settings_number_warn, Toast.LENGTH_SHORT).show();
+                ApplicationMethods.showToast(requireContext(), R.string.settings_number_warn);
             }
             return false;
         });
@@ -1142,7 +1142,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                             false
                     );
                 } else {
-                    Toast.makeText(requireContext(), R.string.settings_picture_position_warn, Toast.LENGTH_SHORT).show();
+                    ApplicationMethods.showToast(requireContext(), R.string.settings_picture_position_warn);
                 }
             } catch (Exception e) {
                 e.printStackTrace();
@@ -1197,7 +1197,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                             false
                     );
                 } else {
-                    Toast.makeText(requireContext(), R.string.settings_picture_position_warn, Toast.LENGTH_SHORT).show();
+                    ApplicationMethods.showToast(requireContext(), R.string.settings_picture_position_warn);
                 }
             } catch (Exception e) {
                 e.printStackTrace();
@@ -1659,7 +1659,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                     if (!isAdded() || getActivity() == null) {
                         return;
                     }
-                    Toast.makeText(requireContext(), R.string.picture_settings_save_failed, Toast.LENGTH_SHORT).show();
+                    ApplicationMethods.showToast(requireContext(), R.string.picture_settings_save_failed);
                     if (onFailed != null) {
                         onFailed.run();
                     }

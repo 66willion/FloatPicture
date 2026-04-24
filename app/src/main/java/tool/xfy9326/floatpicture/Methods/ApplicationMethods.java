@@ -9,7 +9,12 @@ import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.os.Build;
 import android.util.Log;
+import android.view.Gravity;
+import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewGroup;
+import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.coordinatorlayout.widget.CoordinatorLayout;
 import androidx.core.content.ContextCompat;
@@ -125,6 +130,64 @@ public class ApplicationMethods {
         }
     }
 
+    public static Snackbar makeStyledSnackbar(Activity activity, View rootView, int messageResId, int durationMs) {
+        return makeStyledSnackbar(activity, rootView, activity.getString(messageResId), durationMs);
+    }
+
+    public static Snackbar makeStyledSnackbar(Activity activity, View rootView, CharSequence message, int durationMs) {
+        Snackbar snackbar = Snackbar.make(rootView, message, Snackbar.LENGTH_SHORT);
+        snackbar.setDuration(durationMs);
+        styleSnackbar(activity, snackbar);
+        return snackbar;
+    }
+
+    private static void styleSnackbar(Activity activity, Snackbar snackbar) {
+        View snackbarView = snackbar.getView();
+        snackbarView.setBackgroundResource(R.drawable.bg_snackbar_status);
+        ViewGroup.LayoutParams layoutParams = snackbarView.getLayoutParams();
+        if (layoutParams instanceof ViewGroup.MarginLayoutParams) {
+            ViewGroup.MarginLayoutParams marginLayoutParams = (ViewGroup.MarginLayoutParams) layoutParams;
+            marginLayoutParams.setMargins(0, 0, 0, 0);
+            snackbarView.setLayoutParams(marginLayoutParams);
+        }
+        TextView snackbarText = snackbarView.findViewById(com.google.android.material.R.id.snackbar_text);
+        if (snackbarText != null) {
+            snackbarText.setTextColor(ContextCompat.getColor(activity, R.color.colorPromptText));
+            snackbarText.setTextSize(14);
+            snackbarText.setMaxLines(3);
+        }
+        TextView snackbarAction = snackbarView.findViewById(com.google.android.material.R.id.snackbar_action);
+        if (snackbarAction != null) {
+            snackbarAction.setTextColor(ContextCompat.getColor(activity, R.color.colorPromptText));
+            snackbarAction.setTextSize(14);
+        }
+    }
+
+    public static void showToast(Context context, int messageResId) {
+        if (context != null) {
+            showToast(context, context.getString(messageResId));
+        }
+    }
+
+    public static void showToast(Context context, CharSequence message) {
+        if (context == null || message == null) {
+            return;
+        }
+        try {
+            View toastView = LayoutInflater.from(context).inflate(R.layout.toast_status, null, false);
+            TextView textView = toastView.findViewById(R.id.textview_toast_status);
+            textView.setText(message);
+            Toast toast = new Toast(context.getApplicationContext());
+            toast.setDuration(Toast.LENGTH_SHORT);
+            toast.setGravity(Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL, 0, 0);
+            // Custom toast views are used only for foreground app feedback.
+            toast.setView(toastView);
+            toast.show();
+        } catch (Exception ignored) {
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show();
+        }
+    }
+
     public static void DoubleClickCloseSnackBar(final Activity mActivity, boolean isDoubleClick) {
         if (isDoubleClick && waitDoubleClick) {
             CloseMainUiOrApplication(mActivity);
@@ -133,8 +196,12 @@ public class ApplicationMethods {
             int messageResId = isPureOverlayModeEnabled(mActivity)
                     ? R.string.action_warn_double_click_close_management
                     : R.string.action_warn_double_click_close_application;
-            Snackbar snackbar = Snackbar.make(coordinatorLayout, messageResId, Snackbar.LENGTH_SHORT);
-            snackbar.setDuration(DOUBLE_CLICK_SNACKBAR_DURATION_MS);
+            Snackbar snackbar = makeStyledSnackbar(
+                    mActivity,
+                    coordinatorLayout,
+                    messageResId,
+                    DOUBLE_CLICK_SNACKBAR_DURATION_MS
+            );
             snackbar.setAction(R.string.action_back_to_launcher, v -> mActivity.moveTaskToBack(true));
             snackbar.setActionTextColor(ContextCompat.getColor(mActivity, R.color.colorPrimary));
             snackbar.addCallback(new BaseTransientBottomBar.BaseCallback<>() {
@@ -147,6 +214,10 @@ public class ApplicationMethods {
             waitDoubleClick = true;
             snackbar.show();
         }
+    }
+
+    private static int dp(Context context, int value) {
+        return Math.round(value * context.getResources().getDisplayMetrics().density);
     }
 
     public static void ClearUselessTemp(final Context mContext) {

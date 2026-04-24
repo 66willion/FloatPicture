@@ -2,13 +2,10 @@ package tool.xfy9326.floatpicture.Activities;
 
 import android.content.Intent;
 import android.os.Bundle;
-import android.view.Menu;
-import android.view.MenuItem;
+import android.view.View;
 
 import androidx.activity.OnBackPressedCallback;
-import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.appcompat.widget.Toolbar;
 import androidx.fragment.app.FragmentTransaction;
 
 import tool.xfy9326.floatpicture.R;
@@ -28,14 +25,11 @@ public class PictureSettingsActivity extends AppCompatActivity {
     }
 
     private void ViewSet() {
-        Toolbar toolbar = findViewById(R.id.toolbar);
-        setSupportActionBar(toolbar);
-        ActionBar actionBar = getSupportActionBar();
-        Intent intent = getIntent();
-        if (actionBar != null && intent != null) {
-            if (!intent.getBooleanExtra(Config.INTENT_PICTURE_EDIT_MODE, false)) {
-                actionBar.setDisplayHomeAsUpEnabled(true);
-            }
+        View saveButton = findViewById(R.id.picture_settings_button_save);
+        if (saveButton != null) {
+            saveButton.bringToFront();
+            saveButton.setTranslationZ(18f);
+            saveButton.setOnClickListener(view -> savePictureSettings(view));
         }
     }
 
@@ -62,30 +56,19 @@ public class PictureSettingsActivity extends AppCompatActivity {
         });
     }
 
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        getMenuInflater().inflate(R.menu.activity_picture_settings, menu);
-        return super.onCreateOptionsMenu(menu);
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        int itemId = item.getItemId();
-        if (itemId == R.id.menu_picture_settings_save) {
-            // 禁用保存按钮，防止用户在后台 IO 期间重复点击
-            item.setEnabled(false);
-            mPictureSettingsFragment.saveAllData(
-                    () -> {
-                        setSuccessResult();
-                        finish();
-                    },
-                    () -> item.setEnabled(true)
-            );
-        } else if (itemId == android.R.id.home) {
-            mPictureSettingsFragment.exit();
-            finish();
+    private void savePictureSettings(View saveButton) {
+        if (mPictureSettingsFragment == null || saveButton == null || !saveButton.isEnabled()) {
+            return;
         }
-        return super.onOptionsItemSelected(item);
+        // 禁用保存按钮，防止用户在后台 IO 期间重复点击
+        saveButton.setEnabled(false);
+        mPictureSettingsFragment.saveAllData(
+                () -> {
+                    setSuccessResult();
+                    finish();
+                },
+                () -> saveButton.setEnabled(true)
+        );
     }
 
     private void setSuccessResult() {

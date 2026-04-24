@@ -17,6 +17,16 @@
     <string name="drawer_release_memory">释放内存</string>
     <string name="main_add_overlay">新增悬浮窗</string>
     <string name="main_release_memory">释放内存</string>
+    <string name="main_overview_title">悬浮控制台</string>
+    <string name="main_overview_summary">%1$d 张图片 · %2$d 个显示中 · %3$d 个异常</string>
+    <string name="main_count_all">全部 %1$d</string>
+    <string name="main_count_visible">显示 %1$d</string>
+    <string name="main_count_hidden">隐藏 %1$d</string>
+    <string name="main_count_issue">异常 %1$d</string>
+    <string name="main_mode_pure_on">纯悬浮 开</string>
+    <string name="main_mode_pure_off">纯悬浮 关</string>
+    <string name="main_mode_trusted_on">Trusted 开</string>
+    <string name="main_mode_trusted_off">Trusted 关</string>
     <string name="main_pure_overlay_on">纯悬浮开</string>
     <string name="main_pure_overlay_off">纯悬浮关</string>
     <string name="main_trusted_overlay_on">Trusted 开</string>

@@ -9,11 +9,9 @@ import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.widget.SwitchCompat;
-import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -206,19 +204,15 @@ public class ManageListAdapter extends AdvancedRecyclerView.Adapter<ManageListVi
         }
         registerAttachedPreviewHolder(item.id, holder);
         holder.textView_Picture_Name.setText(item.pictureName);
-        holder.textView_Picture_Id.setText(item.id);
         bindPreview(holder, item.id, position);
         holder.textView_Picture_Error.setVisibility(item.pictureExists ? View.GONE : View.VISIBLE);
 
         SwitchCompat switch_Picture_Show = holder.switch_Picture_Show;
         switch_Picture_Show.setOnCheckedChangeListener(null);
         switch_Picture_Show.setChecked(item.visible);
-        bindStatusChips(holder, item.visible, item.touchAndMove, item.overLayout);
         android.widget.CompoundButton.OnCheckedChangeListener visibilityChangeListener = (compoundButton, checked) -> {
             item.visible = checked;
             OverlayRuntimeController.setWindowVisible(mActivity, item.id, checked);
-            // 实际状态由 overlay 进程写盘并广播回来；这里先反映用户操作，随后列表刷新会校正为真实状态。
-            bindStatusChips(holder, checked, item.touchAndMove, item.overLayout);
         };
         switch_Picture_Show.setOnCheckedChangeListener(visibilityChangeListener);
 
@@ -291,27 +285,6 @@ public class ManageListAdapter extends AdvancedRecyclerView.Adapter<ManageListVi
             return;
         }
         requestPreviewLoad(adapterPosition, PREVIEW_PRIORITY_VISIBLE);
-    }
-
-    private void bindStatusChips(ManageListViewHolder holder, boolean visible, boolean touchAndMove, boolean overLayout) {
-        setChip(holder.textView_Picture_Visible,
-                visible ? R.string.manage_state_visible : R.string.manage_state_hidden,
-                visible ? R.drawable.bg_chip_success : R.drawable.bg_chip_neutral,
-                visible ? R.color.colorStatusSuccessText : R.color.colorStatusNeutralText);
-        setChip(holder.textView_Picture_TouchMode,
-                touchAndMove ? R.string.manage_state_drag_enabled : R.string.manage_state_click_through,
-                touchAndMove ? R.drawable.bg_chip_warning : R.drawable.bg_chip_info,
-                touchAndMove ? R.color.colorStatusWarningText : R.color.colorStatusInfoText);
-        setChip(holder.textView_Picture_Boundary,
-                overLayout ? R.string.manage_state_allow_overflow : R.string.manage_state_screen_bound,
-                overLayout ? R.drawable.bg_chip_warning : R.drawable.bg_chip_neutral,
-                overLayout ? R.color.colorStatusWarningText : R.color.colorStatusNeutralText);
-    }
-
-    private void setChip(TextView textView, int textResId, int backgroundResId, int textColorResId) {
-        textView.setText(textResId);
-        textView.setBackgroundResource(backgroundResId);
-        textView.setTextColor(ContextCompat.getColor(mActivity, textColorResId));
     }
 
     private static ThreadPoolExecutor createPreviewLoadExecutor() {

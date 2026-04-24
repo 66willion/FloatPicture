@@ -10,15 +10,15 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
-        app:cardBackgroundColor="@color/colorSurface"
-        app:cardCornerRadius="24dp"
+        app:cardBackgroundColor="@android:color/transparent"
+        app:cardCornerRadius="18dp"
         app:cardElevation="0dp"
-        app:strokeColor="@color/colorCardStroke"
-        app:strokeWidth="1dp">
+        app:strokeWidth="0dp">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:background="@drawable/bg_home_black_double_stroke"
             android:gravity="center"
             android:orientation="vertical"
             android:padding="28dp">
@@ -37,7 +37,7 @@
                 android:gravity="center"
                 android:text="@string/manage_empty_title"
                 android:textColor="@color/colorTextPrimary"
-                android:textSize="20sp" />
+                android:textSize="18sp" />
 
             <TextView
                 android:layout_width="wrap_content"

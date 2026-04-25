@@ -145,17 +145,17 @@
                 app:srcCompat="@drawable/ic_add" />
 
             <com.google.android.material.floatingactionbutton.FloatingActionButton
-                android:id="@+id/main_button_random_window"
+                android:id="@+id/main_button_trusted_overlay"
                 android:layout_width="52dp"
                 android:layout_height="52dp"
                 android:layout_margin="4dp"
-                android:contentDescription="@string/main_random_window"
-                app:backgroundTint="@color/colorRandomAction"
+                android:contentDescription="@string/main_trusted_overlay_off"
+                app:backgroundTint="@color/colorTrustedOverlayOff"
                 app:elevation="4dp"
                 app:fabCustomSize="52dp"
                 app:maxImageSize="24dp"
                 app:pressedTranslationZ="8dp"
-                app:srcCompat="@drawable/ic_random_window"
+                app:srcCompat="@drawable/ic_invisible"
                 app:tint="@color/white" />
 
             <com.google.android.material.floatingactionbutton.FloatingActionButton
@@ -174,17 +174,17 @@
                 app:tint="@color/white" />
 
             <com.google.android.material.floatingactionbutton.FloatingActionButton
-                android:id="@+id/main_button_trusted_overlay"
+                android:id="@+id/main_button_random_window"
                 android:layout_width="52dp"
                 android:layout_height="52dp"
                 android:layout_margin="4dp"
-                android:contentDescription="@string/main_trusted_overlay_off"
-                app:backgroundTint="@color/colorTrustedOverlayOff"
+                android:contentDescription="@string/main_random_window"
+                app:backgroundTint="@color/colorRandomAction"
                 app:elevation="4dp"
                 app:fabCustomSize="52dp"
                 app:maxImageSize="24dp"
                 app:pressedTranslationZ="8dp"
-                app:srcCompat="@drawable/ic_invisible"
+                app:srcCompat="@drawable/ic_random_window"
                 app:tint="@color/white" />
 
         </GridLayout>

@@ -28,6 +28,7 @@ import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.PreferenceManager;
 import androidx.preference.SwitchPreferenceCompat;
+import androidx.recyclerview.widget.RecyclerView;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -123,6 +124,13 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
         fragmentClosing = false;
+        RecyclerView recyclerView = getListView();
+        recyclerView.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+        recyclerView.setClipToPadding(false);
+        int horizontalPadding = Math.round(8 * getResources().getDisplayMetrics().density);
+        int verticalPadding = Math.round(12 * getResources().getDisplayMetrics().density);
+        recyclerView.setPadding(horizontalPadding, verticalPadding, horizontalPadding, verticalPadding);
+        recyclerView.setItemAnimator(null);
         PreferenceSet();
         setMode();
     }
@@ -1834,7 +1842,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                         );
                         ImageMethods.recycleBitmap(displayBitmap);
                     }
-                    OverlayRuntimeController.syncPicture(appContext, pictureId);
+                    OverlayRuntimeController.syncPicture(appContext, pictureId, false);
                 }
             }
             final boolean finalSaveFailed = saveFailed;

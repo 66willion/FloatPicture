@@ -85,7 +85,9 @@ public class NotificationService extends Service {
         String action = intent != null ? intent.getAction() : OverlayRuntimeController.ACTION_RUNTIME_START;
         if (!OverlayRuntimeController.ACTION_RUNTIME_SHUTDOWN.equals(action)) {
             ensureForegroundStarted();
-            ensureRuntimeInitialized();
+            if (shouldInitializeRuntime(intent, action)) {
+                ensureRuntimeInitialized();
+            }
         }
         boolean refreshNotification = handleAction(intent, action);
         if (OverlayRuntimeController.ACTION_RUNTIME_SHUTDOWN.equals(action)) {
@@ -133,6 +135,20 @@ public class NotificationService extends Service {
         ManageMethods.RunWin(this);
         mainApplication.setAppInit(true);
         IOMethods.setNoMedia();
+    }
+
+    private boolean shouldInitializeRuntime(@Nullable Intent intent, @Nullable String action) {
+        if (OverlayRuntimeController.ACTION_RUNTIME_SYNC_PICTURE.equals(action)
+                && intent != null
+                && !intent.getBooleanExtra(OverlayRuntimeController.EXTRA_CREATE_IF_VISIBLE, true)) {
+            return false;
+        }
+        if (OverlayRuntimeController.ACTION_RUNTIME_REFRESH_NOTIFICATION.equals(action)
+                && intent != null
+                && !intent.getBooleanExtra(OverlayRuntimeController.EXTRA_INITIALIZE_RUNTIME, true)) {
+            return false;
+        }
+        return true;
     }
 
     private PendingIntent createContentIntent() {
@@ -241,7 +257,8 @@ public class NotificationService extends Service {
         if (pictureId == null || pictureId.isEmpty()) {
             return;
         }
-        ManageMethods.syncWindowFromDisk(this, pictureId);
+        boolean createIfVisible = intent.getBooleanExtra(OverlayRuntimeController.EXTRA_CREATE_IF_VISIBLE, true);
+        ManageMethods.syncWindowFromDisk(this, pictureId, createIfVisible);
         OverlayRuntimeController.notifyRuntimeStateChanged(this);
     }
 

@@ -5,6 +5,7 @@ import android.content.Context;
 import android.view.MotionEvent;
 import android.view.WindowManager;
 
+import androidx.annotation.Nullable;
 import androidx.appcompat.widget.AppCompatImageView;
 
 import tool.xfy9326.floatpicture.Methods.WindowsMethods;
@@ -19,6 +20,7 @@ public class FloatImageView extends AppCompatImageView {
     /** 实际写入 LayoutParams.alpha 的值，由 WindowsMethods 在每次 updateViewLayout 后同步。
      *  拖动时直接复用此值，避免绕开多窗口联合透明度公式。 */
     private float layoutAlpha = Config.DATA_DEFAULT_PICTURE_ALPHA;
+    private WindowManager attachedWindowManager;
 
     private float mTouchStartX = 0;
     private float mTouchStartY = 0;
@@ -70,6 +72,15 @@ public class FloatImageView extends AppCompatImageView {
         this.layoutAlpha = layoutAlpha;
     }
 
+    public void setAttachedWindowManager(@Nullable WindowManager windowManager) {
+        attachedWindowManager = windowManager;
+    }
+
+    @Nullable
+    public WindowManager getAttachedWindowManager() {
+        return attachedWindowManager;
+    }
+
     @SuppressLint("ClickableViewAccessibility")
     @Override
     public boolean onTouchEvent(MotionEvent event) {
@@ -115,7 +126,8 @@ public class FloatImageView extends AppCompatImageView {
         // 拖动时复用上次由 WindowsMethods 同步过来的 layoutAlpha，
         // 避免单窗口路径（getDefaultLayout）覆盖掉多窗口联合公式计算的值。
         params.alpha = layoutAlpha;
-        WindowsMethods.getWindowManager(getContext()).updateViewLayout(this, params);
+        WindowManager windowManager = attachedWindowManager != null ? attachedWindowManager : WindowsMethods.getWindowManager(getContext());
+        windowManager.updateViewLayout(this, params);
     }
 
 }

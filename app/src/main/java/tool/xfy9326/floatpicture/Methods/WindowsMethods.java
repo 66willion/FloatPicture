@@ -52,6 +52,7 @@ public class WindowsMethods {
             if (currentLayoutParams != null && canUpdateWindowInPlace(currentLayoutParams, layoutParams)) {
                 try {
                     activeWindowManager.updateViewLayout(pictureView, layoutParams);
+                    syncAttachedWindowManager(pictureView, activeWindowManager);
                     syncLayoutAlpha(pictureView, layoutParams);
                     syncAllWindows(safeContext);
                     return;
@@ -160,6 +161,7 @@ public class WindowsMethods {
         }
         try {
             activeWindowManager.updateViewLayout(pictureView, layoutParams);
+            syncAttachedWindowManager(pictureView, activeWindowManager);
         } catch (Exception e) {
             Log.w("WindowsMethods", "updateWindow updateViewLayout failed: " + e.getMessage());
             createWindow(activeWindowManager, pictureView, touchable, overLayout, pictureAlpha, layoutPositionX, layoutPositionY);
@@ -197,6 +199,7 @@ public class WindowsMethods {
             window.layoutParams.alpha = newAlpha;
             try {
                 windowManager.updateViewLayout(window.view, window.layoutParams);
+                syncAttachedWindowManager(window.view, windowManager);
                 syncLayoutAlpha(window.view, window.layoutParams);
             } catch (Exception e) {
                 Log.w("WindowsMethods", "syncAllWindows updateViewLayout failed: " + e.getMessage());
@@ -403,6 +406,11 @@ public class WindowsMethods {
 
     public static boolean removeWindowIfAttached(View pictureView) {
         if (pictureView == null || !pictureView.isAttachedToWindow()) {
+            syncAttachedWindowManager(pictureView, null);
+            return true;
+        }
+        WindowManager attachedWindowManager = getAttachedWindowManager(pictureView);
+        if (tryRemoveWindow(attachedWindowManager, pictureView, true, "attached-immediate")) {
             return true;
         }
         WindowManager originalWindowManager = getContextWindowManager(pictureView.getContext());
@@ -429,6 +437,7 @@ public class WindowsMethods {
     private static boolean tryAddWindow(WindowManager windowManager, View pictureView, WindowManager.LayoutParams layoutParams) {
         try {
             windowManager.addView(pictureView, layoutParams);
+            syncAttachedWindowManager(pictureView, windowManager);
             return true;
         } catch (Exception e) {
             Log.w("WindowsMethods", "tryAddWindow addView failed: " + e.getMessage());
@@ -442,8 +451,15 @@ public class WindowsMethods {
     }
 
     private static boolean tryRemoveWindow(WindowManager windowManager, View pictureView, boolean immediate, String source) {
-        if (windowManager == null || pictureView == null || !pictureView.isAttachedToWindow()) {
-            return !pictureView.isAttachedToWindow();
+        if (pictureView == null) {
+            return true;
+        }
+        if (!pictureView.isAttachedToWindow()) {
+            syncAttachedWindowManager(pictureView, null);
+            return true;
+        }
+        if (windowManager == null) {
+            return false;
         }
         try {
             if (immediate) {
@@ -454,7 +470,11 @@ public class WindowsMethods {
         } catch (Exception e) {
             Log.w("WindowsMethods", "tryRemoveWindow " + source + " failed: " + e.getMessage());
         }
-        return !pictureView.isAttachedToWindow();
+        boolean detached = !pictureView.isAttachedToWindow();
+        if (detached) {
+            syncAttachedWindowManager(pictureView, null);
+        }
+        return detached;
     }
 
     private static boolean shouldUseTrustedOverlay(Context context) {
@@ -483,6 +503,19 @@ public class WindowsMethods {
         if (view instanceof FloatImageView fiv) {
             fiv.setLayoutAlpha(lp.alpha);
         }
+    }
+
+    private static void syncAttachedWindowManager(View view, WindowManager windowManager) {
+        if (view instanceof FloatImageView fiv) {
+            fiv.setAttachedWindowManager(windowManager);
+        }
+    }
+
+    private static WindowManager getAttachedWindowManager(View view) {
+        if (view instanceof FloatImageView fiv) {
+            return fiv.getAttachedWindowManager();
+        }
+        return null;
     }
 
     private static double alphaToObscuringBudget(float alpha) {

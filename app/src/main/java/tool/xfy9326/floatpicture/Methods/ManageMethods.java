@@ -3,6 +3,8 @@ package tool.xfy9326.floatpicture.Methods;
 
 import static tool.xfy9326.floatpicture.Methods.WindowsMethods.getWindowManager;
 import android.content.Context;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.graphics.Bitmap;
 import android.view.View;
@@ -30,6 +32,7 @@ public class ManageMethods {
     private static final Random RANDOM = new Random();
     private static final ArrayList<String> RANDOM_BAG = new ArrayList<>();
     private static final LinkedHashSet<String> RANDOM_BAG_SNAPSHOT = new LinkedHashSet<>();
+    private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
     private static String lastRandomPictureId = null;
 
     public static void RunWin(Context mContext) {
@@ -94,16 +97,16 @@ public class ManageMethods {
         MainApplication mainApplication = (MainApplication) mContext.getApplicationContext();
         Map<String, View> hashMap = new LinkedHashMap<>(mainApplication.getRegister());
         if (!hashMap.isEmpty()) {
-            WindowManager windowManager = getWindowManager(mContext);
-            for (HashMap.Entry<?, ?> entry : hashMap.entrySet()) {
-                if (entry.getValue() instanceof FloatImageView floatImageView) {
-                    if (WindowsMethods.removeWindowIfAttached(floatImageView)) {
-                        ImageMethods.releasePictureView(floatImageView);
-                        mainApplication.unregisterView(entry.getKey().toString());
-                    }
+            for (Map.Entry<String, View> entry : hashMap.entrySet()) {
+                String id = entry.getKey();
+                if (entry.getValue() instanceof FloatImageView) {
+                    releaseWindowById(mContext, id, false);
+                } else {
+                    mainApplication.unregisterView(id);
                 }
             }
         }
+        WindowsMethods.syncAllWindows(mContext);
         mainApplication.setWinVisible(false);
     }
 
@@ -131,9 +134,6 @@ public class ManageMethods {
             if (!pictureData.getBoolean(Config.DATA_PICTURE_SHOW_ENABLED, Config.DATA_DEFAULT_PICTURE_SHOW_ENABLED)) {
                 if (releaseWindowById(context, id, false)) {
                     releasedCount++;
-                } else {
-                    pictureData.put(Config.DATA_PICTURE_SHOW_ENABLED, true);
-                    pictureData.commit(null);
                 }
                 continue;
             }
@@ -316,7 +316,24 @@ public class ManageMethods {
         PictureData pictureData = new PictureData();
         LinkedHashMap<String, String> linkedHashMap = pictureData.getListArray();
         if (linkedHashMap == null || linkedHashMap.isEmpty()) {
+            if (!visible) {
+                CloseAllWindows(context);
+            }
             ((MainApplication) context.getApplicationContext()).setWinVisible(false);
+            return;
+        }
+        if (!visible) {
+            for (String pictureId : linkedHashMap.keySet()) {
+                if (pictureId == null || pictureId.isEmpty()) {
+                    continue;
+                }
+                pictureData.setDataControl(pictureId);
+                pictureData.put(Config.DATA_PICTURE_SHOW_ENABLED, false);
+                pictureData.commit(null);
+            }
+            CloseAllWindows(context);
+            updateGlobalVisibleState(context);
+            NotificationService.refresh(context);
             return;
         }
         setWindowsVisible(context, new LinkedHashSet<>(linkedHashMap.keySet()), visible);
@@ -342,6 +359,10 @@ public class ManageMethods {
     }
 
     public static void syncWindowFromDisk(Context context, String id) {
+        syncWindowFromDisk(context, id, true);
+    }
+
+    public static void syncWindowFromDisk(Context context, String id, boolean createIfVisible) {
         PictureData pictureData = new PictureData();
         LinkedHashMap<String, String> linkedHashMap = pictureData.getListArray();
         if (linkedHashMap == null || !linkedHashMap.containsKey(id)) {
@@ -352,7 +373,10 @@ public class ManageMethods {
         pictureData.setDataControl(id);
         boolean visible = pictureData.getBoolean(Config.DATA_PICTURE_SHOW_ENABLED, Config.DATA_DEFAULT_PICTURE_SHOW_ENABLED);
         if (visible) {
-            showWindowById(context, id);
+            FloatImageView existingView = ImageMethods.getFloatImageViewById(context, id);
+            if (createIfVisible || existingView != null) {
+                showWindowById(context, id);
+            }
         } else {
             hideWindowById(context, id);
         }
@@ -372,9 +396,13 @@ public class ManageMethods {
             }
         } else {
             if (data_visible) {
+                pictureData.put(Config.DATA_PICTURE_SHOW_ENABLED, false);
+                pictureData.commit(null);
+                hideWindowById(context, id);
+                updateGlobalVisibleState(context);
+                NotificationService.refresh(context);
+            } else {
                 if (hideWindowById(context, id)) {
-                    pictureData.put(Config.DATA_PICTURE_SHOW_ENABLED, false);
-                    pictureData.commit(null);
                     updateGlobalVisibleState(context);
                     NotificationService.refresh(context);
                 }
@@ -565,10 +593,7 @@ public class ManageMethods {
             }
             pictureData.setDataControl(id);
             if (!pictureData.getBoolean(Config.DATA_PICTURE_SHOW_ENABLED, Config.DATA_DEFAULT_PICTURE_SHOW_ENABLED)) {
-                if (!releaseWindowById(context, id, false)) {
-                    pictureData.put(Config.DATA_PICTURE_SHOW_ENABLED, true);
-                    pictureData.commit(null);
-                }
+                releaseWindowById(context, id, false);
             }
         }
     }
@@ -582,14 +607,53 @@ public class ManageMethods {
         boolean removed = WindowsMethods.removeWindowIfAttached(floatImageView);
         if (floatImageView.isAttachedToWindow() || !removed) {
             Log.w("ManageMethods", "releaseWindowById failed to detach window: " + id);
+            scheduleDetachedWindowCleanup(context, id, floatImageView, syncAllWindows);
             return false;
         }
-        ImageMethods.releasePictureView(floatImageView);
-        mainApplication.unregisterView(id);
+        releaseRegisteredWindow(mainApplication, id, floatImageView);
         if (syncAllWindows) {
             WindowsMethods.syncAllWindows(context);
         }
         return true;
+    }
+
+    private static void scheduleDetachedWindowCleanup(Context context,
+                                                      String id,
+                                                      FloatImageView floatImageView,
+                                                      boolean syncAllWindows) {
+        Context appContext = context.getApplicationContext() != null ? context.getApplicationContext() : context;
+        MAIN_HANDLER.postDelayed(() -> cleanupDetachedWindow(appContext, id, floatImageView, syncAllWindows), 250L);
+        MAIN_HANDLER.postDelayed(() -> cleanupDetachedWindow(appContext, id, floatImageView, syncAllWindows), 1000L);
+    }
+
+    private static void cleanupDetachedWindow(Context context,
+                                              String id,
+                                              FloatImageView floatImageView,
+                                              boolean syncAllWindows) {
+        if (floatImageView == null) {
+            return;
+        }
+        if (floatImageView.isAttachedToWindow()) {
+            WindowsMethods.removeWindowIfAttached(floatImageView);
+        }
+        if (floatImageView.isAttachedToWindow()) {
+            return;
+        }
+        MainApplication mainApplication = (MainApplication) context.getApplicationContext();
+        if (mainApplication.getRegisteredView(id) != floatImageView) {
+            return;
+        }
+        releaseRegisteredWindow(mainApplication, id, floatImageView);
+        if (syncAllWindows) {
+            WindowsMethods.syncAllWindows(context);
+        }
+        updateGlobalVisibleState(context);
+        NotificationService.refresh(context);
+    }
+
+    private static void releaseRegisteredWindow(MainApplication mainApplication, String id, FloatImageView floatImageView) {
+        ImageMethods.releasePictureView(floatImageView);
+        mainApplication.unregisterView(id);
     }
 
 }

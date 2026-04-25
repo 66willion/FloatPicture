@@ -640,7 +640,7 @@ public class MainActivity extends AppCompatActivity {
         exitBatchEditMode();
         refreshManageListData();
         SnackShow(this, R.string.action_batch_settings_saved);
-        OverlayRuntimeController.refreshNotification(this);
+        OverlayRuntimeController.refreshNotification(this, false);
     }
 
     private void launchOverlayPermissionRequest() {

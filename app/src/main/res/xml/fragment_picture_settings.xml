@@ -5,22 +5,26 @@
     <PreferenceCategory
         app:iconSpaceReserved="false"
         app:key="settings_category_general"
+        app:layout="@layout/preference_global_category"
         app:title="@string/settings_general">
         <Preference
             android:selectAllOnFocus="true"
             app:iconSpaceReserved="false"
             app:key="settings_picture_name"
+            app:layout="@layout/preference_global_capsule"
             app:singleLine="true"
             app:summary="@string/settings_picture_name_sum"
             app:title="@string/settings_picture_name" />
     </PreferenceCategory>
     <PreferenceCategory
         app:iconSpaceReserved="false"
+        app:layout="@layout/preference_global_category"
         app:title="@string/settings_picture_control">
         <Preference
             android:selectAllOnFocus="true"
             app:iconSpaceReserved="false"
             app:key="settings_picture_resize"
+            app:layout="@layout/preference_global_capsule"
             app:singleLine="true"
             app:summary="@string/settings_picture_resize_sum"
             app:title="@string/settings_picture_resize" />
@@ -28,6 +32,7 @@
             android:selectAllOnFocus="true"
             app:iconSpaceReserved="false"
             app:key="settings_picture_fit_screen_height"
+            app:layout="@layout/preference_global_capsule"
             app:singleLine="true"
             app:summary="@string/settings_picture_fit_screen_height_sum"
             app:title="@string/settings_picture_fit_screen_height" />
@@ -35,6 +40,7 @@
             android:selectAllOnFocus="true"
             app:iconSpaceReserved="false"
             app:key="settings_picture_replace"
+            app:layout="@layout/preference_global_capsule"
             app:singleLine="true"
             app:summary="@string/settings_picture_replace_sum"
             app:title="@string/settings_picture_replace" />
@@ -42,6 +48,7 @@
             android:selectAllOnFocus="true"
             app:iconSpaceReserved="false"
             app:key="settings_picture_degree"
+            app:layout="@layout/preference_global_capsule"
             app:singleLine="true"
             app:summary="@string/settings_picture_degree_sum"
             app:title="@string/settings_picture_degree" />
@@ -49,6 +56,7 @@
             android:selectAllOnFocus="true"
             app:iconSpaceReserved="false"
             app:key="settings_picture_alpha"
+            app:layout="@layout/preference_global_capsule"
             app:singleLine="true"
             app:summary="@string/settings_picture_alpha_sum"
             app:title="@string/settings_picture_alpha" />
@@ -56,6 +64,7 @@
             android:selectAllOnFocus="true"
             app:iconSpaceReserved="false"
             app:key="settings_picture_corner_radius"
+            app:layout="@layout/preference_global_capsule"
             app:singleLine="true"
             app:summary="@string/settings_picture_corner_radius_sum"
             app:title="@string/settings_picture_corner_radius" />
@@ -63,18 +72,21 @@
             android:selectAllOnFocus="true"
             app:iconSpaceReserved="false"
             app:key="settings_picture_edge_feather"
+            app:layout="@layout/preference_global_capsule"
             app:singleLine="true"
             app:summary="@string/settings_picture_edge_feather_sum"
             app:title="@string/settings_picture_edge_feather" />
     </PreferenceCategory>
     <PreferenceCategory
         app:iconSpaceReserved="false"
+        app:layout="@layout/preference_global_category"
         app:title="@string/settings_window">
         <Preference
             android:selectAllOnFocus="true"
             app:dependency="settings_picture_touchable_and_moveable"
             app:iconSpaceReserved="false"
             app:key="settings_picture_position"
+            app:layout="@layout/preference_global_capsule"
             app:singleLine="true"
             app:summary="@string/settings_picture_position_sum"
             app:title="@string/settings_picture_position" />
@@ -83,6 +95,7 @@
             app:disableDependentsState="true"
             app:iconSpaceReserved="false"
             app:key="settings_picture_touchable_and_moveable"
+            app:layout="@layout/preference_global_capsule"
             app:singleLine="true"
             app:summary="@string/settings_picture_touchable_and_moveable_sum"
             app:title="@string/settings_picture_touchable_and_moveable" />
@@ -90,6 +103,7 @@
             android:selectAllOnFocus="true"
             app:iconSpaceReserved="false"
             app:key="settings_allow_picture_over_layout"
+            app:layout="@layout/preference_global_capsule"
             app:singleLine="true"
             app:summary="@string/settings_allow_picture_over_layout_sum"
             app:title="@string/settings_allow_picture_over_layout" />

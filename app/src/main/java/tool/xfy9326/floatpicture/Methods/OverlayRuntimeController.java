@@ -50,6 +50,8 @@ public final class OverlayRuntimeController {
     public static final String EXTRA_POSITION_Y = "extra_position_y";
     public static final String EXTRA_PREVIEW_MODE = "extra_preview_mode";
     public static final String EXTRA_RELOAD_SOURCE = "extra_reload_source";
+    public static final String EXTRA_CREATE_IF_VISIBLE = "extra_create_if_visible";
+    public static final String EXTRA_INITIALIZE_RUNTIME = "extra_initialize_runtime";
     public static final String EXTRA_RESULT_RECEIVER = "extra_result_receiver";
     public static final String EXTRA_RELEASED_WINDOW_COUNT = "extra_released_window_count";
 
@@ -76,7 +78,13 @@ public final class OverlayRuntimeController {
     }
 
     public static void refreshNotification(@NonNull Context context) {
-        dispatchCommand(getAppContext(context), createIntent(context, ACTION_RUNTIME_REFRESH_NOTIFICATION));
+        refreshNotification(context, true);
+    }
+
+    public static void refreshNotification(@NonNull Context context, boolean initializeRuntime) {
+        Intent intent = createIntent(context, ACTION_RUNTIME_REFRESH_NOTIFICATION);
+        intent.putExtra(EXTRA_INITIALIZE_RUNTIME, initializeRuntime);
+        dispatchCommand(getAppContext(context), intent);
     }
 
     public static void recreateVisibleWindows(@NonNull Context context) {
@@ -84,11 +92,16 @@ public final class OverlayRuntimeController {
     }
 
     public static void syncPicture(@NonNull Context context, @Nullable String pictureId) {
+        syncPicture(context, pictureId, true);
+    }
+
+    public static void syncPicture(@NonNull Context context, @Nullable String pictureId, boolean createIfVisible) {
         if (pictureId == null || pictureId.isEmpty()) {
             return;
         }
         Intent intent = createIntent(context, ACTION_RUNTIME_SYNC_PICTURE);
         intent.putExtra(EXTRA_PICTURE_ID, pictureId);
+        intent.putExtra(EXTRA_CREATE_IF_VISIBLE, createIfVisible);
         dispatchCommand(getAppContext(context), intent);
     }
 

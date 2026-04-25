@@ -39,8 +39,10 @@ public class MainApplication extends Application {
             @Override
             protected boolean removeEldestEntry(Map.Entry<String, View> eldest) {
                 if (size() > MAX_VIEW_REGISTER_SIZE) {
-                    // 主动释放被淘汰条目持有的 Bitmap，避免内存泄漏
                     if (eldest.getValue() instanceof FloatImageView floatImageView) {
+                        if (floatImageView.isAttachedToWindow()) {
+                            return false;
+                        }
                         ImageMethods.releasePictureView(floatImageView);
                     }
                     return true;

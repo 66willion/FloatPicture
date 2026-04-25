@@ -17,6 +17,8 @@
     <color name="colorPromptBackground">#000000</color>
     <color name="colorPromptText">#FFFFFF</color>
     <color name="colorFloatingBlurSurface">#B3000000</color>
+    <color name="colorDrawerOuterBlurSurface">#66000000</color>
+    <color name="colorDrawerControlSurface">#CC000000</color>
     <color name="colorPreviewBackground">#000000</color>
     <color name="colorCodeBackGround">#000000</color>
     <color name="colorImageViewEditBackground">#7897A3B6</color>

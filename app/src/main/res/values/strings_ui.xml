@@ -15,6 +15,8 @@
     <string name="settings_theme_mode">Theme mode</string>
     <string name="drawer_close_all_pictures">Close all pictures</string>
     <string name="drawer_release_memory">Free memory</string>
+    <string name="drawer_batch_edit">Batch edit</string>
+    <string name="drawer_batch_import">Batch import</string>
     <string name="main_add_overlay">Add overlay</string>
     <string name="main_release_memory">Free memory</string>
     <string name="main_overview_title">Overlay console</string>

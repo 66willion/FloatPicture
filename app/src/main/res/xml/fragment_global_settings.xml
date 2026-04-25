@@ -3,6 +3,7 @@
 
     <PreferenceCategory
         app:iconSpaceReserved="false"
+        app:layout="@layout/preference_global_category"
         app:title="@string/settings_appearance">
         <ListPreference
             app:defaultValue="system"
@@ -10,45 +11,53 @@
             app:entryValues="@array/theme_mode_values"
             app:iconSpaceReserved="false"
             app:key="theme_mode"
+            app:layout="@layout/preference_global_capsule"
             app:title="@string/settings_theme_mode"
             app:useSimpleSummaryProvider="true" />
     </PreferenceCategory>
 
     <PreferenceCategory
         app:iconSpaceReserved="false"
+        app:layout="@layout/preference_global_category"
         app:title="@string/settings_general">
         <SwitchPreferenceCompat
             app:defaultValue="false"
             app:iconSpaceReserved="false"
             app:key="boot_auto_run"
+            app:layout="@layout/preference_global_capsule"
             app:summary="@string/settings_global_start_on_boot_sum"
             app:title="@string/settings_global_start_on_boot" />
         <SwitchPreferenceCompat
             app:defaultValue="true"
             app:iconSpaceReserved="false"
             app:key="show_notification_control"
+            app:layout="@layout/preference_global_capsule"
             app:summary="@string/settings_global_show_notification_control_sum"
             app:title="@string/settings_global_show_notification_control" />
         <Preference
             app:iconSpaceReserved="false"
             app:key="new_picture_quality"
+            app:layout="@layout/preference_global_capsule"
             app:summary="@string/settings_global_picture_quality_sum"
             app:title="@string/settings_global_picture_quality" />
     </PreferenceCategory>
 
     <PreferenceCategory
         app:iconSpaceReserved="false"
+        app:layout="@layout/preference_global_category"
         app:title="@string/settings_global_advanced">
         <SwitchPreferenceCompat
             app:defaultValue="false"
             app:iconSpaceReserved="false"
             app:key="trusted_overlay_accessibility"
+            app:layout="@layout/preference_global_capsule"
             app:summary="@string/settings_global_trusted_overlay_accessibility_sum"
             app:title="@string/settings_global_trusted_overlay_accessibility" />
         <SwitchPreferenceCompat
             app:defaultValue="false"
             app:iconSpaceReserved="false"
             app:key="touchable_position_edit"
+            app:layout="@layout/preference_global_capsule"
             app:summary="@string/settings_global_advanced_touchable_position_edit_sum"
             app:title="@string/settings_global_advanced_touchable_position_edit" />
     </PreferenceCategory>

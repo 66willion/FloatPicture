@@ -17,6 +17,7 @@ import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.PreferenceManager;
 import androidx.preference.SwitchPreferenceCompat;
+import androidx.recyclerview.widget.RecyclerView;
 
 import java.util.Objects;
 
@@ -42,6 +43,18 @@ public class GlobalSettingsFragment extends PreferenceFragmentCompat {
         addPreferencesFromResource(R.xml.fragment_global_settings);
         PreferenceSet();
         updateTrustedOverlaySummary();
+    }
+
+    @Override
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+        RecyclerView recyclerView = getListView();
+        recyclerView.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+        recyclerView.setClipToPadding(false);
+        int horizontalPadding = Math.round(8 * getResources().getDisplayMetrics().density);
+        int verticalPadding = Math.round(12 * getResources().getDisplayMetrics().density);
+        recyclerView.setPadding(horizontalPadding, verticalPadding, horizontalPadding, verticalPadding);
+        recyclerView.setItemAnimator(null);
     }
 
     @Override

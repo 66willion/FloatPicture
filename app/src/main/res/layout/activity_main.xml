@@ -7,15 +7,430 @@
 
     <include layout="@layout/activity_main_content" />
 
-    <com.google.android.material.navigation.NavigationView
-        android:id="@+id/main_navigation_view"
-        android:layout_width="300dp"
+    <FrameLayout
+        android:id="@+id/main_navigation_drawer"
+        android:layout_width="336dp"
         android:layout_height="match_parent"
         android:layout_gravity="start"
-        android:background="@color/colorSurface"
-        app:headerLayout="@layout/drawer_manage_header"
-        app:itemIconTint="@color/navigation_item_tint"
-        app:itemTextColor="@color/navigation_item_tint"
-        app:menu="@menu/drawer_manage_menu" />
+        android:background="@android:color/transparent"
+        android:clipChildren="false"
+        android:clipToPadding="false"
+        android:paddingStart="16dp"
+        android:paddingTop="28dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="20dp">
+
+        <FrameLayout
+            android:id="@+id/main_drawer_capsule_panel"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/bg_drawer_capsule_double_stroke"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:elevation="18dp"
+            android:translationZ="18dp">
+
+            <FrameLayout
+                android:id="@+id/main_drawer_capsule_inner"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_margin="7dp"
+                android:background="@drawable/bg_drawer_capsule_blur"
+                android:clickable="true"
+                android:clipChildren="true"
+                android:clipToOutline="true"
+                android:clipToPadding="true"
+                android:focusable="true">
+
+                <View
+                    android:id="@+id/main_drawer_capsule_blur"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@drawable/bg_drawer_capsule_blur" />
+
+                <ScrollView
+                    android:id="@+id/main_drawer_menu_page"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:clickable="true"
+                    android:clipToPadding="false"
+                    android:focusable="true"
+                    android:fillViewport="true"
+                    android:overScrollMode="never"
+                    android:paddingStart="22dp"
+                    android:paddingTop="28dp"
+                    android:paddingEnd="22dp"
+                    android:paddingBottom="28dp"
+                    android:scrollbars="none">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/main_drawer_global_settings"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="56dp"
+                        android:layout_marginTop="0dp"
+                        android:gravity="center_vertical"
+                        android:paddingStart="18dp"
+                        android:paddingEnd="18dp"
+                        android:text="@string/settings_global_label"
+                        android:textAllCaps="false"
+                        android:textColor="@color/colorPromptText"
+                        android:textSize="16sp"
+                        app:backgroundTint="@color/colorDrawerControlSurface"
+                        app:cornerRadius="28dp"
+                        app:icon="@drawable/ic_settings"
+                        app:iconGravity="textStart"
+                        app:iconPadding="18dp"
+                        app:iconSize="24dp"
+                        app:iconTint="@color/colorPromptText"
+                        app:strokeColor="@color/colorPromptText"
+                        app:strokeWidth="1dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/main_drawer_close_all_windows"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="56dp"
+                        android:layout_marginTop="10dp"
+                        android:gravity="center_vertical"
+                        android:paddingStart="18dp"
+                        android:paddingEnd="18dp"
+                        android:text="@string/drawer_close_all_pictures"
+                        android:textAllCaps="false"
+                        android:textColor="@color/colorPromptText"
+                        android:textSize="16sp"
+                        app:backgroundTint="@color/colorDrawerControlSurface"
+                        app:cornerRadius="28dp"
+                        app:icon="@drawable/ic_close_all"
+                        app:iconGravity="textStart"
+                        app:iconPadding="18dp"
+                        app:iconSize="24dp"
+                        app:iconTint="@color/colorPromptText"
+                        app:strokeColor="@color/colorPromptText"
+                        app:strokeWidth="1dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/main_drawer_release_memory"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="56dp"
+                        android:layout_marginTop="10dp"
+                        android:gravity="center_vertical"
+                        android:paddingStart="18dp"
+                        android:paddingEnd="18dp"
+                        android:text="@string/drawer_release_memory"
+                        android:textAllCaps="false"
+                        android:textColor="@color/colorPromptText"
+                        android:textSize="16sp"
+                        app:backgroundTint="@color/colorDrawerControlSurface"
+                        app:cornerRadius="28dp"
+                        app:icon="@drawable/ic_memory_clean"
+                        app:iconGravity="textStart"
+                        app:iconPadding="18dp"
+                        app:iconSize="24dp"
+                        app:iconTint="@color/colorPromptText"
+                        app:strokeColor="@color/colorPromptText"
+                        app:strokeWidth="1dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/main_drawer_batch_edit"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="56dp"
+                        android:layout_marginTop="10dp"
+                        android:gravity="center_vertical"
+                        android:paddingStart="18dp"
+                        android:paddingEnd="18dp"
+                        android:text="@string/drawer_batch_edit"
+                        android:textAllCaps="false"
+                        android:textColor="@color/colorPromptText"
+                        android:textSize="16sp"
+                        app:backgroundTint="@color/colorDrawerControlSurface"
+                        app:cornerRadius="28dp"
+                        app:icon="@drawable/ic_edit"
+                        app:iconGravity="textStart"
+                        app:iconPadding="18dp"
+                        app:iconSize="24dp"
+                        app:iconTint="@color/colorPromptText"
+                        app:strokeColor="@color/colorPromptText"
+                        app:strokeWidth="1dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/main_drawer_batch_import"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="56dp"
+                        android:layout_marginTop="10dp"
+                        android:gravity="center_vertical"
+                        android:paddingStart="18dp"
+                        android:paddingEnd="18dp"
+                        android:text="@string/drawer_batch_import"
+                        android:textAllCaps="false"
+                        android:textColor="@color/colorPromptText"
+                        android:textSize="16sp"
+                        app:backgroundTint="@color/colorDrawerControlSurface"
+                        app:cornerRadius="28dp"
+                        app:icon="@drawable/ic_add"
+                        app:iconGravity="textStart"
+                        app:iconPadding="18dp"
+                        app:iconSize="24dp"
+                        app:iconTint="@color/colorPromptText"
+                        app:strokeColor="@color/colorPromptText"
+                        app:strokeWidth="1dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/main_drawer_about"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="56dp"
+                        android:layout_marginTop="10dp"
+                        android:gravity="center_vertical"
+                        android:paddingStart="18dp"
+                        android:paddingEnd="18dp"
+                        android:text="@string/about"
+                        android:textAllCaps="false"
+                        android:textColor="@color/colorPromptText"
+                        android:textSize="16sp"
+                        app:backgroundTint="@color/colorDrawerControlSurface"
+                        app:cornerRadius="28dp"
+                        app:icon="@drawable/ic_about"
+                        app:iconGravity="textStart"
+                        app:iconPadding="18dp"
+                        app:iconSize="24dp"
+                        app:iconTint="@color/colorPromptText"
+                        app:strokeColor="@color/colorPromptText"
+                        app:strokeWidth="1dp" />
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginTop="18dp"
+                        android:layout_marginBottom="8dp"
+                        android:background="@color/colorPromptText" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/main_drawer_back_to_launcher"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="56dp"
+                        android:layout_marginTop="10dp"
+                        android:gravity="center_vertical"
+                        android:paddingStart="18dp"
+                        android:paddingEnd="18dp"
+                        android:text="@string/back_to_launcher"
+                        android:textAllCaps="false"
+                        android:textColor="@color/colorPromptText"
+                        android:textSize="16sp"
+                        app:backgroundTint="@color/colorDrawerControlSurface"
+                        app:cornerRadius="28dp"
+                        app:icon="@drawable/ic_back_to_launcher"
+                        app:iconGravity="textStart"
+                        app:iconPadding="18dp"
+                        app:iconSize="24dp"
+                        app:iconTint="@color/colorPromptText"
+                        app:strokeColor="@color/colorPromptText"
+                        app:strokeWidth="1dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/main_drawer_exit"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="56dp"
+                        android:layout_marginTop="10dp"
+                        android:gravity="center_vertical"
+                        android:paddingStart="18dp"
+                        android:paddingEnd="18dp"
+                        android:text="@string/exit_application"
+                        android:textAllCaps="false"
+                        android:textColor="@color/colorPromptText"
+                        android:textSize="16sp"
+                        app:backgroundTint="@color/colorDrawerControlSurface"
+                        app:cornerRadius="28dp"
+                        app:icon="@drawable/ic_exit"
+                        app:iconGravity="textStart"
+                        app:iconPadding="18dp"
+                        app:iconSize="24dp"
+                        app:iconTint="@color/colorPromptText"
+                        app:strokeColor="@color/colorPromptText"
+                        app:strokeWidth="1dp" />
+
+                    </LinearLayout>
+
+                </ScrollView>
+
+                <LinearLayout
+                    android:id="@+id/main_drawer_global_page"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:orientation="vertical"
+                    android:paddingStart="18dp"
+                    android:paddingTop="18dp"
+                    android:paddingEnd="18dp"
+                    android:paddingBottom="20dp"
+                    android:visibility="gone">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="52dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/main_drawer_global_back"
+                            style="@style/Widget.Material3.Button.OutlinedButton"
+                            android:layout_width="42dp"
+                            android:layout_height="42dp"
+                            android:minWidth="0dp"
+                            android:minHeight="0dp"
+                            android:padding="0dp"
+                            android:text=""
+                            android:textAllCaps="false"
+                            app:backgroundTint="@color/colorDrawerControlSurface"
+                            app:cornerRadius="21dp"
+                            app:icon="@drawable/ic_arrow_back"
+                            app:iconGravity="textStart"
+                            app:iconPadding="0dp"
+                            app:iconSize="22dp"
+                            app:iconTint="@color/colorPromptText"
+                            app:strokeColor="@color/colorPromptText"
+                            app:strokeWidth="1dp" />
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="14dp"
+                            android:layout_weight="1"
+                            android:ellipsize="end"
+                            android:fontFamily="sans-serif-medium"
+                            android:includeFontPadding="false"
+                            android:maxLines="1"
+                            android:text="@string/settings_global_label"
+                            android:textColor="@color/colorPromptText"
+                            android:textSize="18sp" />
+
+                    </LinearLayout>
+
+                    <FrameLayout
+                        android:id="@+id/main_drawer_global_settings_container"
+                        android:layout_width="match_parent"
+                        android:layout_height="0dp"
+                        android:layout_marginTop="8dp"
+                        android:layout_weight="1"
+                        android:clipChildren="false"
+                        android:clipToPadding="false" />
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/main_drawer_about_page"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:orientation="vertical"
+                    android:paddingStart="24dp"
+                    android:paddingTop="24dp"
+                    android:paddingEnd="24dp"
+                    android:paddingBottom="28dp"
+                    android:visibility="gone">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="52dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/main_drawer_about_back"
+                            style="@style/Widget.Material3.Button.OutlinedButton"
+                            android:layout_width="42dp"
+                            android:layout_height="42dp"
+                            android:minWidth="0dp"
+                            android:minHeight="0dp"
+                            android:padding="0dp"
+                            android:text=""
+                            android:textAllCaps="false"
+                            app:backgroundTint="@android:color/transparent"
+                            app:cornerRadius="21dp"
+                            app:icon="@drawable/ic_arrow_back"
+                            app:iconGravity="textStart"
+                            app:iconPadding="0dp"
+                            app:iconSize="28dp"
+                            app:iconTint="@color/colorPromptText"
+                            app:strokeWidth="0dp" />
+
+                        <Space
+                            android:layout_width="0dp"
+                            android:layout_height="1dp"
+                            android:layout_weight="1" />
+
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="0dp"
+                        android:layout_weight="1"
+                        android:gravity="center_horizontal"
+                        android:orientation="vertical">
+
+                        <Space
+                            android:layout_width="1dp"
+                            android:layout_height="0dp"
+                            android:layout_weight="0.16" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="sans-serif-medium"
+                            android:includeFontPadding="false"
+                            android:text="@string/app_name"
+                            android:textColor="@color/colorPromptText"
+                            android:textSize="36sp" />
+
+                        <TextView
+                            android:id="@+id/main_drawer_about_version"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="34dp"
+                            android:includeFontPadding="false"
+                            android:textColor="@color/colorTextSecondary"
+                            android:textSize="16sp" />
+
+                        <Space
+                            android:layout_width="1dp"
+                            android:layout_height="0dp"
+                            android:layout_weight="1" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/main_drawer_about_open_source"
+                            style="@style/Widget.Material3.Button.OutlinedButton"
+                            android:layout_width="match_parent"
+                            android:layout_height="64dp"
+                            android:layout_marginStart="16dp"
+                            android:layout_marginEnd="16dp"
+                            android:text="@string/open_source_license"
+                            android:textAllCaps="false"
+                            android:textColor="@color/colorPromptText"
+                            android:textSize="18sp"
+                            app:backgroundTint="@color/colorDrawerControlSurface"
+                            app:cornerRadius="32dp"
+                            app:strokeWidth="0dp" />
+
+                    </LinearLayout>
+
+                </LinearLayout>
+
+            </FrameLayout>
+
+        </FrameLayout>
+
+    </FrameLayout>
 
 </androidx.drawerlayout.widget.DrawerLayout>

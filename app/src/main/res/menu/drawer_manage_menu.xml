@@ -18,6 +18,14 @@
             android:icon="@drawable/ic_memory_clean"
             android:title="@string/drawer_release_memory" />
         <item
+            android:id="@+id/menu_batch_edit"
+            android:icon="@drawable/ic_edit"
+            android:title="@string/drawer_batch_edit" />
+        <item
+            android:id="@+id/menu_batch_import"
+            android:icon="@drawable/ic_add"
+            android:title="@string/drawer_batch_import" />
+        <item
             android:id="@+id/menu_about"
             android:icon="@drawable/ic_about"
             android:title="@string/about" />

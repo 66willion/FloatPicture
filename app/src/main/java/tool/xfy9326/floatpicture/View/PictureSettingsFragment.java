@@ -29,6 +29,7 @@ import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.PreferenceManager;
 import androidx.preference.SwitchPreferenceCompat;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Objects;
@@ -48,6 +49,9 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
     private static final int PERCENT_SCALE = 100;
     private static final int MAX_CORNER_RADIUS_PERCENT = 25;
     private static final int MAX_EDGE_FEATHER_PERCENT = 15;
+    private static final float BATCH_MAX_ZOOM = 10f;
+    private boolean Batch_Mode;
+    private boolean Batch_Import_Mode;
     private boolean Edit_Mode;
     private boolean onUseEditPicture = false;
     private boolean changesSaved = false;
@@ -82,6 +86,16 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
     private int position_x_temp;
     private int position_y_temp;
     private boolean allow_picture_over_layout;
+    private ArrayList<String> batchPictureIds = new ArrayList<>();
+    private boolean batchZoomChanged = false;
+    private boolean batchFitScreenHeightChanged = false;
+    private boolean batchDegreeChanged = false;
+    private boolean batchAlphaChanged = false;
+    private boolean batchCornerRadiusChanged = false;
+    private boolean batchEdgeFeatherChanged = false;
+    private boolean batchPositionChanged = false;
+    private boolean batchTouchAndMoveChanged = false;
+    private boolean batchOverLayoutChanged = false;
     /** 进入编辑时窗口是否处于隐藏状态；编辑完成后恢复该状态 */
     private boolean wasHidden = false;
     private volatile boolean fragmentClosing = false;
@@ -89,6 +103,9 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        Intent intent = requireActivity().getIntent();
+        Batch_Mode = intent != null && intent.getBooleanExtra(Config.INTENT_PICTURE_BATCH_EDIT_MODE, false);
+        Batch_Import_Mode = intent != null && intent.getBooleanExtra(Config.INTENT_PICTURE_BATCH_IMPORT_MODE, false);
         Edit_Mode = false;
         changesSaved = false;
         pictureData = new PictureData();
@@ -125,9 +142,15 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
 
     private void setMode() {
         Intent intent = Objects.requireNonNull(requireActivity().getIntent());
+        Batch_Mode = intent.getBooleanExtra(Config.INTENT_PICTURE_BATCH_EDIT_MODE, false);
+        Batch_Import_Mode = intent.getBooleanExtra(Config.INTENT_PICTURE_BATCH_IMPORT_MODE, false);
+        if (Batch_Mode) {
+            initializeBatchMode(intent);
+            return;
+        }
         Edit_Mode = intent.getBooleanExtra(Config.INTENT_PICTURE_EDIT_MODE, false);
         wasHidden = intent.getBooleanExtra(Config.INTENT_PICTURE_WAS_HIDDEN, false);
-        updateReplacePicturePreferenceVisibility();
+        updatePicturePreferenceVisibility();
         AlertDialog.Builder loading = new AlertDialog.Builder(requireActivity());
         loading.setCancelable(false);
         View mView = inflater.inflate(R.layout.dialog_loading, requireActivity().findViewById(R.id.layout_dialog_loading));
@@ -202,11 +225,49 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                         return;
                     }
                     bindPreferenceValues();
-                    updateReplacePicturePreferenceVisibility();
+                    updatePicturePreferenceVisibility();
                     showWorkingWindowPreview(picture_alpha);
                     dismissDialogIfShowing(alertDialog);
                 });
         }).start();
+    }
+
+    private void initializeBatchMode(Intent intent) {
+        requireActivity().setTitle(R.string.settings_batch_label);
+        Edit_Mode = false;
+        wasHidden = false;
+        ArrayList<String> requestedIds = intent.getStringArrayListExtra(Config.INTENT_PICTURE_BATCH_EDIT_IDS);
+        LinkedHashMap<String, String> listArray = pictureData.getListArray();
+        batchPictureIds.clear();
+        if (requestedIds != null && listArray != null) {
+            for (String pictureId : requestedIds) {
+                if (pictureId != null && listArray.containsKey(pictureId) && !batchPictureIds.contains(pictureId)) {
+                    batchPictureIds.add(pictureId);
+                }
+            }
+        }
+        if (batchPictureIds.isEmpty()) {
+            ApplicationMethods.showToast(requireContext(), R.string.action_batch_edit_no_selection);
+            requireActivity().finish();
+            return;
+        }
+        pictureData.setDataControl(batchPictureIds.get(0));
+        PictureId = null;
+        PictureName = getString(R.string.settings_batch_label);
+        position_x = pictureData.getInt(Config.DATA_PICTURE_POSITION_X, Config.DATA_DEFAULT_PICTURE_POSITION_X);
+        position_y = pictureData.getInt(Config.DATA_PICTURE_POSITION_Y, Config.DATA_DEFAULT_PICTURE_POSITION_Y);
+        picture_degree = pictureData.getFloat(Config.DATA_PICTURE_DEGREE, Config.DATA_DEFAULT_PICTURE_DEGREE);
+        picture_alpha = pictureData.getFloat(Config.DATA_PICTURE_ALPHA, Config.DATA_DEFAULT_PICTURE_ALPHA);
+        picture_corner_radius_ratio = pictureData.getFloat(Config.DATA_PICTURE_CORNER_RADIUS_RATIO, Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_RATIO);
+        picture_corner_radius_mask = pictureData.getInt(Config.DATA_PICTURE_CORNER_RADIUS_MASK, Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_MASK);
+        picture_edge_feather_ratio = pictureData.getFloat(Config.DATA_PICTURE_EDGE_FEATHER_RATIO, Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_RATIO);
+        picture_edge_feather_mask = pictureData.getInt(Config.DATA_PICTURE_EDGE_FEATHER_MASK, Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_MASK);
+        touch_and_move = pictureData.getBoolean(Config.DATA_PICTURE_TOUCH_AND_MOVE, Config.DATA_DEFAULT_PICTURE_TOUCH_AND_MOVE);
+        allow_picture_over_layout = pictureData.getBoolean(Config.DATA_ALLOW_PICTURE_OVER_LAYOUT, Config.DATA_DEFAULT_ALLOW_PICTURE_OVER_LAYOUT);
+        default_zoom = 1f;
+        zoom = pictureData.getFloat(Config.DATA_PICTURE_ZOOM, default_zoom);
+        bindPreferenceValues();
+        updatePicturePreferenceVisibility();
     }
 
     @NonNull
@@ -281,10 +342,18 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         updateAppearancePreferenceSummaries();
     }
 
-    private void updateReplacePicturePreferenceVisibility() {
+    private void updatePicturePreferenceVisibility() {
+        Preference generalCategory = findPreference(Config.PREFERENCE_CATEGORY_GENERAL);
+        if (generalCategory != null) {
+            generalCategory.setVisible(!Batch_Mode);
+        }
+        Preference namePreference = findPreference(Config.PREFERENCE_PICTURE_NAME);
+        if (namePreference != null) {
+            namePreference.setVisible(!Batch_Mode);
+        }
         Preference replacePreference = findPreference(Config.PREFERENCE_PICTURE_REPLACE);
         if (replacePreference != null) {
-            replacePreference.setVisible(Edit_Mode);
+            replacePreference.setVisible(Edit_Mode && !Batch_Mode);
         }
     }
 
@@ -338,11 +407,21 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
     }
 
     private void setAllowPictureOverLayout(boolean allow) {
+        if (Batch_Mode) {
+            allow_picture_over_layout = allow;
+            batchOverLayoutChanged = true;
+            return;
+        }
         allow_picture_over_layout = allow;
         showWorkingWindowPreview(picture_alpha);
     }
 
     private void setPictureTouchAndMove(boolean touchable_and_moveable) {
+        if (Batch_Mode) {
+            touch_and_move = touchable_and_moveable;
+            batchTouchAndMoveChanged = true;
+            return;
+        }
         if (touch_and_move) {
             Point previewPosition = getPreviewPosition(position_x, position_y);
             position_x = previewPosition.x;
@@ -473,7 +552,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
     }
 
     private void setPictureSize() {
-        if (!ensureSourceBitmapLoaded()) {
+        if (!Batch_Mode && !ensureSourceBitmapLoaded()) {
             return;
         }
 
@@ -481,7 +560,9 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         AlertDialog.Builder dialog = new AlertDialog.Builder(requireContext());
         dialog.setTitle(R.string.settings_picture_resize);
         dialog.setCancelable(false);
-        final float maxSize = roundToThreeDecimals(ImageMethods.getDefaultZoom(requireContext(), bitmap, true));
+        final float maxSize = Batch_Mode
+                ? Math.max(BATCH_MAX_ZOOM, roundToThreeDecimals(zoom))
+                : roundToThreeDecimals(ImageMethods.getDefaultZoom(requireContext(), bitmap, true));
         TextView name = mView.findViewById(R.id.textview_set_size);
         name.setText(R.string.settings_picture_resize_size);
         final SeekBar seekBar = mView.findViewById(R.id.seekbar_set_size);
@@ -537,7 +618,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         editText.setOnEditorActionListener((v, actionId, event) -> {
             try {
                 float edittext_temp = roundToThreeDecimals(Float.parseFloat(v.getText().toString().trim()));
-                if (edittext_temp > 0 && (allow_picture_over_layout || edittext_temp <= maxSize)) {
+                if (edittext_temp > 0 && (Batch_Mode || allow_picture_over_layout || edittext_temp <= maxSize)) {
                     zoom_temp = edittext_temp;
                     editText.setText(formatThreeDecimal(zoom_temp));
                     boolean updatedBySeekBar = false;
@@ -561,10 +642,14 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         });
         dialog.setPositiveButton(R.string.done, (__, which) -> {
             Float inputValue = parseThreeDecimalFloat(editText);
-            if (inputValue != null && inputValue > 0f && (allow_picture_over_layout || inputValue <= maxSize)) {
+            if (inputValue != null && inputValue > 0f && (Batch_Mode || allow_picture_over_layout || inputValue <= maxSize)) {
                 zoom = inputValue;
             } else {
                 zoom = zoom_temp;
+            }
+            if (Batch_Mode) {
+                batchZoomChanged = true;
+                batchFitScreenHeightChanged = false;
             }
             showWorkingWindowPreview(picture_alpha);
         });
@@ -575,6 +660,16 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
     }
 
     private void fitPictureToScreenHeight() {
+        if (Batch_Mode) {
+            batchFitScreenHeightChanged = true;
+            batchZoomChanged = false;
+            position_y = 0;
+            Preference preference = findPreference(Config.PREFERENCE_PICTURE_FIT_SCREEN_HEIGHT);
+            if (preference != null) {
+                preference.setSummary(R.string.settings_picture_fit_screen_height_batch_pending);
+            }
+            return;
+        }
         if (!ensureSourceBitmapLoaded()) {
             return;
         }
@@ -600,7 +695,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
     }
 
     private void setPictureDegree() {
-        if (!ensureSourceBitmapLoaded()) {
+        if (!Batch_Mode && !ensureSourceBitmapLoaded()) {
             return;
         }
 
@@ -683,6 +778,9 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
             } else {
                 picture_degree = picture_degree_temp;
             }
+            if (Batch_Mode) {
+                batchDegreeChanged = true;
+            }
             showWorkingWindowPreview(picture_alpha);
         });
         dialog.setNegativeButton(R.string.cancel, (__, which) -> showWorkingWindowPreview(picture_alpha));
@@ -748,6 +846,9 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                 picture_alpha = inputValue;
             } else {
                 picture_alpha = picture_alpha_temp;
+            }
+            if (Batch_Mode) {
+                batchAlphaChanged = true;
             }
             showWorkingWindowPreview(picture_alpha);
         });
@@ -885,6 +986,9 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                 picture_corner_radius_ratio = picture_corner_radius_ratio_temp;
             }
             picture_corner_radius_mask = resolveCheckedMask(optionCheckBoxes, optionBits);
+            if (Batch_Mode) {
+                batchCornerRadiusChanged = true;
+            }
             updateAppearancePreferenceSummaries();
             showWorkingWindowPreview(picture_alpha);
         });
@@ -1021,6 +1125,9 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                 picture_edge_feather_ratio = picture_edge_feather_ratio_temp;
             }
             picture_edge_feather_mask = resolveCheckedMask(optionCheckBoxes, optionBits);
+            if (Batch_Mode) {
+                batchEdgeFeatherChanged = true;
+            }
             updateAppearancePreferenceSummaries();
             showWorkingWindowPreview(picture_alpha);
         });
@@ -1031,11 +1138,11 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
     }
 
     private void setPicturePosition() {
-        if (!ensureSourceBitmapLoaded()) {
+        if (!Batch_Mode && !ensureSourceBitmapLoaded()) {
             return;
         }
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(requireContext());
-        final boolean touchable_edit = (touch_and_move || sharedPreferences.getBoolean(Config.PREFERENCE_TOUCHABLE_POSITION_EDIT, false));
+        final boolean touchable_edit = !Batch_Mode && (touch_and_move || sharedPreferences.getBoolean(Config.PREFERENCE_TOUCHABLE_POSITION_EDIT, false));
         showPreview(
                 zoom,
                 picture_degree,
@@ -1195,6 +1302,9 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                 Point previewPosition = getPreviewPosition(position_x_temp, position_y_temp);
                 position_x = previewPosition.x;
                 position_y = previewPosition.y;
+                if (Batch_Mode) {
+                    batchPositionChanged = true;
+                }
                 showWorkingWindowPreview(picture_alpha);
             });
         }
@@ -1211,6 +1321,9 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
             } else {
                 position_x = position_x_temp;
                 position_y = position_y_temp;
+            }
+            if (Batch_Mode) {
+                batchPositionChanged = true;
             }
             showWorkingWindowPreview(picture_alpha);
         });
@@ -1234,7 +1347,10 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
     }
 
     private float resolveScreenHeightZoom(@NonNull Bitmap sourceBitmap, float degreeValue) {
-        Point windowSize = getWindowSize();
+        return resolveScreenHeightZoom(sourceBitmap, degreeValue, getWindowSize());
+    }
+
+    private float resolveScreenHeightZoom(@NonNull Bitmap sourceBitmap, float degreeValue, @NonNull Point windowSize) {
         if (windowSize.y <= 0) {
             return 0f;
         }
@@ -1441,6 +1557,9 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
     }
 
     private void showWorkingWindowPreview(float alpha, boolean reloadSource) {
+        if (Batch_Mode) {
+            return;
+        }
         Point previewPosition = touch_and_move ? getPreviewPosition(position_x, position_y) : new Point(position_x, position_y);
         showPreview(
                 zoom,
@@ -1560,7 +1679,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                              int previewMode,
                              boolean reloadSource,
                              boolean useRuntimePosition) {
-        if (PictureId == null || shouldAbortFragmentWork()) {
+        if (Batch_Mode || PictureId == null || shouldAbortFragmentWork()) {
             return;
         }
         int resolvedPositionX = positionX;
@@ -1596,7 +1715,156 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         return OverlayRuntimeStateStore.getWindowPosition(requireContext(), PictureId, fallbackX, fallbackY);
     }
 
+    private void saveBatchData(@Nullable Runnable onComplete, @Nullable Runnable onFailed) {
+        final ArrayList<String> snapshotPictureIds = new ArrayList<>(batchPictureIds);
+        final boolean snapshotZoomChanged = batchZoomChanged;
+        final boolean snapshotFitScreenHeightChanged = batchFitScreenHeightChanged;
+        final boolean snapshotDegreeChanged = batchDegreeChanged;
+        final boolean snapshotAlphaChanged = batchAlphaChanged;
+        final boolean snapshotCornerRadiusChanged = batchCornerRadiusChanged;
+        final boolean snapshotEdgeFeatherChanged = batchEdgeFeatherChanged;
+        final boolean snapshotPositionChanged = batchPositionChanged;
+        final boolean snapshotTouchAndMoveChanged = batchTouchAndMoveChanged;
+        final boolean snapshotOverLayoutChanged = batchOverLayoutChanged;
+        final float snapshotZoom = zoom;
+        final float snapshotDegree = picture_degree;
+        final float snapshotAlpha = picture_alpha;
+        final float snapshotCornerRadiusRatio = picture_corner_radius_ratio;
+        final int snapshotCornerRadiusMask = picture_corner_radius_mask;
+        final float snapshotEdgeFeatherRatio = picture_edge_feather_ratio;
+        final int snapshotEdgeFeatherMask = picture_edge_feather_mask;
+        final int snapshotX = position_x;
+        final int snapshotY = position_y;
+        final boolean snapshotTouchAndMove = touch_and_move;
+        final boolean snapshotOverLayout = allow_picture_over_layout;
+        final Point snapshotWindowSize = getWindowSize();
+        final Context appContext = requireContext().getApplicationContext();
+        new Thread(() -> {
+            boolean saveFailed = false;
+            PictureData listPictureData = new PictureData();
+            LinkedHashMap<String, String> listArray = listPictureData.getListArray();
+            if (listArray == null) {
+                saveFailed = true;
+            } else {
+                for (String pictureId : snapshotPictureIds) {
+                    if (pictureId == null || !listArray.containsKey(pictureId)) {
+                        continue;
+                    }
+                    PictureData itemPictureData = new PictureData();
+                    itemPictureData.setDataControl(pictureId);
+                    float itemDefaultZoom = itemPictureData.getFloat(Config.DATA_PICTURE_DEFAULT_ZOOM, ImageMethods.getDefaultZoom(appContext, pictureId, false));
+                    float itemZoom = itemPictureData.getFloat(Config.DATA_PICTURE_ZOOM, itemDefaultZoom);
+                    float itemDegree = itemPictureData.getFloat(Config.DATA_PICTURE_DEGREE, Config.DATA_DEFAULT_PICTURE_DEGREE);
+                    float itemAlpha = itemPictureData.getFloat(Config.DATA_PICTURE_ALPHA, Config.DATA_DEFAULT_PICTURE_ALPHA);
+                    float itemCornerRadiusRatio = itemPictureData.getFloat(Config.DATA_PICTURE_CORNER_RADIUS_RATIO, Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_RATIO);
+                    int itemCornerRadiusMask = itemPictureData.getInt(Config.DATA_PICTURE_CORNER_RADIUS_MASK, Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_MASK);
+                    float itemEdgeFeatherRatio = itemPictureData.getFloat(Config.DATA_PICTURE_EDGE_FEATHER_RATIO, Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_RATIO);
+                    int itemEdgeFeatherMask = itemPictureData.getInt(Config.DATA_PICTURE_EDGE_FEATHER_MASK, Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_MASK);
+                    int itemPositionX = itemPictureData.getInt(Config.DATA_PICTURE_POSITION_X, Config.DATA_DEFAULT_PICTURE_POSITION_X);
+                    int itemPositionY = itemPictureData.getInt(Config.DATA_PICTURE_POSITION_Y, Config.DATA_DEFAULT_PICTURE_POSITION_Y);
+
+                    if (snapshotDegreeChanged) {
+                        itemDegree = snapshotDegree;
+                        itemPictureData.put(Config.DATA_PICTURE_DEGREE, itemDegree);
+                    }
+                    if (snapshotZoomChanged) {
+                        itemZoom = snapshotZoom;
+                        itemPictureData.put(Config.DATA_PICTURE_ZOOM, itemZoom);
+                    }
+                    if (snapshotFitScreenHeightChanged) {
+                        Bitmap sourceBitmap = ImageMethods.getEditSourceBitmap(appContext, pictureId);
+                        if (sourceBitmap == null || sourceBitmap.isRecycled()) {
+                            saveFailed = true;
+                        } else {
+                            float fittedZoom = resolveScreenHeightZoom(sourceBitmap, itemDegree, snapshotWindowSize);
+                            ImageMethods.recycleBitmap(sourceBitmap);
+                            if (fittedZoom > 0f) {
+                                itemZoom = fittedZoom;
+                                itemPositionY = 0;
+                                itemPictureData.put(Config.DATA_PICTURE_ZOOM, itemZoom);
+                                itemPictureData.put(Config.DATA_PICTURE_POSITION_Y, itemPositionY);
+                            } else {
+                                saveFailed = true;
+                            }
+                        }
+                    }
+                    if (snapshotAlphaChanged) {
+                        itemAlpha = snapshotAlpha;
+                        itemPictureData.put(Config.DATA_PICTURE_ALPHA, itemAlpha);
+                    }
+                    if (snapshotCornerRadiusChanged) {
+                        itemCornerRadiusRatio = snapshotCornerRadiusRatio;
+                        itemCornerRadiusMask = snapshotCornerRadiusMask;
+                        itemPictureData.put(Config.DATA_PICTURE_CORNER_RADIUS_RATIO, itemCornerRadiusRatio);
+                        itemPictureData.put(Config.DATA_PICTURE_CORNER_RADIUS_MASK, itemCornerRadiusMask);
+                    }
+                    if (snapshotEdgeFeatherChanged) {
+                        itemEdgeFeatherRatio = snapshotEdgeFeatherRatio;
+                        itemEdgeFeatherMask = snapshotEdgeFeatherMask;
+                        itemPictureData.put(Config.DATA_PICTURE_EDGE_FEATHER_RATIO, itemEdgeFeatherRatio);
+                        itemPictureData.put(Config.DATA_PICTURE_EDGE_FEATHER_MASK, itemEdgeFeatherMask);
+                    }
+                    if (snapshotPositionChanged) {
+                        itemPositionX = snapshotX;
+                        itemPositionY = snapshotY;
+                        itemPictureData.put(Config.DATA_PICTURE_POSITION_X, itemPositionX);
+                        itemPictureData.put(Config.DATA_PICTURE_POSITION_Y, itemPositionY);
+                    }
+                    if (snapshotTouchAndMoveChanged) {
+                        itemPictureData.put(Config.DATA_PICTURE_TOUCH_AND_MOVE, snapshotTouchAndMove);
+                    }
+                    if (snapshotOverLayoutChanged) {
+                        itemPictureData.put(Config.DATA_ALLOW_PICTURE_OVER_LAYOUT, snapshotOverLayout);
+                    }
+                    itemPictureData.commit(null);
+
+                    if (snapshotZoomChanged
+                            || snapshotFitScreenHeightChanged
+                            || snapshotDegreeChanged
+                            || snapshotCornerRadiusChanged
+                            || snapshotEdgeFeatherChanged) {
+                        Bitmap displayBitmap = ImageMethods.createAndSaveDisplayBitmap(
+                                pictureId,
+                                itemZoom,
+                                itemDegree,
+                                itemCornerRadiusRatio,
+                                itemCornerRadiusMask,
+                                itemEdgeFeatherRatio,
+                                itemEdgeFeatherMask
+                        );
+                        ImageMethods.recycleBitmap(displayBitmap);
+                    }
+                    OverlayRuntimeController.syncPicture(appContext, pictureId);
+                }
+            }
+            final boolean finalSaveFailed = saveFailed;
+            if (!isAdded() || getActivity() == null) {
+                return;
+            }
+            requireActivity().runOnUiThread(() -> {
+                if (!isAdded() || getActivity() == null) {
+                    return;
+                }
+                if (finalSaveFailed) {
+                    ApplicationMethods.showToast(requireContext(), R.string.picture_settings_save_failed);
+                    if (onFailed != null) {
+                        onFailed.run();
+                    }
+                    return;
+                }
+                changesSaved = true;
+                if (onComplete != null) {
+                    onComplete.run();
+                }
+            });
+        }).start();
+    }
+
     public void saveAllData(@Nullable Runnable onComplete, @Nullable Runnable onFailed) {
+        if (Batch_Mode) {
+            saveBatchData(onComplete, onFailed);
+            return;
+        }
         // 若编辑前窗口是隐藏的，保存后仍保持隐藏（用户只修改设置，不改变显示状态）
         pictureData.put(Config.DATA_PICTURE_SHOW_ENABLED, !wasHidden);
         pictureData.put(Config.DATA_PICTURE_ZOOM, zoom);
@@ -1690,6 +1958,12 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
     }
 
     public void clearEditView() {
+        if (Batch_Mode) {
+            if (Batch_Import_Mode && !changesSaved) {
+                clearImportedBatchPictures();
+            }
+            return;
+        }
         if (changesSaved || PictureId == null) {
             return;
         }
@@ -1702,6 +1976,9 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
 
     public void exit() {
         fragmentClosing = true;
+        if (Batch_Mode) {
+            return;
+        }
         if (!Edit_Mode) {
             releaseSourceBitmap();
             OverlayRuntimeController.deletePicture(requireActivity(), PictureId);
@@ -1711,6 +1988,24 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
             ImageMethods.clearPendingReplacementImage(PictureId);
             releaseSourceBitmap();
             OverlayRuntimeController.cancelPreview(requireContext(), PictureId);
+        }
+    }
+
+    private void clearImportedBatchPictures() {
+        Context context = getContext();
+        if (context == null || batchPictureIds == null || batchPictureIds.isEmpty()) {
+            return;
+        }
+        Context appContext = context.getApplicationContext() != null ? context.getApplicationContext() : context;
+        for (String pictureId : batchPictureIds) {
+            if (pictureId == null || pictureId.isEmpty()) {
+                continue;
+            }
+            PictureData importedPictureData = new PictureData();
+            importedPictureData.setDataControl(pictureId);
+            importedPictureData.remove();
+            ImageMethods.clearAllTemp(appContext, pictureId);
+            OverlayRuntimeController.deletePicture(appContext, pictureId);
         }
     }
 

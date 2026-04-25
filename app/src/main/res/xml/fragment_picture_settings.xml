@@ -4,6 +4,7 @@
 
     <PreferenceCategory
         app:iconSpaceReserved="false"
+        app:key="settings_category_general"
         app:title="@string/settings_general">
         <Preference
             android:selectAllOnFocus="true"

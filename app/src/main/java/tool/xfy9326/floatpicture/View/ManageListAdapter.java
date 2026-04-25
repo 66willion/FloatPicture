@@ -18,6 +18,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.PriorityBlockingQueue;
@@ -46,6 +47,10 @@ public class ManageListAdapter extends AdvancedRecyclerView.Adapter<ManageListVi
         void launch(Intent intent);
     }
 
+    public interface BatchSelectionListener {
+        void onSelectionChanged(int selectedCount, int totalCount, boolean allSelected);
+    }
+
     private final Activity mActivity;
     private final Context previewContext;
     private final EditPictureLauncher editPictureLauncher;
@@ -58,6 +63,9 @@ public class ManageListAdapter extends AdvancedRecyclerView.Adapter<ManageListVi
     private volatile int visibleEndPosition = RecyclerView.NO_POSITION;
     private volatile int visibleCenterPosition = RecyclerView.NO_POSITION;
     private ArrayList<ManageListItem> items = new ArrayList<>();
+    private final LinkedHashSet<String> selectedPictureIds = new LinkedHashSet<>();
+    private BatchSelectionListener batchSelectionListener;
+    private boolean batchEditMode = false;
 
     public ManageListAdapter(Activity mActivity, EditPictureLauncher editPictureLauncher) {
         this.mActivity = mActivity;
@@ -72,6 +80,49 @@ public class ManageListAdapter extends AdvancedRecyclerView.Adapter<ManageListVi
         invalidateQueuedPreviewRequests();
         submitItems(buildItems());
         scheduleCurrentViewportPreviewLoads(false);
+    }
+
+    public void setBatchSelectionListener(BatchSelectionListener batchSelectionListener) {
+        this.batchSelectionListener = batchSelectionListener;
+        notifyBatchSelectionChanged();
+    }
+
+    public void setBatchEditMode(boolean enabled) {
+        if (batchEditMode == enabled) {
+            return;
+        }
+        batchEditMode = enabled;
+        if (!batchEditMode) {
+            selectedPictureIds.clear();
+        }
+        notifyDataSetChanged();
+        notifyBatchSelectionChanged();
+    }
+
+    public boolean isBatchEditMode() {
+        return batchEditMode;
+    }
+
+    public ArrayList<String> getSelectedPictureIds() {
+        return new ArrayList<>(selectedPictureIds);
+    }
+
+    public int getSelectedPictureCount() {
+        return selectedPictureIds.size();
+    }
+
+    public void setAllBatchItemsSelected(boolean selected) {
+        if (!batchEditMode) {
+            return;
+        }
+        selectedPictureIds.clear();
+        if (selected) {
+            for (ManageListItem item : items) {
+                selectedPictureIds.add(item.id);
+            }
+        }
+        notifyDataSetChanged();
+        notifyBatchSelectionChanged();
     }
 
     public void updatePreviewViewport(int firstVisiblePosition, int lastVisiblePosition, boolean idle) {
@@ -188,7 +239,9 @@ public class ManageListAdapter extends AdvancedRecyclerView.Adapter<ManageListVi
             }
         });
         items = newItems;
+        pruneSelectedPictureIds();
         diffResult.dispatchUpdatesTo(this);
+        notifyBatchSelectionChanged();
     }
 
     @Override
@@ -206,6 +259,27 @@ public class ManageListAdapter extends AdvancedRecyclerView.Adapter<ManageListVi
         holder.textView_Picture_Name.setText(item.pictureName);
         bindPreview(holder, item.id, position);
         holder.textView_Picture_Error.setVisibility(item.pictureExists ? View.GONE : View.VISIBLE);
+
+        holder.checkBox_Picture_Select.setOnCheckedChangeListener(null);
+        holder.checkBox_Picture_Select.setVisibility(batchEditMode ? View.VISIBLE : View.GONE);
+        holder.checkBox_Picture_Select.setChecked(selectedPictureIds.contains(item.id));
+        holder.checkBox_Picture_Select.setOnCheckedChangeListener((compoundButton, checked) -> {
+            int currentPos = holder.getAdapterPosition();
+            ManageListItem currentItem = getItem(currentPos);
+            if (currentItem == null) {
+                return;
+            }
+            if (checked) {
+                selectedPictureIds.add(currentItem.id);
+            } else {
+                selectedPictureIds.remove(currentItem.id);
+            }
+            notifyBatchSelectionChanged();
+        });
+        holder.card_Picture_Item.setOnClickListener(view -> {
+            int currentPos = holder.getAdapterPosition();
+            toggleBatchSelection(currentPos);
+        });
 
         SwitchCompat switch_Picture_Show = holder.switch_Picture_Show;
         switch_Picture_Show.setOnCheckedChangeListener(null);
@@ -244,6 +318,7 @@ public class ManageListAdapter extends AdvancedRecyclerView.Adapter<ManageListVi
             holder.switch_Picture_Show.setOnCheckedChangeListener(null);
             holder.button_Picture_Edit.setOnClickListener(null);
             holder.button_Picture_Delete.setOnClickListener(null);
+            holder.checkBox_Picture_Select.setOnCheckedChangeListener(null);
             refreshData();
             MainActivity.SnackShow(mActivity, R.string.action_delete_window);
             OverlayRuntimeController.refreshNotification(mActivity);
@@ -263,6 +338,8 @@ public class ManageListAdapter extends AdvancedRecyclerView.Adapter<ManageListVi
         holder.switch_Picture_Show.setOnCheckedChangeListener(null);
         holder.button_Picture_Edit.setOnClickListener(null);
         holder.button_Picture_Delete.setOnClickListener(null);
+        holder.checkBox_Picture_Select.setOnCheckedChangeListener(null);
+        holder.card_Picture_Item.setOnClickListener(null);
         clearAttachedPreviewHolder(holder);
         holder.imageView_Picture_Preview.setTag(null);
         ImageMethods.releaseImageBitmap(holder.imageView_Picture_Preview);
@@ -274,6 +351,43 @@ public class ManageListAdapter extends AdvancedRecyclerView.Adapter<ManageListVi
             return null;
         }
         return items.get(position);
+    }
+
+    private void toggleBatchSelection(int position) {
+        if (!batchEditMode) {
+            return;
+        }
+        ManageListItem item = getItem(position);
+        if (item == null) {
+            return;
+        }
+        if (selectedPictureIds.contains(item.id)) {
+            selectedPictureIds.remove(item.id);
+        } else {
+            selectedPictureIds.add(item.id);
+        }
+        notifyItemChanged(position);
+        notifyBatchSelectionChanged();
+    }
+
+    private void pruneSelectedPictureIds() {
+        if (selectedPictureIds.isEmpty()) {
+            return;
+        }
+        LinkedHashSet<String> existingIds = new LinkedHashSet<>();
+        for (ManageListItem item : items) {
+            existingIds.add(item.id);
+        }
+        selectedPictureIds.retainAll(existingIds);
+    }
+
+    private void notifyBatchSelectionChanged() {
+        if (batchSelectionListener == null) {
+            return;
+        }
+        int selectedCount = selectedPictureIds.size();
+        int totalCount = items.size();
+        batchSelectionListener.onSelectionChanged(selectedCount, totalCount, totalCount > 0 && selectedCount == totalCount);
     }
 
     private void bindPreview(ManageListViewHolder holder, String pictureId, int adapterPosition) {

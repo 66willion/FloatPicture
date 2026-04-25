@@ -14,6 +14,9 @@ public class Config {
     public final static String INTENT_PICTURE_EDIT_ID = "EDIT_ID";
     public final static String INTENT_PICTURE_EDIT_MODE = "EDIT_MODE";
     public final static String INTENT_PICTURE_WAS_HIDDEN = "PICTURE_WAS_HIDDEN";
+    public final static String INTENT_PICTURE_BATCH_EDIT_MODE = "BATCH_EDIT_MODE";
+    public final static String INTENT_PICTURE_BATCH_EDIT_IDS = "BATCH_EDIT_IDS";
+    public final static String INTENT_PICTURE_BATCH_IMPORT_MODE = "BATCH_IMPORT_MODE";
 
     public final static String INTENT_ACTION_NOTIFICATION_START = "ACTION_NOTIFICATION_START";
     public final static String INTENT_ACTION_NOTIFICATION_BUTTON_CLICK = "ACTION_NOTIFICATION_BUTTON_CLICK";
@@ -57,6 +60,7 @@ public class Config {
     public final static boolean DATA_DEFAULT_PICTURE_TOUCH_AND_MOVE = false;
     public final static boolean DATA_DEFAULT_ALLOW_PICTURE_OVER_LAYOUT = false;
 
+    public final static String PREFERENCE_CATEGORY_GENERAL = "settings_category_general";
     public final static String PREFERENCE_PICTURE_NAME = "settings_picture_name";
     public final static String PREFERENCE_PICTURE_REPLACE = "settings_picture_replace";
     public final static String PREFERENCE_ALLOW_PICTURE_OVER_LAYOUT = "settings_allow_picture_over_layout";

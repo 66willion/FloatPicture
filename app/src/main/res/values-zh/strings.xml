@@ -13,6 +13,7 @@
     <string name="save">保存</string>
     <string name="settings_general">通用设置</string>
     <string name="settings_label">图片设置</string>
+    <string name="settings_batch_label">批量图片设置</string>
     <string name="settings_picture_control">图片控制设置</string>
     <string name="settings_picture_name">图片名称</string>
     <string name="settings_picture_name_sum">使用不同的名称区分图片</string>
@@ -28,6 +29,7 @@
     <string name="settings_picture_resize_warn">请输入一个正确的图片大小！</string>
     <string name="settings_picture_fit_screen_height">充满屏幕高度</string>
     <string name="settings_picture_fit_screen_height_sum">按当前角度自动缩放到顶住屏幕上下边，并将 Y 坐标设为 0</string>
+    <string name="settings_picture_fit_screen_height_batch_pending">保存时会批量充满屏幕高度</string>
     <string name="settings_picture_replace">替换图片</string>
     <string name="settings_picture_replace_sum">保留当前参数，直接替换这个项目使用的图片</string>
     <string name="settings_window">窗口设置</string>
@@ -38,6 +40,9 @@
     <string name="action_random_window_no_candidate">没有可随机显示的图片</string>
     <string name="action_random_window_failed">随机显示失败，请重试</string>
     <string name="action_close_all_windows_success">已关闭所有图片</string>
+    <string name="action_batch_settings_saved">批量设置已保存</string>
+    <string name="action_batch_edit_no_selection">请先选择至少一张图片</string>
+    <string name="action_batch_import_failed">没有成功导入图片</string>
     <string name="new_picture_name">新图片</string>
     <string name="settings_global_label">全局设置</string>
     <string name="action_back_to_launcher">返回桌面</string>
@@ -87,6 +92,9 @@
     <string name="selection_none">无</string>
     <string name="appearance_summary_format">%1$s / %2$s</string>
     <string name="settings_number_warn">请输入一个正确的数字！</string>
+    <string name="main_batch_edit">编辑选中的图片</string>
+    <string name="main_batch_select_all">全选图片</string>
+    <string name="main_batch_select_picture">选择图片用于批量编辑</string>
     <string name="settings_picture_degree">设置图片显示角度</string>
     <string name="settings_picture_degree_sum">旋转图片到任意角度</string>
     <string name="degree">角度：</string>

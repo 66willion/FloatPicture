@@ -2,6 +2,7 @@ package tool.xfy9326.floatpicture.View;
 
 import android.view.View;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.ImageView;
 import android.widget.TextView;
 
@@ -19,6 +20,7 @@ public class ManageListViewHolder extends AdvancedRecyclerView.ViewHolder {
     final TextView textView_Picture_Error;
     final Button button_Picture_Edit;
     final Button button_Picture_Delete;
+    final CheckBox checkBox_Picture_Select;
 
     ManageListViewHolder(View mView) {
         super(mView);
@@ -29,5 +31,6 @@ public class ManageListViewHolder extends AdvancedRecyclerView.ViewHolder {
         textView_Picture_Error = mView.findViewById(R.id.adapter_picture_error);
         button_Picture_Edit = mView.findViewById(R.id.adapter_picture_edit);
         button_Picture_Delete = mView.findViewById(R.id.adapter_picture_delete);
+        checkBox_Picture_Select = mView.findViewById(R.id.adapter_picture_select);
     }
 }

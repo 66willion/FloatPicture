@@ -11,6 +11,7 @@
     <string name="permission_warn_overlay_intent">Please give overlay permission!</string>
     <string name="adapter_image_description">Picture Preview</string>
     <string name="settings_label">Picture Settings</string>
+    <string name="settings_batch_label">Batch Picture Settings</string>
     <string name="settings_general">General Settings</string>
     <string name="settings_picture_name">Picture name</string>
     <string name="settings_picture_name_warn">Please input a correct picture name!</string>
@@ -22,6 +23,7 @@
     <string name="settings_picture_resize_size">Size:</string>
     <string name="settings_picture_fit_screen_height">Fill screen height</string>
     <string name="settings_picture_fit_screen_height_sum">Resize the picture to touch the top and bottom of the screen and set Y to 0.</string>
+    <string name="settings_picture_fit_screen_height_batch_pending">Will fill screen height after saving.</string>
     <string name="settings_picture_replace">Replace picture</string>
     <string name="settings_picture_replace_sum">Replace the image for this item while keeping current settings.</string>
     <string name="settings_window">Window Settings</string>
@@ -37,6 +39,9 @@
     <string name="action_random_window_no_candidate">No picture available for random display.</string>
     <string name="action_random_window_failed">Random display failed. Please try again.</string>
     <string name="action_close_all_windows_success">All picture windows closed.</string>
+    <string name="action_batch_settings_saved">Batch settings saved.</string>
+    <string name="action_batch_edit_no_selection">Select at least one picture first.</string>
+    <string name="action_batch_import_failed">No images were imported.</string>
     <string name="new_picture_name">New Picture</string>
     <string name="settings_global_label">Global Settings</string>
     <string name="action_warn_double_click_close_application">Double click to close application.</string>
@@ -86,6 +91,9 @@
     <string name="selection_none">None</string>
     <string name="appearance_summary_format">%1$s / %2$s</string>
     <string name="settings_number_warn">Please input a correct number!</string>
+    <string name="main_batch_edit">Edit selected pictures</string>
+    <string name="main_batch_select_all">Select all pictures</string>
+    <string name="main_batch_select_picture">Select picture for batch edit</string>
     <string name="settings_picture_degree">Set picture show degree</string>
     <string name="settings_picture_degree_sum">Rotate picture to any degree</string>
     <string name="degree">Degree:</string>

@@ -1,6 +1,7 @@
 package tool.xfy9326.floatpicture.Activities;
 
 import android.os.Bundle;
+import android.view.View;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.ActionBar;
@@ -23,6 +24,10 @@ public class GlobalSettingsActivity extends AppCompatActivity {
     }
 
     private void ViewSet() {
+        View saveButtonContainer = findViewById(R.id.picture_settings_button_save_container);
+        if (saveButtonContainer != null) {
+            saveButtonContainer.setVisibility(View.GONE);
+        }
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
         ActionBar actionBar = getSupportActionBar();

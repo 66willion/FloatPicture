@@ -99,6 +99,33 @@
 
     </FrameLayout>
 
+    <FrameLayout
+        android:id="@+id/main_batch_select_all_container"
+        android:layout_width="54dp"
+        android:layout_height="54dp"
+        android:layout_gravity="top|start"
+        android:layout_marginStart="74dp"
+        android:layout_marginTop="12dp"
+        android:background="@drawable/bg_floating_black_circle"
+        android:clipToOutline="true"
+        android:elevation="18dp"
+        android:translationZ="18dp"
+        android:visibility="gone">
+
+        <com.google.android.material.checkbox.MaterialCheckBox
+            android:id="@+id/main_check_batch_select_all"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:buttonTint="@color/colorPromptText"
+            android:contentDescription="@string/main_batch_select_all"
+            android:gravity="center"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:padding="0dp"
+            android:text="" />
+
+    </FrameLayout>
+
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/main_layout_actions"
         android:layout_width="144dp"

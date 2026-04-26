@@ -9,6 +9,7 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.widget.AppCompatImageView;
 
 import tool.xfy9326.floatpicture.Methods.WindowsMethods;
+import tool.xfy9326.floatpicture.Utils.AppExecutors;
 import tool.xfy9326.floatpicture.Utils.Config;
 import tool.xfy9326.floatpicture.Utils.OverlayRuntimeStateStore;
 
@@ -20,6 +21,7 @@ public class FloatImageView extends AppCompatImageView {
     /** 实际写入 LayoutParams.alpha 的值，由 WindowsMethods 在每次 updateViewLayout 后同步。
      *  拖动时直接复用此值，避免绕开多窗口联合透明度公式。 */
     private float layoutAlpha = Config.DATA_DEFAULT_PICTURE_ALPHA;
+    private long displayBitmapVersion = 0L;
     private WindowManager attachedWindowManager;
 
     private float mTouchStartX = 0;
@@ -81,6 +83,14 @@ public class FloatImageView extends AppCompatImageView {
         return attachedWindowManager;
     }
 
+    public long getDisplayBitmapVersion() {
+        return displayBitmapVersion;
+    }
+
+    public void setDisplayBitmapVersion(long displayBitmapVersion) {
+        this.displayBitmapVersion = displayBitmapVersion;
+    }
+
     @SuppressLint("ClickableViewAccessibility")
     @Override
     public boolean onTouchEvent(MotionEvent event) {
@@ -99,7 +109,7 @@ public class FloatImageView extends AppCompatImageView {
                 case MotionEvent.ACTION_UP -> {
                     getNowPosition();
                     updatePosition();
-                    OverlayRuntimeStateStore.saveWindowPosition(getContext(), PictureId, (int) mNowPositionX, (int) mNowPositionY);
+                    saveWindowPositionAsync((int) mNowPositionX, (int) mNowPositionY);
                     mTouchStartX = mTouchStartY = 0;
                 }
             }
@@ -128,6 +138,12 @@ public class FloatImageView extends AppCompatImageView {
         params.alpha = layoutAlpha;
         WindowManager windowManager = attachedWindowManager != null ? attachedWindowManager : WindowsMethods.getWindowManager(getContext());
         windowManager.updateViewLayout(this, params);
+    }
+
+    private void saveWindowPositionAsync(int positionX, int positionY) {
+        String pictureId = PictureId;
+        Context appContext = getContext().getApplicationContext() != null ? getContext().getApplicationContext() : getContext();
+        AppExecutors.io().execute(() -> OverlayRuntimeStateStore.saveWindowPosition(appContext, pictureId, positionX, positionY));
     }
 
 }

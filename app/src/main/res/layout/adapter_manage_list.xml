@@ -94,57 +94,59 @@
                     android:textSize="12sp"
                     android:visibility="gone" />
 
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:gravity="end"
-                    android:orientation="horizontal">
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/adapter_picture_edit"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
-                        android:layout_width="42dp"
-                        android:layout_height="42dp"
-                        android:minWidth="0dp"
-                        android:minHeight="0dp"
-                        android:padding="0dp"
-                        android:text=""
-                        android:textAllCaps="false"
-                        app:backgroundTint="@color/colorPromptBackground"
-                        app:cornerRadius="21dp"
-                        app:icon="@drawable/ic_edit"
-                        app:iconGravity="textStart"
-                        app:iconPadding="0dp"
-                        app:iconSize="19dp"
-                        app:iconTint="@color/colorPromptText"
-                        app:strokeColor="@color/colorPromptText"
-                        app:strokeWidth="1dp" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/adapter_picture_delete"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
-                        android:layout_width="42dp"
-                        android:layout_height="42dp"
-                        android:layout_marginStart="10dp"
-                        android:minWidth="0dp"
-                        android:minHeight="0dp"
-                        android:padding="0dp"
-                        android:text=""
-                        android:textAllCaps="false"
-                        app:backgroundTint="@color/colorPromptBackground"
-                        app:cornerRadius="21dp"
-                        app:icon="@drawable/ic_delete"
-                        app:iconGravity="textStart"
-                        app:iconPadding="0dp"
-                        app:iconSize="19dp"
-                        app:iconTint="@color/colorPromptText"
-                        app:strokeColor="@color/colorPromptText"
-                        app:strokeWidth="1dp" />
-
-                </LinearLayout>
-
             </LinearLayout>
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="42dp"
+            android:layout_gravity="bottom|end"
+            android:layout_marginEnd="14dp"
+            android:layout_marginBottom="14dp"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/adapter_picture_edit"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="42dp"
+                android:layout_height="42dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:padding="0dp"
+                android:text=""
+                android:textAllCaps="false"
+                app:backgroundTint="@color/colorPromptBackground"
+                app:cornerRadius="21dp"
+                app:icon="@drawable/ic_edit"
+                app:iconGravity="textStart"
+                app:iconPadding="0dp"
+                app:iconSize="19dp"
+                app:iconTint="@color/colorPromptText"
+                app:strokeColor="@color/colorPromptText"
+                app:strokeWidth="1dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/adapter_picture_delete"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="42dp"
+                android:layout_height="42dp"
+                android:layout_marginStart="10dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:padding="0dp"
+                android:text=""
+                android:textAllCaps="false"
+                app:backgroundTint="@color/colorPromptBackground"
+                app:cornerRadius="21dp"
+                app:icon="@drawable/ic_delete"
+                app:iconGravity="textStart"
+                app:iconPadding="0dp"
+                app:iconSize="19dp"
+                app:iconTint="@color/colorPromptText"
+                app:strokeColor="@color/colorPromptText"
+                app:strokeWidth="1dp" />
 
         </LinearLayout>
 

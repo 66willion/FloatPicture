@@ -2,9 +2,9 @@ package tool.xfy9326.floatpicture.View;
 
 import android.content.Context;
 import android.util.AttributeSet;
-import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.widget.FrameLayout;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.widget.AppCompatImageButton;
@@ -13,12 +13,14 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import tool.xfy9326.floatpicture.R;
 
-public class RecyclerFastScrollerView extends android.widget.LinearLayout {
+public class RecyclerFastScrollerView extends FrameLayout {
     private static final int MIN_FAST_SCROLL_ITEM_COUNT = 1;
     private static final float PAGE_JUMP_RATIO = 0.85f;
     private static final float MIN_PAGE_JUMP_DP = 64f;
     private static final float SCROLLER_TRANSLATION_Z_DP = 18f;
     private static final int DIRECT_JUMP_DISTANCE_THRESHOLD = 12;
+    private static final long AUTO_HIDE_DELAY_MS = 1500L;
+    private static final long FADE_DURATION_MS = 160L;
 
     private final RecyclerView.AdapterDataObserver adapterDataObserver = new RecyclerView.AdapterDataObserver() {
         @Override
@@ -49,16 +51,27 @@ public class RecyclerFastScrollerView extends android.widget.LinearLayout {
     private final RecyclerView.OnScrollListener scrollListener = new RecyclerView.OnScrollListener() {
         @Override
         public void onScrolled(RecyclerView recyclerView, int dx, int dy) {
-            trackView.refreshState();
+            showTransientScroller();
+        }
+
+        @Override
+        public void onScrollStateChanged(RecyclerView recyclerView, int newState) {
+            if (newState == RecyclerView.SCROLL_STATE_IDLE) {
+                scheduleAutoHide();
+            } else {
+                showTransientScroller();
+            }
         }
     };
     private final View.OnLayoutChangeListener layoutChangeListener = (v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> refreshScrollerState();
+    private final Runnable hideRunnable = this::hideScroller;
 
     private RecyclerView recyclerView;
     private RecyclerView.Adapter<?> observedAdapter;
     private AppCompatImageButton scrollToTopButton;
     private AppCompatImageButton scrollToBottomButton;
     private RecyclerFastScrollTrackView trackView;
+    private boolean trackInteracting = false;
 
     public RecyclerFastScrollerView(Context context) {
         super(context);
@@ -76,8 +89,6 @@ public class RecyclerFastScrollerView extends android.widget.LinearLayout {
     }
 
     private void init(Context context) {
-        setOrientation(VERTICAL);
-        setGravity(Gravity.CENTER_HORIZONTAL);
         LayoutInflater.from(context).inflate(R.layout.widget_recycler_fast_scroller, this, true);
         scrollToTopButton = findViewById(R.id.fast_scroller_button_top);
         scrollToBottomButton = findViewById(R.id.fast_scroller_button_bottom);
@@ -88,18 +99,26 @@ public class RecyclerFastScrollerView extends android.widget.LinearLayout {
         trackView.setInteractionListener(new RecyclerFastScrollTrackView.InteractionListener() {
             @Override
             public void onTrackMoved() {
+                trackInteracting = true;
                 trackView.refreshState();
+                showScroller();
             }
 
             @Override
             public void onTrackReleased() {
+                trackInteracting = false;
                 if (recyclerView == null) {
                     refreshScrollerState();
                     return;
                 }
                 recyclerView.post(RecyclerFastScrollerView.this::refreshScrollerState);
+                scheduleAutoHide();
             }
         });
+        setClipChildren(false);
+        setClipToPadding(false);
+        setClickable(false);
+        setAlpha(0f);
         setVisibility(GONE);
     }
 
@@ -112,7 +131,7 @@ public class RecyclerFastScrollerView extends android.widget.LinearLayout {
         this.recyclerView = recyclerView;
         trackView.attachToRecyclerView(recyclerView);
         if (recyclerView == null) {
-            setVisibility(GONE);
+            hideImmediately();
             return;
         }
         recyclerView.addOnScrollListener(scrollListener);
@@ -131,14 +150,15 @@ public class RecyclerFastScrollerView extends android.widget.LinearLayout {
             if (recyclerView == null) {
                 return;
             }
-            boolean visible = shouldShowScroller();
-            setVisibility(visible ? VISIBLE : GONE);
-            if (visible) {
+            if (!shouldShowScroller()) {
+                hideImmediately();
+                return;
+            }
+            if (getVisibility() == VISIBLE) {
+                updateControlVisibility();
                 bringToFront();
                 setTranslationZ(dpToPx(SCROLLER_TRANSLATION_Z_DP));
             }
-            scrollToTopButton.setEnabled(visible);
-            scrollToBottomButton.setEnabled(visible);
             trackView.refreshState();
         });
     }
@@ -155,7 +175,9 @@ public class RecyclerFastScrollerView extends android.widget.LinearLayout {
         }
         recyclerView.stopScroll();
         scrollToPosition(0);
+        showScroller();
         recyclerView.post(this::refreshScrollerState);
+        scheduleAutoHide();
     }
 
     private void scrollToBottom() {
@@ -168,7 +190,9 @@ public class RecyclerFastScrollerView extends android.widget.LinearLayout {
         }
         recyclerView.stopScroll();
         scrollToPosition(itemCount - 1);
+        showScroller();
         recyclerView.post(this::refreshScrollerState);
+        scheduleAutoHide();
     }
 
     private void pageJumpByDirection(int direction) {
@@ -179,14 +203,95 @@ public class RecyclerFastScrollerView extends android.widget.LinearLayout {
         int pageDistance = Math.max(Math.round(extent * PAGE_JUMP_RATIO), dpToPx(MIN_PAGE_JUMP_DP));
         recyclerView.stopScroll();
         recyclerView.smoothScrollBy(0, direction * pageDistance);
+        showScroller();
         recyclerView.post(this::refreshScrollerState);
+        scheduleAutoHide();
     }
 
     private boolean shouldShowScroller() {
         if (recyclerView == null || recyclerView.getAdapter() == null) {
             return false;
         }
-        return recyclerView.getAdapter().getItemCount() >= MIN_FAST_SCROLL_ITEM_COUNT;
+        return recyclerView.getAdapter().getItemCount() >= MIN_FAST_SCROLL_ITEM_COUNT
+                && recyclerView.computeVerticalScrollRange() > recyclerView.computeVerticalScrollExtent() + 1;
+    }
+
+    private void showTransientScroller() {
+        if (!shouldShowScroller()) {
+            hideImmediately();
+            return;
+        }
+        showScroller();
+        if (recyclerView == null || recyclerView.getScrollState() == RecyclerView.SCROLL_STATE_IDLE) {
+            scheduleAutoHide();
+        } else {
+            removeCallbacks(hideRunnable);
+        }
+    }
+
+    private void showScroller() {
+        if (!shouldShowScroller()) {
+            hideImmediately();
+            return;
+        }
+        removeCallbacks(hideRunnable);
+        updateControlVisibility();
+        bringToFront();
+        setTranslationZ(dpToPx(SCROLLER_TRANSLATION_Z_DP));
+        if (getVisibility() != VISIBLE) {
+            setVisibility(VISIBLE);
+            setAlpha(0f);
+        }
+        animate().cancel();
+        animate().alpha(1f).setDuration(FADE_DURATION_MS).start();
+        trackView.refreshState();
+    }
+
+    private void hideScroller() {
+        if (trackInteracting) {
+            scheduleAutoHide();
+            return;
+        }
+        animate().cancel();
+        animate()
+                .alpha(0f)
+                .setDuration(FADE_DURATION_MS)
+                .withEndAction(() -> {
+                    if (getAlpha() == 0f) {
+                        setVisibility(GONE);
+                    }
+                })
+                .start();
+    }
+
+    private void hideImmediately() {
+        removeCallbacks(hideRunnable);
+        animate().cancel();
+        setAlpha(0f);
+        setVisibility(GONE);
+        scrollToTopButton.setVisibility(GONE);
+        scrollToBottomButton.setVisibility(GONE);
+    }
+
+    private void scheduleAutoHide() {
+        removeCallbacks(hideRunnable);
+        postDelayed(hideRunnable, AUTO_HIDE_DELAY_MS);
+    }
+
+    private void updateControlVisibility() {
+        if (recyclerView == null || !shouldShowScroller()) {
+            scrollToTopButton.setVisibility(GONE);
+            scrollToBottomButton.setVisibility(GONE);
+            trackView.setVisibility(GONE);
+            return;
+        }
+        boolean canScrollUp = recyclerView.canScrollVertically(-1);
+        boolean canScrollDown = recyclerView.canScrollVertically(1);
+        scrollToTopButton.setVisibility(canScrollUp ? VISIBLE : GONE);
+        scrollToBottomButton.setVisibility(canScrollDown ? VISIBLE : GONE);
+        scrollToTopButton.setEnabled(canScrollUp);
+        scrollToBottomButton.setEnabled(canScrollDown);
+        trackView.setVisibility(VISIBLE);
     }
 
     private void scrollToPosition(int targetPosition) {
@@ -242,6 +347,7 @@ public class RecyclerFastScrollerView extends android.widget.LinearLayout {
         observeAdapter(null);
         recyclerView = null;
         trackView.attachToRecyclerView(null);
+        hideImmediately();
     }
 
     private int dpToPx(float dp) {

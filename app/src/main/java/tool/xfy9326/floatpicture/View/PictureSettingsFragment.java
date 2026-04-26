@@ -1,5 +1,8 @@
 package tool.xfy9326.floatpicture.View;
 
+import static tool.xfy9326.floatpicture.View.PictureSettingsValueFormatter.formatRatioPercent;
+import static tool.xfy9326.floatpicture.View.PictureSettingsValueFormatter.roundToThreeDecimals;
+
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -8,14 +11,10 @@ import android.graphics.Point;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.text.InputType;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.WindowManager;
-import android.widget.CheckBox;
 import android.widget.EditText;
-import android.widget.SeekBar;
-import android.widget.TextView;
 
 import android.util.Log;
 
@@ -31,8 +30,6 @@ import androidx.preference.SwitchPreferenceCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.Locale;
 import java.util.Objects;
 
 import tool.xfy9326.floatpicture.MainApplication;
@@ -41,13 +38,11 @@ import tool.xfy9326.floatpicture.Methods.ImageMethods;
 import tool.xfy9326.floatpicture.Methods.OverlayRuntimeController;
 import tool.xfy9326.floatpicture.Methods.WindowsMethods;
 import tool.xfy9326.floatpicture.R;
+import tool.xfy9326.floatpicture.Utils.AppExecutors;
 import tool.xfy9326.floatpicture.Utils.Config;
-import tool.xfy9326.floatpicture.Utils.OverlayRuntimeStateStore;
 import tool.xfy9326.floatpicture.Utils.PictureData;
 
 public class PictureSettingsFragment extends PreferenceFragmentCompat {
-    private static final int THREE_DECIMAL_SCALE = 1000;
-    private static final int PERCENT_SCALE = 100;
     private static final int MAX_CORNER_RADIUS_PERCENT = 25;
     private static final int MAX_EDGE_FEATHER_PERCENT = 15;
     private static final float BATCH_MAX_ZOOM = 10f;
@@ -61,6 +56,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
     private String PictureId;
     private String PictureName;
     private WindowManager windowManager;
+    private PictureSettingsDialogController settingsDialogController;
     private ActivityResultLauncher<String> replacePictureLauncher;
     private volatile FloatImageView floatImageView;
     private Bitmap bitmap;
@@ -69,23 +65,14 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
     private boolean touch_and_move;
     private float default_zoom;
     private float zoom;
-    private float zoom_temp;
     private float picture_degree;
-    private float picture_degree_temp;
     private float picture_alpha;
-    private float picture_alpha_temp;
     private float picture_corner_radius_ratio;
-    private float picture_corner_radius_ratio_temp;
     private int picture_corner_radius_mask;
-    private int picture_corner_radius_mask_temp;
     private float picture_edge_feather_ratio;
-    private float picture_edge_feather_ratio_temp;
     private int picture_edge_feather_mask;
-    private int picture_edge_feather_mask_temp;
     private int position_x;
     private int position_y;
-    private int position_x_temp;
-    private int position_y_temp;
     private boolean allow_picture_over_layout;
     private ArrayList<String> batchPictureIds = new ArrayList<>();
     private boolean batchZoomChanged = false;
@@ -95,6 +82,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
     private boolean batchCornerRadiusChanged = false;
     private boolean batchEdgeFeatherChanged = false;
     private boolean batchPositionChanged = false;
+    private boolean positionChanged = false;
     private boolean batchTouchAndMoveChanged = false;
     private boolean batchOverLayoutChanged = false;
     /** 进入编辑时窗口是否处于隐藏状态；编辑完成后恢复该状态 */
@@ -112,6 +100,55 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         pictureData = new PictureData();
         inflater = LayoutInflater.from(requireActivity());
         windowManager = WindowsMethods.getWindowManager(requireActivity());
+        settingsDialogController = new PictureSettingsDialogController(
+                this,
+                inflater,
+                new PictureSettingsDialogController.Callbacks() {
+                    @Override
+                    public void showPreview(float zoom,
+                                            float degree,
+                                            float alpha,
+                                            float cornerRadiusRatio,
+                                            int cornerRadiusMask,
+                                            float edgeFeatherRatio,
+                                            int edgeFeatherMask,
+                                            int positionX,
+                                            int positionY,
+                                            boolean touchAndMove,
+                                            boolean overLayout,
+                                            int previewMode,
+                                            boolean reloadSource,
+                                            boolean useRuntimePosition) {
+                        PictureSettingsFragment.this.showPreview(
+                                zoom,
+                                degree,
+                                alpha,
+                                cornerRadiusRatio,
+                                cornerRadiusMask,
+                                edgeFeatherRatio,
+                                edgeFeatherMask,
+                                positionX,
+                                positionY,
+                                touchAndMove,
+                                overLayout,
+                                previewMode,
+                                reloadSource,
+                                useRuntimePosition
+                        );
+                    }
+
+                    @Override
+                    public void showWorkingWindowPreview(float alpha) {
+                        PictureSettingsFragment.this.showWorkingWindowPreview(alpha);
+                    }
+
+                    @NonNull
+                    @Override
+                    public Point getPreviewPosition(int fallbackX, int fallbackY) {
+                        return PictureSettingsFragment.this.getPreviewPosition(fallbackX, fallbackY);
+                    }
+                }
+        );
         replacePictureLauncher = registerForActivityResult(new ActivityResultContracts.GetContent(), this::onReplacementPictureSelected);
     }
 
@@ -164,118 +201,81 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         View mView = inflater.inflate(R.layout.dialog_loading, requireActivity().findViewById(R.id.layout_dialog_loading));
         loading.setView(mView);
         final AlertDialog alertDialog = loading.show();
-        new Thread(() -> {
-                if (Edit_Mode) {
-                    //Edit
-                    PictureId = intent.getStringExtra(Config.INTENT_PICTURE_EDIT_ID);
-                    if (PictureId == null) {
-                        finishWithError(alertDialog);
-                        return;
-                    }
-                    pictureData.setDataControl(PictureId);
-                    LinkedHashMap<String, String> listArray = pictureData.getListArray();
-                    if (listArray == null || !listArray.containsKey(PictureId)) {
-                        finishWithError(alertDialog);
-                        return;
-                    }
-                    PictureName = listArray.get(PictureId);
-                    position_x = pictureData.getInt(Config.DATA_PICTURE_POSITION_X, Config.DATA_DEFAULT_PICTURE_POSITION_X);
-                    position_y = pictureData.getInt(Config.DATA_PICTURE_POSITION_Y, Config.DATA_DEFAULT_PICTURE_POSITION_Y);
-                    picture_degree = pictureData.getFloat(Config.DATA_PICTURE_DEGREE, Config.DATA_DEFAULT_PICTURE_DEGREE);
-                    picture_alpha = pictureData.getFloat(Config.DATA_PICTURE_ALPHA, Config.DATA_DEFAULT_PICTURE_ALPHA);
-                    picture_corner_radius_ratio = pictureData.getFloat(Config.DATA_PICTURE_CORNER_RADIUS_RATIO, Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_RATIO);
-                    picture_corner_radius_mask = pictureData.getInt(Config.DATA_PICTURE_CORNER_RADIUS_MASK, Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_MASK);
-                    picture_edge_feather_ratio = pictureData.getFloat(Config.DATA_PICTURE_EDGE_FEATHER_RATIO, Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_RATIO);
-                    picture_edge_feather_mask = pictureData.getInt(Config.DATA_PICTURE_EDGE_FEATHER_MASK, Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_MASK);
-                    touch_and_move = pictureData.getBoolean(Config.DATA_PICTURE_TOUCH_AND_MOVE, Config.DATA_DEFAULT_PICTURE_TOUCH_AND_MOVE);
-                    allow_picture_over_layout = pictureData.getBoolean(Config.DATA_ALLOW_PICTURE_OVER_LAYOUT, Config.DATA_DEFAULT_ALLOW_PICTURE_OVER_LAYOUT);
-                    bitmap = loadCurrentSourceBitmap();
-                    if (bitmap == null) {
-                        finishWithError(alertDialog);
-                        return;
-                    }
-                    default_zoom = ImageMethods.getDefaultZoom(requireContext(), bitmap, false);
-                    zoom = pictureData.getFloat(Config.DATA_PICTURE_ZOOM, default_zoom);
-                } else {
-                    //New
-                    PictureId = ImageMethods.setNewImage(requireActivity(), intent.getData());
-                    if (PictureId == null) {
-                        finishWithError(alertDialog);
-                        return;
-                    }
-                    pictureData.setDataControl(PictureId);
-                    PictureName = getString(R.string.new_picture_name);
-                    position_x = Config.DATA_DEFAULT_PICTURE_POSITION_X;
-                    position_y = Config.DATA_DEFAULT_PICTURE_POSITION_Y;
-                    picture_alpha = Config.DATA_DEFAULT_PICTURE_ALPHA;
-                    picture_degree = Config.DATA_DEFAULT_PICTURE_DEGREE;
-                    picture_corner_radius_ratio = Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_RATIO;
-                    picture_corner_radius_mask = Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_MASK;
-                    picture_edge_feather_ratio = Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_RATIO;
-                    picture_edge_feather_mask = Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_MASK;
-                    touch_and_move = Config.DATA_DEFAULT_PICTURE_TOUCH_AND_MOVE;
-                    allow_picture_over_layout = Config.DATA_DEFAULT_ALLOW_PICTURE_OVER_LAYOUT;
-                    bitmap = ImageMethods.getEditSourceBitmap(requireContext(), PictureId);
-                    if (bitmap == null) {
-                        finishWithError(alertDialog);
-                        return;
-                    }
-                    default_zoom = ImageMethods.getDefaultZoom(requireContext(), bitmap, false);
-                    zoom = default_zoom;
+        final Context appContext = requireContext().getApplicationContext();
+        final boolean editMode = Edit_Mode;
+        final String newPictureName = getString(R.string.new_picture_name);
+        AppExecutors.io().execute(() -> {
+                PictureSettingsLoader.LoadedSettings loadedSettings =
+                        PictureSettingsLoader.loadSingle(appContext, intent, pictureData, editMode, newPictureName);
+                if (loadedSettings == null) {
+                    finishWithError(alertDialog);
+                    return;
                 }
                 if (shouldAbortFragmentWork()) {
+                    discardLoadedSettings(appContext, loadedSettings);
                     dismissDialogIfShowing(alertDialog);
                     return;
                 }
                 requireActivity().runOnUiThread(() -> {
                     if (shouldAbortFragmentWork()) {
+                        discardLoadedSettings(appContext, loadedSettings);
                         dismissDialogIfShowing(alertDialog);
                         return;
                     }
+                    applyLoadedSettings(loadedSettings);
                     bindPreferenceValues();
                     updatePicturePreferenceVisibility();
                     showWorkingWindowPreview(picture_alpha);
                     dismissDialogIfShowing(alertDialog);
                 });
-        }).start();
+        });
     }
 
     private void initializeBatchMode(Intent intent) {
         requireActivity().setTitle(R.string.settings_batch_label);
         Edit_Mode = false;
         wasHidden = false;
-        ArrayList<String> requestedIds = intent.getStringArrayListExtra(Config.INTENT_PICTURE_BATCH_EDIT_IDS);
-        LinkedHashMap<String, String> listArray = pictureData.getListArray();
-        batchPictureIds.clear();
-        if (requestedIds != null && listArray != null) {
-            for (String pictureId : requestedIds) {
-                if (pictureId != null && listArray.containsKey(pictureId) && !batchPictureIds.contains(pictureId)) {
-                    batchPictureIds.add(pictureId);
-                }
-            }
-        }
-        if (batchPictureIds.isEmpty()) {
+        PictureSettingsLoader.LoadedSettings loadedSettings =
+                PictureSettingsLoader.loadBatch(intent, pictureData, getString(R.string.settings_batch_label));
+        if (loadedSettings == null) {
             ApplicationMethods.showToast(requireContext(), R.string.action_batch_edit_no_selection);
             requireActivity().finish();
             return;
         }
-        pictureData.setDataControl(batchPictureIds.get(0));
-        PictureId = null;
-        PictureName = getString(R.string.settings_batch_label);
-        position_x = pictureData.getInt(Config.DATA_PICTURE_POSITION_X, Config.DATA_DEFAULT_PICTURE_POSITION_X);
-        position_y = pictureData.getInt(Config.DATA_PICTURE_POSITION_Y, Config.DATA_DEFAULT_PICTURE_POSITION_Y);
-        picture_degree = pictureData.getFloat(Config.DATA_PICTURE_DEGREE, Config.DATA_DEFAULT_PICTURE_DEGREE);
-        picture_alpha = pictureData.getFloat(Config.DATA_PICTURE_ALPHA, Config.DATA_DEFAULT_PICTURE_ALPHA);
-        picture_corner_radius_ratio = pictureData.getFloat(Config.DATA_PICTURE_CORNER_RADIUS_RATIO, Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_RATIO);
-        picture_corner_radius_mask = pictureData.getInt(Config.DATA_PICTURE_CORNER_RADIUS_MASK, Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_MASK);
-        picture_edge_feather_ratio = pictureData.getFloat(Config.DATA_PICTURE_EDGE_FEATHER_RATIO, Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_RATIO);
-        picture_edge_feather_mask = pictureData.getInt(Config.DATA_PICTURE_EDGE_FEATHER_MASK, Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_MASK);
-        touch_and_move = pictureData.getBoolean(Config.DATA_PICTURE_TOUCH_AND_MOVE, Config.DATA_DEFAULT_PICTURE_TOUCH_AND_MOVE);
-        allow_picture_over_layout = pictureData.getBoolean(Config.DATA_ALLOW_PICTURE_OVER_LAYOUT, Config.DATA_DEFAULT_ALLOW_PICTURE_OVER_LAYOUT);
-        default_zoom = 1f;
-        zoom = pictureData.getFloat(Config.DATA_PICTURE_ZOOM, default_zoom);
+        applyLoadedSettings(loadedSettings);
         bindPreferenceValues();
         updatePicturePreferenceVisibility();
+    }
+
+    private void applyLoadedSettings(@NonNull PictureSettingsLoader.LoadedSettings loadedSettings) {
+        PictureSettingsLoader.SettingsSnapshot snapshot = loadedSettings.snapshot;
+        PictureId = loadedSettings.pictureId;
+        PictureName = loadedSettings.pictureName;
+        bitmap = loadedSettings.bitmap;
+        batchPictureIds.clear();
+        if (loadedSettings.batchPictureIds != null) {
+            batchPictureIds.addAll(loadedSettings.batchPictureIds);
+        }
+        position_x = snapshot.positionX;
+        position_y = snapshot.positionY;
+        picture_degree = snapshot.pictureDegree;
+        picture_alpha = snapshot.pictureAlpha;
+        picture_corner_radius_ratio = snapshot.cornerRadiusRatio;
+        picture_corner_radius_mask = snapshot.cornerRadiusMask;
+        picture_edge_feather_ratio = snapshot.edgeFeatherRatio;
+        picture_edge_feather_mask = snapshot.edgeFeatherMask;
+        touch_and_move = snapshot.touchAndMove;
+        allow_picture_over_layout = snapshot.allowPictureOverLayout;
+        default_zoom = snapshot.defaultZoom;
+        zoom = snapshot.zoom;
+    }
+
+    private void discardLoadedSettings(@NonNull Context appContext,
+                                       @NonNull PictureSettingsLoader.LoadedSettings loadedSettings) {
+        ImageMethods.recycleBitmap(loadedSettings.bitmap);
+        if (loadedSettings.newPicture && loadedSettings.pictureId != null) {
+            ImageMethods.clearAllTemp(appContext, loadedSettings.pictureId);
+        }
     }
 
     @NonNull
@@ -367,13 +367,12 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
 
     @Nullable
     private Bitmap loadCurrentSourceBitmap() {
-        if (Edit_Mode && PictureId != null) {
-            Bitmap pendingBitmap = ImageMethods.getPendingEditSourceBitmap(PictureId);
-            if (pendingBitmap != null) {
-                return pendingBitmap;
-            }
-        }
-        return ImageMethods.getEditSourceBitmap(requireContext(), PictureId);
+        return loadCurrentSourceBitmap(requireContext());
+    }
+
+    @Nullable
+    private Bitmap loadCurrentSourceBitmap(Context context) {
+        return PictureSettingsLoader.loadCurrentSourceBitmap(context, Edit_Mode, PictureId);
     }
 
     private boolean ensureSourceBitmapLoaded() {
@@ -506,7 +505,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         View loadingView = inflater.inflate(R.layout.dialog_loading, requireActivity().findViewById(R.id.layout_dialog_loading));
         loading.setView(loadingView);
         final AlertDialog alertDialog = loading.show();
-        new Thread(() -> {
+        AppExecutors.io().execute(() -> {
             if (!ImageMethods.stageReplacementImage(appContext, PictureId, uri)) {
                 notifyReplacePictureFailed(alertDialog);
                 return;
@@ -540,7 +539,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                 showWorkingWindowPreview(picture_alpha, true);
                 ApplicationMethods.showToast(requireContext(), R.string.picture_settings_replace_success);
             });
-        }).start();
+        });
     }
 
     private void notifyReplacePictureFailed(AlertDialog alertDialog) {
@@ -563,108 +562,19 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         if (!Batch_Mode && !ensureSourceBitmapLoaded()) {
             return;
         }
-
-        View mView = inflater.inflate(R.layout.dialog_set_size, requireActivity().findViewById(R.id.layout_dialog_set_size));
-        AlertDialog.Builder dialog = new AlertDialog.Builder(requireContext());
-        dialog.setTitle(R.string.settings_picture_resize);
-        dialog.setCancelable(false);
         final float maxSize = Batch_Mode
                 ? Math.max(BATCH_MAX_ZOOM, roundToThreeDecimals(zoom))
                 : roundToThreeDecimals(ImageMethods.getDefaultZoom(requireContext(), bitmap, true));
-        TextView name = mView.findViewById(R.id.textview_set_size);
-        name.setText(R.string.settings_picture_resize_size);
-        final SeekBar seekBar = mView.findViewById(R.id.seekbar_set_size);
-        seekBar.setMax(Math.max(1, toThreeDecimalProgress(maxSize)));
-        seekBar.setProgress(Math.max(1, Math.min(seekBar.getMax(), toThreeDecimalProgress(zoom))));
-        final EditText editText = mView.findViewById(R.id.edittext_set_size);
-        enableDecimalInput(editText);
-        editText.setText(formatThreeDecimal(zoom));
-        zoom_temp = roundToThreeDecimals(zoom);
-        seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                if (progress > 0) {
-                    zoom_temp = roundToThreeDecimals(((float) progress) / THREE_DECIMAL_SCALE);
-                    editText.setText(formatThreeDecimal(zoom_temp));
-                    showPreview(
-                            zoom_temp,
-                            picture_degree,
-                            picture_alpha,
-                            position_x,
-                            position_y,
-                            touch_and_move,
-                            allow_picture_over_layout,
-                            fromUser ? OverlayRuntimeController.PREVIEW_MODE_OUTLINE : OverlayRuntimeController.PREVIEW_MODE_FULL,
-                            false,
-                            touch_and_move
-                    );
-                }
-            }
-
-            @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {
-            }
-
-            @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
-                if (seekBar.getProgress() > 0) {
-                    showPreview(
-                            zoom_temp,
-                            picture_degree,
-                            picture_alpha,
-                            position_x,
-                            position_y,
-                            touch_and_move,
-                            allow_picture_over_layout,
-                            OverlayRuntimeController.PREVIEW_MODE_FULL,
-                            false,
-                            touch_and_move
-                    );
-                }
-            }
-        });
-        editText.setOnEditorActionListener((v, actionId, event) -> {
-            try {
-                float edittext_temp = roundToThreeDecimals(Float.parseFloat(v.getText().toString().trim()));
-                if (edittext_temp > 0 && (Batch_Mode || allow_picture_over_layout || edittext_temp <= maxSize)) {
-                    zoom_temp = edittext_temp;
-                    editText.setText(formatThreeDecimal(zoom_temp));
-                    boolean updatedBySeekBar = false;
-                    if (zoom_temp <= maxSize) {
-                        int progress = Math.max(1, Math.min(seekBar.getMax(), toThreeDecimalProgress(zoom_temp)));
-                        if (seekBar.getProgress() != progress) {
-                            seekBar.setProgress(progress);
-                            updatedBySeekBar = true;
-                        }
+        settingsDialogController.showSizeDialog(
+                new PictureSettingsDialogController.SizeDialogRequest(Batch_Mode, maxSize, createPreviewValues()),
+                value -> {
+                    zoom = value;
+                    if (Batch_Mode) {
+                        batchZoomChanged = true;
+                        batchFitScreenHeightChanged = false;
                     }
-                    if (!updatedBySeekBar) {
-                        showPreview(zoom_temp, picture_degree, picture_alpha, position_x, position_y, touch_and_move, allow_picture_over_layout, false, touch_and_move);
-                    }
-                } else {
-                    ApplicationMethods.showToast(requireContext(), R.string.settings_picture_resize_warn);
                 }
-            } catch (NumberFormatException ignored) {
-                ApplicationMethods.showToast(requireContext(), R.string.settings_number_warn);
-            }
-            return false;
-        });
-        dialog.setPositiveButton(R.string.done, (__, which) -> {
-            Float inputValue = parseThreeDecimalFloat(editText);
-            if (inputValue != null && inputValue > 0f && (Batch_Mode || allow_picture_over_layout || inputValue <= maxSize)) {
-                zoom = inputValue;
-            } else {
-                zoom = zoom_temp;
-            }
-            if (Batch_Mode) {
-                batchZoomChanged = true;
-                batchFitScreenHeightChanged = false;
-            }
-            showWorkingWindowPreview(picture_alpha);
-        });
-        dialog.setNegativeButton(R.string.cancel, (__, which) -> showWorkingWindowPreview(picture_alpha));
-        dialog.setView(mView);
-        AlertDialog alertDialog = dialog.show();
-        alertDialog.setOnDismissListener(d -> showWorkingWindowPreview(picture_alpha));
+        );
     }
 
     private void fitPictureToScreenHeight() {
@@ -689,6 +599,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         zoom = fittedZoom;
         position_x = currentPosition.x;
         position_y = 0;
+        positionChanged = true;
         showPreview(
                 zoom,
                 picture_degree,
@@ -706,443 +617,92 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         if (!Batch_Mode && !ensureSourceBitmapLoaded()) {
             return;
         }
-
-        View mView = inflater.inflate(R.layout.dialog_set_size, requireActivity().findViewById(R.id.layout_dialog_set_size));
-        AlertDialog.Builder dialog = new AlertDialog.Builder(requireContext());
-        dialog.setTitle(R.string.settings_picture_degree);
-        dialog.setCancelable(false);
-        TextView name = mView.findViewById(R.id.textview_set_size);
-        name.setText(R.string.degree);
-        final SeekBar seekBar = mView.findViewById(R.id.seekbar_set_size);
-        seekBar.setMax(360 * THREE_DECIMAL_SCALE);
-        seekBar.setProgress(Math.min(seekBar.getMax(), toThreeDecimalProgress(picture_degree)));
-        final EditText editText = mView.findViewById(R.id.edittext_set_size);
-        enableDecimalInput(editText);
-        editText.setText(formatThreeDecimal(picture_degree));
-        picture_degree_temp = roundToThreeDecimals(picture_degree);
-        seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                picture_degree_temp = roundToThreeDecimals(((float) progress) / THREE_DECIMAL_SCALE);
-                editText.setText(formatThreeDecimal(picture_degree_temp));
-                showPreview(
-                        zoom,
-                        picture_degree_temp,
-                        picture_alpha,
-                        position_x,
-                        position_y,
-                        touch_and_move,
-                        allow_picture_over_layout,
-                        fromUser ? OverlayRuntimeController.PREVIEW_MODE_LOW_RES : OverlayRuntimeController.PREVIEW_MODE_FULL,
-                        false,
-                        touch_and_move
-                );
-            }
-
-            @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {
-            }
-
-            @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
-                showPreview(
-                        zoom,
-                        picture_degree_temp,
-                        picture_alpha,
-                        position_x,
-                        position_y,
-                        touch_and_move,
-                        allow_picture_over_layout,
-                        OverlayRuntimeController.PREVIEW_MODE_FULL,
-                        false,
-                        touch_and_move
-                );
-            }
-        });
-        editText.setOnEditorActionListener((v, actionId, event) -> {
-            try {
-                float edittext_temp = roundToThreeDecimals(Float.parseFloat(v.getText().toString().trim()));
-                if (edittext_temp >= 0 && edittext_temp <= 360) {
-                    picture_degree_temp = edittext_temp;
-                    editText.setText(formatThreeDecimal(picture_degree_temp));
-                    int progress = Math.min(seekBar.getMax(), toThreeDecimalProgress(picture_degree_temp));
-                    if (seekBar.getProgress() != progress) {
-                        seekBar.setProgress(progress);
-                    } else {
-                        showPreview(zoom, picture_degree_temp, picture_alpha, position_x, position_y, touch_and_move, allow_picture_over_layout, false, touch_and_move);
-                    }
-                } else {
-                    ApplicationMethods.showToast(requireContext(), R.string.settings_number_warn);
-                }
-            } catch (NumberFormatException ignored) {
-                ApplicationMethods.showToast(requireContext(), R.string.settings_number_warn);
-            }
-            return false;
-        });
-        dialog.setPositiveButton(R.string.done, (__, which) -> {
-            Float inputValue = parseThreeDecimalFloat(editText);
-            if (inputValue != null && inputValue >= 0f && inputValue <= 360f) {
-                picture_degree = inputValue;
-            } else {
-                picture_degree = picture_degree_temp;
-            }
+        settingsDialogController.showDegreeDialog(createPreviewValues(), value -> {
+            picture_degree = value;
             if (Batch_Mode) {
                 batchDegreeChanged = true;
             }
-            showWorkingWindowPreview(picture_alpha);
         });
-        dialog.setNegativeButton(R.string.cancel, (__, which) -> showWorkingWindowPreview(picture_alpha));
-        dialog.setView(mView);
-        AlertDialog alertDialogDegree = dialog.show();
-        alertDialogDegree.setOnDismissListener(d -> showWorkingWindowPreview(picture_alpha));
     }
 
     // 方法名改为 showPictureAlphaDialog 避免与 FloatImageView.setPictureAlpha(float) 重名
     private void showPictureAlphaDialog() {
-        View mView = inflater.inflate(R.layout.dialog_set_size, requireActivity().findViewById(R.id.layout_dialog_set_size));
-        AlertDialog.Builder dialog = new AlertDialog.Builder(requireContext());
-        dialog.setTitle(R.string.settings_picture_alpha);
-        dialog.setCancelable(false);
-        TextView name = mView.findViewById(R.id.textview_set_size);
-        name.setText(R.string.transparency);
-        final SeekBar seekBar = mView.findViewById(R.id.seekbar_set_size);
-        seekBar.setMax(THREE_DECIMAL_SCALE);
-        seekBar.setProgress(Math.min(seekBar.getMax(), toThreeDecimalProgress(picture_alpha)));
-        final EditText editText = mView.findViewById(R.id.edittext_set_size);
-        enableDecimalInput(editText);
-        editText.setText(formatThreeDecimal(picture_alpha));
-        picture_alpha_temp = roundToThreeDecimals(picture_alpha);
-        seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                picture_alpha_temp = roundToThreeDecimals(((float) progress) / THREE_DECIMAL_SCALE);
-                editText.setText(formatThreeDecimal(picture_alpha_temp));
-                showWorkingWindowPreview(picture_alpha_temp);
-            }
-
-            @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {
-            }
-
-            @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
-            }
-        });
-        editText.setOnEditorActionListener((v, actionId, event) -> {
-            try {
-                float edittext_temp = roundToThreeDecimals(Float.parseFloat(v.getText().toString().trim()));
-                if (edittext_temp >= 0 && edittext_temp <= 1) {
-                    picture_alpha_temp = edittext_temp;
-                    editText.setText(formatThreeDecimal(picture_alpha_temp));
-                    int progress = Math.min(seekBar.getMax(), toThreeDecimalProgress(picture_alpha_temp));
-                    if (seekBar.getProgress() != progress) {
-                        seekBar.setProgress(progress);
-                    } else {
-                        showWorkingWindowPreview(picture_alpha_temp);
-                    }
-                } else {
-                    ApplicationMethods.showToast(requireContext(), R.string.settings_number_warn);
-                }
-            } catch (NumberFormatException ignored) {
-                ApplicationMethods.showToast(requireContext(), R.string.settings_number_warn);
-            }
-            return false;
-        });
-        dialog.setPositiveButton(R.string.done, (__, which) -> {
-            Float inputValue = parseThreeDecimalFloat(editText);
-            if (inputValue != null && inputValue >= 0f && inputValue <= 1f) {
-                picture_alpha = inputValue;
-            } else {
-                picture_alpha = picture_alpha_temp;
-            }
+        settingsDialogController.showAlphaDialog(createPreviewValues(), value -> {
+            picture_alpha = value;
             if (Batch_Mode) {
                 batchAlphaChanged = true;
             }
-            showWorkingWindowPreview(picture_alpha);
         });
-        dialog.setNegativeButton(R.string.cancel, (__, which) -> {
-            showWorkingWindowPreview(picture_alpha);
-        });
-        dialog.setView(mView);
-        dialog.show();
     }
 
     private void setPictureCornerRadius() {
-        View mView = inflater.inflate(
-                R.layout.dialog_set_appearance_options,
-                requireActivity().findViewById(R.id.layout_dialog_set_appearance_options)
-        );
-        AlertDialog.Builder dialog = new AlertDialog.Builder(requireContext());
-        dialog.setTitle(R.string.settings_picture_corner_radius);
-        dialog.setCancelable(false);
-        TextView name = mView.findViewById(R.id.textview_set_size);
-        name.setText(R.string.settings_picture_corner_radius_value);
-        TextView positionsLabel = mView.findViewById(R.id.textview_set_positions);
-        positionsLabel.setText(R.string.settings_picture_corner_radius_positions);
-        final SeekBar seekBar = mView.findViewById(R.id.seekbar_set_size);
-        seekBar.setMax(MAX_CORNER_RADIUS_PERCENT);
-        seekBar.setProgress(toRatioPercentProgress(picture_corner_radius_ratio));
-        final EditText editText = mView.findViewById(R.id.edittext_set_size);
-        enableIntegerInput(editText);
-        editText.setText(String.valueOf(toRatioPercentProgress(picture_corner_radius_ratio)));
-        final CheckBox[] optionCheckBoxes = getAppearanceOptionCheckBoxes(mView);
-        final int[] optionBits = new int[]{
-                Config.MASK_CORNER_TOP_LEFT,
-                Config.MASK_CORNER_TOP_RIGHT,
-                Config.MASK_CORNER_BOTTOM_LEFT,
-                Config.MASK_CORNER_BOTTOM_RIGHT
-        };
-        bindAppearanceOptionCheckBoxes(
-                optionCheckBoxes,
-                new int[]{
-                        R.string.position_top_left,
-                        R.string.position_top_right,
-                        R.string.position_bottom_left,
-                        R.string.position_bottom_right
-                },
-                optionBits,
-                picture_corner_radius_mask
-        );
-        picture_corner_radius_ratio_temp = picture_corner_radius_ratio;
-        picture_corner_radius_mask_temp = picture_corner_radius_mask;
-        seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                picture_corner_radius_ratio_temp = percentProgressToRatio(progress);
-                editText.setText(String.valueOf(progress));
-                picture_corner_radius_mask_temp = resolveCheckedMask(optionCheckBoxes, optionBits);
-                showPreview(
-                        zoom,
-                        picture_degree,
-                        picture_alpha,
-                        picture_corner_radius_ratio_temp,
-                        picture_corner_radius_mask_temp,
-                        picture_edge_feather_ratio,
-                        picture_edge_feather_mask,
-                        position_x,
-                        position_y,
-                        touch_and_move,
-                        allow_picture_over_layout,
-                        false,
-                        touch_and_move
-                );
-            }
-
-            @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {
-            }
-
-            @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
-            }
-        });
-        editText.setOnEditorActionListener((v, actionId, event) -> {
-            Integer progress = parsePercentProgress(editText);
-            if (progress != null && progress >= 0 && progress <= MAX_CORNER_RADIUS_PERCENT) {
-                picture_corner_radius_ratio_temp = percentProgressToRatio(progress);
-                picture_corner_radius_mask_temp = resolveCheckedMask(optionCheckBoxes, optionBits);
-                editText.setText(String.valueOf(progress));
-                if (seekBar.getProgress() != progress) {
-                    seekBar.setProgress(progress);
-                } else {
-                    showPreview(
-                            zoom,
-                            picture_degree,
-                            picture_alpha,
-                            picture_corner_radius_ratio_temp,
-                            picture_corner_radius_mask_temp,
-                            picture_edge_feather_ratio,
-                            picture_edge_feather_mask,
-                            position_x,
-                            position_y,
-                            touch_and_move,
-                            allow_picture_over_layout,
-                            false,
-                            touch_and_move
-                    );
+        settingsDialogController.showAppearanceDialog(
+                new PictureSettingsDialogController.AppearanceDialogRequest(
+                        true,
+                        R.string.settings_picture_corner_radius,
+                        R.string.settings_picture_corner_radius_value,
+                        R.string.settings_picture_corner_radius_positions,
+                        MAX_CORNER_RADIUS_PERCENT,
+                        new int[]{
+                                R.string.position_top_left,
+                                R.string.position_top_right,
+                                R.string.position_bottom_left,
+                                R.string.position_bottom_right
+                        },
+                        new int[]{
+                                Config.MASK_CORNER_TOP_LEFT,
+                                Config.MASK_CORNER_TOP_RIGHT,
+                                Config.MASK_CORNER_BOTTOM_LEFT,
+                                Config.MASK_CORNER_BOTTOM_RIGHT
+                        },
+                        picture_corner_radius_ratio,
+                        picture_corner_radius_mask,
+                        createPreviewValues()
+                ),
+                (ratio, mask) -> {
+                    picture_corner_radius_ratio = ratio;
+                    picture_corner_radius_mask = mask;
+                    if (Batch_Mode) {
+                        batchCornerRadiusChanged = true;
+                    }
+                    updateAppearancePreferenceSummaries();
                 }
-            } else {
-                ApplicationMethods.showToast(requireContext(), R.string.settings_number_warn);
-            }
-            return false;
-        });
-        for (CheckBox optionCheckBox : optionCheckBoxes) {
-            optionCheckBox.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                picture_corner_radius_mask_temp = resolveCheckedMask(optionCheckBoxes, optionBits);
-                showPreview(
-                        zoom,
-                        picture_degree,
-                        picture_alpha,
-                        picture_corner_radius_ratio_temp,
-                        picture_corner_radius_mask_temp,
-                        picture_edge_feather_ratio,
-                        picture_edge_feather_mask,
-                        position_x,
-                        position_y,
-                        touch_and_move,
-                        allow_picture_over_layout,
-                        false,
-                        touch_and_move
-                );
-            });
-        }
-        dialog.setPositiveButton(R.string.done, (__, which) -> {
-            Integer progress = parsePercentProgress(editText);
-            if (progress != null && progress >= 0 && progress <= MAX_CORNER_RADIUS_PERCENT) {
-                picture_corner_radius_ratio = percentProgressToRatio(progress);
-            } else {
-                picture_corner_radius_ratio = picture_corner_radius_ratio_temp;
-            }
-            picture_corner_radius_mask = resolveCheckedMask(optionCheckBoxes, optionBits);
-            if (Batch_Mode) {
-                batchCornerRadiusChanged = true;
-            }
-            updateAppearancePreferenceSummaries();
-            showWorkingWindowPreview(picture_alpha);
-        });
-        dialog.setNegativeButton(R.string.cancel, (__, which) -> showWorkingWindowPreview(picture_alpha));
-        dialog.setView(mView);
-        AlertDialog alertDialog = dialog.show();
-        alertDialog.setOnDismissListener(d -> showWorkingWindowPreview(picture_alpha));
+        );
     }
 
     private void setPictureEdgeFeather() {
-        View mView = inflater.inflate(
-                R.layout.dialog_set_appearance_options,
-                requireActivity().findViewById(R.id.layout_dialog_set_appearance_options)
-        );
-        AlertDialog.Builder dialog = new AlertDialog.Builder(requireContext());
-        dialog.setTitle(R.string.settings_picture_edge_feather);
-        dialog.setCancelable(false);
-        TextView name = mView.findViewById(R.id.textview_set_size);
-        name.setText(R.string.settings_picture_edge_feather_value);
-        TextView positionsLabel = mView.findViewById(R.id.textview_set_positions);
-        positionsLabel.setText(R.string.settings_picture_edge_feather_edges);
-        final SeekBar seekBar = mView.findViewById(R.id.seekbar_set_size);
-        seekBar.setMax(MAX_EDGE_FEATHER_PERCENT);
-        seekBar.setProgress(toRatioPercentProgress(picture_edge_feather_ratio));
-        final EditText editText = mView.findViewById(R.id.edittext_set_size);
-        enableIntegerInput(editText);
-        editText.setText(String.valueOf(toRatioPercentProgress(picture_edge_feather_ratio)));
-        final CheckBox[] optionCheckBoxes = getAppearanceOptionCheckBoxes(mView);
-        final int[] optionBits = new int[]{
-                Config.MASK_EDGE_TOP,
-                Config.MASK_EDGE_BOTTOM,
-                Config.MASK_EDGE_LEFT,
-                Config.MASK_EDGE_RIGHT
-        };
-        bindAppearanceOptionCheckBoxes(
-                optionCheckBoxes,
-                new int[]{
-                        R.string.position_top,
-                        R.string.position_bottom,
-                        R.string.position_left,
-                        R.string.position_right
-                },
-                optionBits,
-                picture_edge_feather_mask
-        );
-        picture_edge_feather_ratio_temp = picture_edge_feather_ratio;
-        picture_edge_feather_mask_temp = picture_edge_feather_mask;
-        seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                picture_edge_feather_ratio_temp = percentProgressToRatio(progress);
-                editText.setText(String.valueOf(progress));
-                picture_edge_feather_mask_temp = resolveCheckedMask(optionCheckBoxes, optionBits);
-                showPreview(
-                        zoom,
-                        picture_degree,
-                        picture_alpha,
-                        picture_corner_radius_ratio,
-                        picture_corner_radius_mask,
-                        picture_edge_feather_ratio_temp,
-                        picture_edge_feather_mask_temp,
-                        position_x,
-                        position_y,
-                        touch_and_move,
-                        allow_picture_over_layout,
+        settingsDialogController.showAppearanceDialog(
+                new PictureSettingsDialogController.AppearanceDialogRequest(
                         false,
-                        touch_and_move
-                );
-            }
-
-            @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {
-            }
-
-            @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
-            }
-        });
-        editText.setOnEditorActionListener((v, actionId, event) -> {
-            Integer progress = parsePercentProgress(editText);
-            if (progress != null && progress >= 0 && progress <= MAX_EDGE_FEATHER_PERCENT) {
-                picture_edge_feather_ratio_temp = percentProgressToRatio(progress);
-                picture_edge_feather_mask_temp = resolveCheckedMask(optionCheckBoxes, optionBits);
-                editText.setText(String.valueOf(progress));
-                if (seekBar.getProgress() != progress) {
-                    seekBar.setProgress(progress);
-                } else {
-                    showPreview(
-                            zoom,
-                            picture_degree,
-                            picture_alpha,
-                            picture_corner_radius_ratio,
-                            picture_corner_radius_mask,
-                            picture_edge_feather_ratio_temp,
-                            picture_edge_feather_mask_temp,
-                            position_x,
-                            position_y,
-                            touch_and_move,
-                            allow_picture_over_layout,
-                            false,
-                            touch_and_move
-                    );
+                        R.string.settings_picture_edge_feather,
+                        R.string.settings_picture_edge_feather_value,
+                        R.string.settings_picture_edge_feather_edges,
+                        MAX_EDGE_FEATHER_PERCENT,
+                        new int[]{
+                                R.string.position_top,
+                                R.string.position_bottom,
+                                R.string.position_left,
+                                R.string.position_right
+                        },
+                        new int[]{
+                                Config.MASK_EDGE_TOP,
+                                Config.MASK_EDGE_BOTTOM,
+                                Config.MASK_EDGE_LEFT,
+                                Config.MASK_EDGE_RIGHT
+                        },
+                        picture_edge_feather_ratio,
+                        picture_edge_feather_mask,
+                        createPreviewValues()
+                ),
+                (ratio, mask) -> {
+                    picture_edge_feather_ratio = ratio;
+                    picture_edge_feather_mask = mask;
+                    if (Batch_Mode) {
+                        batchEdgeFeatherChanged = true;
+                    }
+                    updateAppearancePreferenceSummaries();
                 }
-            } else {
-                ApplicationMethods.showToast(requireContext(), R.string.settings_number_warn);
-            }
-            return false;
-        });
-        for (CheckBox optionCheckBox : optionCheckBoxes) {
-            optionCheckBox.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                picture_edge_feather_mask_temp = resolveCheckedMask(optionCheckBoxes, optionBits);
-                showPreview(
-                        zoom,
-                        picture_degree,
-                        picture_alpha,
-                        picture_corner_radius_ratio,
-                        picture_corner_radius_mask,
-                        picture_edge_feather_ratio_temp,
-                        picture_edge_feather_mask_temp,
-                        position_x,
-                        position_y,
-                        touch_and_move,
-                        allow_picture_over_layout,
-                        false,
-                        touch_and_move
-                );
-            });
-        }
-        dialog.setPositiveButton(R.string.done, (__, which) -> {
-            Integer progress = parsePercentProgress(editText);
-            if (progress != null && progress >= 0 && progress <= MAX_EDGE_FEATHER_PERCENT) {
-                picture_edge_feather_ratio = percentProgressToRatio(progress);
-            } else {
-                picture_edge_feather_ratio = picture_edge_feather_ratio_temp;
-            }
-            picture_edge_feather_mask = resolveCheckedMask(optionCheckBoxes, optionBits);
-            if (Batch_Mode) {
-                batchEdgeFeatherChanged = true;
-            }
-            updateAppearancePreferenceSummaries();
-            showWorkingWindowPreview(picture_alpha);
-        });
-        dialog.setNegativeButton(R.string.cancel, (__, which) -> showWorkingWindowPreview(picture_alpha));
-        dialog.setView(mView);
-        AlertDialog alertDialog = dialog.show();
-        alertDialog.setOnDismissListener(d -> showWorkingWindowPreview(picture_alpha));
+        );
     }
 
     private void setPicturePosition() {
@@ -1151,194 +711,35 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         }
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(requireContext());
         final boolean touchable_edit = !Batch_Mode && (touch_and_move || sharedPreferences.getBoolean(Config.PREFERENCE_TOUCHABLE_POSITION_EDIT, false));
-        showPreview(
+        settingsDialogController.showPositionDialog(
+                new PictureSettingsDialogController.PositionDialogRequest(touchable_edit, getWindowSize(), createPreviewValues()),
+                (positionX, positionY) -> {
+                    position_x = positionX;
+                    position_y = positionY;
+                    if (Batch_Mode) {
+                        batchPositionChanged = true;
+                    } else {
+                        positionChanged = true;
+                    }
+                }
+        );
+    }
+
+    @NonNull
+    private PictureSettingsDialogController.PreviewValues createPreviewValues() {
+        return new PictureSettingsDialogController.PreviewValues(
                 zoom,
                 picture_degree,
                 picture_alpha,
+                picture_corner_radius_ratio,
+                picture_corner_radius_mask,
+                picture_edge_feather_ratio,
+                picture_edge_feather_mask,
                 position_x,
                 position_y,
-                touchable_edit,
-                allow_picture_over_layout,
-                OverlayRuntimeController.PREVIEW_MODE_MOVE_ONLY,
-                false,
-                false
+                touch_and_move,
+                allow_picture_over_layout
         );
-
-        View mView = inflater.inflate(R.layout.dialog_set_position, requireActivity().findViewById(R.id.layout_dialog_set_position));
-        AlertDialog.Builder dialog = new AlertDialog.Builder(requireContext());
-        dialog.setTitle(R.string.settings_picture_position);
-        dialog.setCancelable(false);
-        Point size = getWindowSize();
-        final int Max_X = size.x;
-        final int Max_Y = size.y;
-        final SeekBar seekBar_x = mView.findViewById(R.id.seekbar_set_position_x);
-        if (!allow_picture_over_layout) {
-            seekBar_x.setMax(Max_X);
-            seekBar_x.setProgress(position_x);
-        }
-        final EditText editText_x = mView.findViewById(R.id.edittext_set_position_x);
-        editText_x.setText(String.valueOf(position_x));
-        final SeekBar seekBar_y = mView.findViewById(R.id.seekbar_set_position_y);
-        if (!allow_picture_over_layout) {
-            seekBar_y.setMax(Max_Y);
-            seekBar_y.setProgress(position_y);
-        }
-        final EditText editText_y = mView.findViewById(R.id.edittext_set_position_y);
-        editText_y.setText(String.valueOf(position_y));
-        if (allow_picture_over_layout) {
-            editText_x.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_SIGNED);
-            editText_y.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_SIGNED);
-        }
-        position_x_temp = position_x;
-        position_y_temp = position_y;
-        seekBar_x.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                position_x_temp = progress;
-                editText_x.setText(String.valueOf(progress));
-                showPreview(
-                        zoom,
-                        picture_degree,
-                        picture_alpha,
-                        position_x_temp,
-                        position_y_temp,
-                        touchable_edit,
-                        allow_picture_over_layout,
-                        OverlayRuntimeController.PREVIEW_MODE_MOVE_ONLY,
-                        false,
-                        false
-                );
-            }
-
-            @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {
-            }
-
-            @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
-            }
-        });
-        editText_x.setOnEditorActionListener((v, actionId, event) -> {
-            try {
-                int edittext_temp = Integer.parseInt(v.getText().toString());
-                if (allow_picture_over_layout || (edittext_temp >= 0 && edittext_temp <= Max_X)) {
-                    position_x_temp = edittext_temp;
-                    if (!allow_picture_over_layout) {
-                        seekBar_x.setProgress(edittext_temp);
-                    }
-                    showPreview(
-                            zoom,
-                            picture_degree,
-                            picture_alpha,
-                            position_x_temp,
-                            position_y_temp,
-                            touchable_edit,
-                            allow_picture_over_layout,
-                            OverlayRuntimeController.PREVIEW_MODE_MOVE_ONLY,
-                            false,
-                            false
-                    );
-                } else {
-                    ApplicationMethods.showToast(requireContext(), R.string.settings_picture_position_warn);
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-            return false;
-        });
-        seekBar_y.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                position_y_temp = progress;
-                editText_y.setText(String.valueOf(progress));
-                showPreview(
-                        zoom,
-                        picture_degree,
-                        picture_alpha,
-                        position_x_temp,
-                        position_y_temp,
-                        touchable_edit,
-                        allow_picture_over_layout,
-                        OverlayRuntimeController.PREVIEW_MODE_MOVE_ONLY,
-                        false,
-                        false
-                );
-            }
-
-            @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {
-            }
-
-            @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
-            }
-        });
-        editText_y.setOnEditorActionListener((v, actionId, event) -> {
-            try {
-                int edittext_temp = Integer.parseInt(v.getText().toString());
-                if (allow_picture_over_layout || (edittext_temp >= 0 && edittext_temp <= Max_Y)) {
-                    position_y_temp = edittext_temp;
-                    if (!allow_picture_over_layout) {
-                        seekBar_y.setProgress(edittext_temp);
-                    }
-                    showPreview(
-                            zoom,
-                            picture_degree,
-                            picture_alpha,
-                            position_x_temp,
-                            position_y_temp,
-                            touchable_edit,
-                            allow_picture_over_layout,
-                            OverlayRuntimeController.PREVIEW_MODE_MOVE_ONLY,
-                            false,
-                            false
-                    );
-                } else {
-                    ApplicationMethods.showToast(requireContext(), R.string.settings_picture_position_warn);
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-            return false;
-        });
-        if (allow_picture_over_layout) {
-            seekBar_x.setEnabled(false);
-            seekBar_y.setEnabled(false);
-        }
-        if (touchable_edit) {
-            dialog.setNeutralButton(R.string.save_moved_position, (dialog1, which) -> {
-                Point previewPosition = getPreviewPosition(position_x_temp, position_y_temp);
-                position_x = previewPosition.x;
-                position_y = previewPosition.y;
-                if (Batch_Mode) {
-                    batchPositionChanged = true;
-                }
-                showWorkingWindowPreview(picture_alpha);
-            });
-        }
-        dialog.setPositiveButton(R.string.done, (__, which) -> {
-            if (allow_picture_over_layout) {
-                try {
-                    position_x = Integer.parseInt(editText_x.getText().toString());
-                    position_y = Integer.parseInt(editText_y.getText().toString());
-                } catch (NumberFormatException e) {
-                    e.printStackTrace();
-                    position_x = position_x_temp;
-                    position_y = position_y_temp;
-                }
-            } else {
-                position_x = position_x_temp;
-                position_y = position_y_temp;
-            }
-            if (Batch_Mode) {
-                batchPositionChanged = true;
-            }
-            showWorkingWindowPreview(picture_alpha);
-        });
-        dialog.setNegativeButton(R.string.cancel, (__, which) -> showWorkingWindowPreview(picture_alpha));
-        dialog.setView(mView);
-        AlertDialog alertDialogPosition = dialog.show();
-        alertDialogPosition.setOnDismissListener(d -> showWorkingWindowPreview(picture_alpha));
     }
 
     private Point getWindowSize() {
@@ -1359,16 +760,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
     }
 
     private float resolveScreenHeightZoom(@NonNull Bitmap sourceBitmap, float degreeValue, @NonNull Point windowSize) {
-        if (windowSize.y <= 0) {
-            return 0f;
-        }
-        double radians = Math.toRadians(degreeValue);
-        double rotatedBaseHeight = (Math.abs(sourceBitmap.getHeight() * Math.cos(radians))
-                + Math.abs(sourceBitmap.getWidth() * Math.sin(radians)));
-        if (rotatedBaseHeight <= 0d) {
-            return 0f;
-        }
-        return Math.max(roundToThreeDecimals((float) (windowSize.y / rotatedBaseHeight)), 0.01f);
+        return PictureSettingsSaveController.resolveScreenHeightZoom(sourceBitmap, degreeValue, windowSize);
     }
 
     private boolean removeViewIfAttached(FloatImageView imageView) {
@@ -1401,67 +793,13 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         }
     }
 
-    private void enableDecimalInput(EditText editText) {
-        editText.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
-    }
-
-    private void enableIntegerInput(EditText editText) {
-        editText.setInputType(InputType.TYPE_CLASS_NUMBER);
-    }
-
-    private float roundToThreeDecimals(float value) {
-        return Math.round(value * THREE_DECIMAL_SCALE) / (float) THREE_DECIMAL_SCALE;
-    }
-
-    private int toThreeDecimalProgress(float value) {
-        return Math.round(roundToThreeDecimals(value) * THREE_DECIMAL_SCALE);
-    }
-
-    private int toRatioPercentProgress(float ratio) {
-        return Math.round(clampRatio(ratio) * PERCENT_SCALE);
-    }
-
-    private String formatThreeDecimal(float value) {
-        return String.format(Locale.US, "%.3f", roundToThreeDecimals(value));
-    }
-
-    @Nullable
-    private Float parseThreeDecimalFloat(EditText editText) {
-        try {
-            return roundToThreeDecimals(Float.parseFloat(editText.getText().toString().trim()));
-        } catch (NumberFormatException ignored) {
-            return null;
-        }
-    }
-
-    @Nullable
-    private Integer parsePercentProgress(EditText editText) {
-        try {
-            return Integer.parseInt(editText.getText().toString().trim());
-        } catch (NumberFormatException ignored) {
-            return null;
-        }
-    }
-
-    private float percentProgressToRatio(int progress) {
-        return clampRatio(progress / (float) PERCENT_SCALE);
-    }
-
-    private float clampRatio(float ratio) {
-        return Math.max(0f, Math.min(1f, ratio));
-    }
-
-    private String formatRatioPercent(float ratio) {
-        return toRatioPercentProgress(ratio) + "%";
-    }
-
     private void updateAppearancePreferenceSummaries() {
         Preference cornerRadiusPreference = findPreference(Config.PREFERENCE_PICTURE_CORNER_RADIUS);
         if (cornerRadiusPreference != null) {
             cornerRadiusPreference.setSummary(getString(
                     R.string.appearance_summary_format,
                     formatRatioPercent(picture_corner_radius_ratio),
-                    formatCornerMaskSummary(picture_corner_radius_mask)
+                    PictureSettingsAppearanceOptions.formatCornerMaskSummary(requireContext(), picture_corner_radius_mask)
             ));
         }
         Preference edgeFeatherPreference = findPreference(Config.PREFERENCE_PICTURE_EDGE_FEATHER);
@@ -1469,95 +807,9 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
             edgeFeatherPreference.setSummary(getString(
                     R.string.appearance_summary_format,
                     formatRatioPercent(picture_edge_feather_ratio),
-                    formatEdgeMaskSummary(picture_edge_feather_mask)
+                    PictureSettingsAppearanceOptions.formatEdgeMaskSummary(requireContext(), picture_edge_feather_mask)
             ));
         }
-    }
-
-    private String formatCornerMaskSummary(int mask) {
-        return formatSelectionSummary(
-                mask,
-                new int[]{
-                        Config.MASK_CORNER_TOP_LEFT,
-                        Config.MASK_CORNER_TOP_RIGHT,
-                        Config.MASK_CORNER_BOTTOM_LEFT,
-                        Config.MASK_CORNER_BOTTOM_RIGHT
-                },
-                new int[]{
-                        R.string.position_top_left,
-                        R.string.position_top_right,
-                        R.string.position_bottom_left,
-                        R.string.position_bottom_right
-                }
-        );
-    }
-
-    private String formatEdgeMaskSummary(int mask) {
-        return formatSelectionSummary(
-                mask,
-                new int[]{
-                        Config.MASK_EDGE_TOP,
-                        Config.MASK_EDGE_BOTTOM,
-                        Config.MASK_EDGE_LEFT,
-                        Config.MASK_EDGE_RIGHT
-                },
-                new int[]{
-                        R.string.position_top,
-                        R.string.position_bottom,
-                        R.string.position_left,
-                        R.string.position_right
-                }
-        );
-    }
-
-    private String formatSelectionSummary(int mask, int[] optionBits, int[] labelResIds) {
-        int fullMask = 0;
-        for (int optionBit : optionBits) {
-            fullMask |= optionBit;
-        }
-        if ((mask & fullMask) == 0) {
-            return getString(R.string.selection_none);
-        }
-        if ((mask & fullMask) == fullMask) {
-            return getString(R.string.selection_all);
-        }
-        StringBuilder summaryBuilder = new StringBuilder();
-        for (int index = 0; index < optionBits.length; index++) {
-            if ((mask & optionBits[index]) == 0) {
-                continue;
-            }
-            if (summaryBuilder.length() > 0) {
-                summaryBuilder.append(' ');
-            }
-            summaryBuilder.append(getString(labelResIds[index]));
-        }
-        return summaryBuilder.toString();
-    }
-
-    private CheckBox[] getAppearanceOptionCheckBoxes(View mView) {
-        return new CheckBox[]{
-                mView.findViewById(R.id.checkbox_option_1),
-                mView.findViewById(R.id.checkbox_option_2),
-                mView.findViewById(R.id.checkbox_option_3),
-                mView.findViewById(R.id.checkbox_option_4)
-        };
-    }
-
-    private void bindAppearanceOptionCheckBoxes(CheckBox[] checkBoxes, int[] labelResIds, int[] optionBits, int mask) {
-        for (int index = 0; index < checkBoxes.length; index++) {
-            checkBoxes[index].setText(labelResIds[index]);
-            checkBoxes[index].setChecked((mask & optionBits[index]) != 0);
-        }
-    }
-
-    private int resolveCheckedMask(CheckBox[] checkBoxes, int[] optionBits) {
-        int mask = 0;
-        for (int index = 0; index < checkBoxes.length; index++) {
-            if (checkBoxes[index].isChecked()) {
-                mask |= optionBits[index];
-            }
-        }
-        return mask;
     }
 
     private void showWorkingWindowPreview(float alpha) {
@@ -1690,161 +942,65 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         if (Batch_Mode || PictureId == null || shouldAbortFragmentWork()) {
             return;
         }
-        int resolvedPositionX = positionX;
-        int resolvedPositionY = positionY;
-        if (useRuntimePosition) {
-            Point runtimePosition = getPreviewPosition(positionX, positionY);
-            resolvedPositionX = runtimePosition.x;
-            resolvedPositionY = runtimePosition.y;
-        }
-        OverlayRuntimeController.updatePreview(
+        PictureSettingsPreviewController.showPreview(
                 requireContext(),
                 PictureId,
-                zoomValue,
-                degreeValue,
-                alphaValue,
-                cornerRadiusRatio,
-                cornerRadiusMask,
-                edgeFeatherRatio,
-                edgeFeatherMask,
-                resolvedPositionX,
-                resolvedPositionY,
-                touchAndMove,
-                overLayout,
-                previewMode,
-                reloadSource
+                new PictureSettingsPreviewController.PreviewRequest(
+                        zoomValue,
+                        degreeValue,
+                        alphaValue,
+                        cornerRadiusRatio,
+                        cornerRadiusMask,
+                        edgeFeatherRatio,
+                        edgeFeatherMask,
+                        positionX,
+                        positionY,
+                        touchAndMove,
+                        overLayout,
+                        previewMode,
+                        reloadSource,
+                        useRuntimePosition
+                )
         );
     }
 
     private Point getPreviewPosition(int fallbackX, int fallbackY) {
-        if (PictureId == null) {
+        Context context = getContext();
+        if (context == null || PictureId == null) {
             return new Point(fallbackX, fallbackY);
         }
-        return OverlayRuntimeStateStore.getWindowPosition(requireContext(), PictureId, fallbackX, fallbackY);
+        return PictureSettingsPreviewController.getPreviewPosition(context, PictureId, fallbackX, fallbackY);
     }
 
     private void saveBatchData(@Nullable Runnable onComplete, @Nullable Runnable onFailed) {
-        final ArrayList<String> snapshotPictureIds = new ArrayList<>(batchPictureIds);
-        final boolean snapshotZoomChanged = batchZoomChanged;
-        final boolean snapshotFitScreenHeightChanged = batchFitScreenHeightChanged;
-        final boolean snapshotDegreeChanged = batchDegreeChanged;
-        final boolean snapshotAlphaChanged = batchAlphaChanged;
-        final boolean snapshotCornerRadiusChanged = batchCornerRadiusChanged;
-        final boolean snapshotEdgeFeatherChanged = batchEdgeFeatherChanged;
-        final boolean snapshotPositionChanged = batchPositionChanged;
-        final boolean snapshotTouchAndMoveChanged = batchTouchAndMoveChanged;
-        final boolean snapshotOverLayoutChanged = batchOverLayoutChanged;
-        final float snapshotZoom = zoom;
-        final float snapshotDegree = picture_degree;
-        final float snapshotAlpha = picture_alpha;
-        final float snapshotCornerRadiusRatio = picture_corner_radius_ratio;
-        final int snapshotCornerRadiusMask = picture_corner_radius_mask;
-        final float snapshotEdgeFeatherRatio = picture_edge_feather_ratio;
-        final int snapshotEdgeFeatherMask = picture_edge_feather_mask;
-        final int snapshotX = position_x;
-        final int snapshotY = position_y;
-        final boolean snapshotTouchAndMove = touch_and_move;
-        final boolean snapshotOverLayout = allow_picture_over_layout;
-        final Point snapshotWindowSize = getWindowSize();
+        final PictureSettingsSaveController.BatchSaveRequest saveRequest =
+                new PictureSettingsSaveController.BatchSaveRequest(
+                        new ArrayList<>(batchPictureIds),
+                        batchZoomChanged,
+                        batchFitScreenHeightChanged,
+                        batchDegreeChanged,
+                        batchAlphaChanged,
+                        batchCornerRadiusChanged,
+                        batchEdgeFeatherChanged,
+                        batchPositionChanged,
+                        batchTouchAndMoveChanged,
+                        batchOverLayoutChanged,
+                        zoom,
+                        picture_degree,
+                        picture_alpha,
+                        picture_corner_radius_ratio,
+                        picture_corner_radius_mask,
+                        picture_edge_feather_ratio,
+                        picture_edge_feather_mask,
+                        position_x,
+                        position_y,
+                        touch_and_move,
+                        allow_picture_over_layout,
+                        getWindowSize()
+                );
         final Context appContext = requireContext().getApplicationContext();
-        new Thread(() -> {
-            boolean saveFailed = false;
-            PictureData listPictureData = new PictureData();
-            LinkedHashMap<String, String> listArray = listPictureData.getListArray();
-            if (listArray == null) {
-                saveFailed = true;
-            } else {
-                for (String pictureId : snapshotPictureIds) {
-                    if (pictureId == null || !listArray.containsKey(pictureId)) {
-                        continue;
-                    }
-                    PictureData itemPictureData = new PictureData();
-                    itemPictureData.setDataControl(pictureId);
-                    float itemDefaultZoom = itemPictureData.getFloat(Config.DATA_PICTURE_DEFAULT_ZOOM, ImageMethods.getDefaultZoom(appContext, pictureId, false));
-                    float itemZoom = itemPictureData.getFloat(Config.DATA_PICTURE_ZOOM, itemDefaultZoom);
-                    float itemDegree = itemPictureData.getFloat(Config.DATA_PICTURE_DEGREE, Config.DATA_DEFAULT_PICTURE_DEGREE);
-                    float itemAlpha = itemPictureData.getFloat(Config.DATA_PICTURE_ALPHA, Config.DATA_DEFAULT_PICTURE_ALPHA);
-                    float itemCornerRadiusRatio = itemPictureData.getFloat(Config.DATA_PICTURE_CORNER_RADIUS_RATIO, Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_RATIO);
-                    int itemCornerRadiusMask = itemPictureData.getInt(Config.DATA_PICTURE_CORNER_RADIUS_MASK, Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_MASK);
-                    float itemEdgeFeatherRatio = itemPictureData.getFloat(Config.DATA_PICTURE_EDGE_FEATHER_RATIO, Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_RATIO);
-                    int itemEdgeFeatherMask = itemPictureData.getInt(Config.DATA_PICTURE_EDGE_FEATHER_MASK, Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_MASK);
-                    int itemPositionX = itemPictureData.getInt(Config.DATA_PICTURE_POSITION_X, Config.DATA_DEFAULT_PICTURE_POSITION_X);
-                    int itemPositionY = itemPictureData.getInt(Config.DATA_PICTURE_POSITION_Y, Config.DATA_DEFAULT_PICTURE_POSITION_Y);
-
-                    if (snapshotDegreeChanged) {
-                        itemDegree = snapshotDegree;
-                        itemPictureData.put(Config.DATA_PICTURE_DEGREE, itemDegree);
-                    }
-                    if (snapshotZoomChanged) {
-                        itemZoom = snapshotZoom;
-                        itemPictureData.put(Config.DATA_PICTURE_ZOOM, itemZoom);
-                    }
-                    if (snapshotFitScreenHeightChanged) {
-                        Bitmap sourceBitmap = ImageMethods.getEditSourceBitmap(appContext, pictureId);
-                        if (sourceBitmap == null || sourceBitmap.isRecycled()) {
-                            saveFailed = true;
-                        } else {
-                            float fittedZoom = resolveScreenHeightZoom(sourceBitmap, itemDegree, snapshotWindowSize);
-                            ImageMethods.recycleBitmap(sourceBitmap);
-                            if (fittedZoom > 0f) {
-                                itemZoom = fittedZoom;
-                                itemPositionY = 0;
-                                itemPictureData.put(Config.DATA_PICTURE_ZOOM, itemZoom);
-                                itemPictureData.put(Config.DATA_PICTURE_POSITION_Y, itemPositionY);
-                            } else {
-                                saveFailed = true;
-                            }
-                        }
-                    }
-                    if (snapshotAlphaChanged) {
-                        itemAlpha = snapshotAlpha;
-                        itemPictureData.put(Config.DATA_PICTURE_ALPHA, itemAlpha);
-                    }
-                    if (snapshotCornerRadiusChanged) {
-                        itemCornerRadiusRatio = snapshotCornerRadiusRatio;
-                        itemCornerRadiusMask = snapshotCornerRadiusMask;
-                        itemPictureData.put(Config.DATA_PICTURE_CORNER_RADIUS_RATIO, itemCornerRadiusRatio);
-                        itemPictureData.put(Config.DATA_PICTURE_CORNER_RADIUS_MASK, itemCornerRadiusMask);
-                    }
-                    if (snapshotEdgeFeatherChanged) {
-                        itemEdgeFeatherRatio = snapshotEdgeFeatherRatio;
-                        itemEdgeFeatherMask = snapshotEdgeFeatherMask;
-                        itemPictureData.put(Config.DATA_PICTURE_EDGE_FEATHER_RATIO, itemEdgeFeatherRatio);
-                        itemPictureData.put(Config.DATA_PICTURE_EDGE_FEATHER_MASK, itemEdgeFeatherMask);
-                    }
-                    if (snapshotPositionChanged) {
-                        itemPositionX = snapshotX;
-                        itemPositionY = snapshotY;
-                        itemPictureData.put(Config.DATA_PICTURE_POSITION_X, itemPositionX);
-                        itemPictureData.put(Config.DATA_PICTURE_POSITION_Y, itemPositionY);
-                    }
-                    if (snapshotTouchAndMoveChanged) {
-                        itemPictureData.put(Config.DATA_PICTURE_TOUCH_AND_MOVE, snapshotTouchAndMove);
-                    }
-                    if (snapshotOverLayoutChanged) {
-                        itemPictureData.put(Config.DATA_ALLOW_PICTURE_OVER_LAYOUT, snapshotOverLayout);
-                    }
-                    itemPictureData.commit(null);
-
-                    if (snapshotZoomChanged
-                            || snapshotFitScreenHeightChanged
-                            || snapshotDegreeChanged
-                            || snapshotCornerRadiusChanged
-                            || snapshotEdgeFeatherChanged) {
-                        Bitmap displayBitmap = ImageMethods.createAndSaveDisplayBitmap(
-                                pictureId,
-                                itemZoom,
-                                itemDegree,
-                                itemCornerRadiusRatio,
-                                itemCornerRadiusMask,
-                                itemEdgeFeatherRatio,
-                                itemEdgeFeatherMask
-                        );
-                        ImageMethods.recycleBitmap(displayBitmap);
-                    }
-                    OverlayRuntimeController.syncPicture(appContext, pictureId, false);
-                }
-            }
+        AppExecutors.io().execute(() -> {
+            boolean saveFailed = !PictureSettingsSaveController.saveBatch(appContext, saveRequest);
             final boolean finalSaveFailed = saveFailed;
             if (!isAdded() || getActivity() == null) {
                 return;
@@ -1865,7 +1021,7 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                     onComplete.run();
                 }
             });
-        }).start();
+        });
     }
 
     public void saveAllData(@Nullable Runnable onComplete, @Nullable Runnable onFailed) {
@@ -1873,43 +1029,34 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
             saveBatchData(onComplete, onFailed);
             return;
         }
-        // 若编辑前窗口是隐藏的，保存后仍保持隐藏（用户只修改设置，不改变显示状态）
-        pictureData.put(Config.DATA_PICTURE_SHOW_ENABLED, !wasHidden);
-        pictureData.put(Config.DATA_PICTURE_ZOOM, zoom);
-        pictureData.put(Config.DATA_PICTURE_DEFAULT_ZOOM, default_zoom);
-        pictureData.put(Config.DATA_PICTURE_ALPHA, picture_alpha);
-        pictureData.put(Config.DATA_PICTURE_CORNER_RADIUS_RATIO, picture_corner_radius_ratio);
-        pictureData.put(Config.DATA_PICTURE_CORNER_RADIUS_MASK, picture_corner_radius_mask);
-        pictureData.put(Config.DATA_PICTURE_EDGE_FEATHER_RATIO, picture_edge_feather_ratio);
-        pictureData.put(Config.DATA_PICTURE_EDGE_FEATHER_MASK, picture_edge_feather_mask);
-        if (touch_and_move) {
+        if (touch_and_move && !positionChanged) {
             Point previewPosition = getPreviewPosition(position_x, position_y);
             position_x = previewPosition.x;
             position_y = previewPosition.y;
         }
-        pictureData.put(Config.DATA_PICTURE_POSITION_X, position_x);
-        pictureData.put(Config.DATA_PICTURE_POSITION_Y, position_y);
-        pictureData.put(Config.DATA_PICTURE_DEGREE, picture_degree);
-        pictureData.put(Config.DATA_PICTURE_TOUCH_AND_MOVE, touch_and_move);
-        pictureData.put(Config.DATA_ALLOW_PICTURE_OVER_LAYOUT, allow_picture_over_layout);
-        // 快照不可变值供后台线程使用，避免主线程字段被并发读
-        final String snapshotPictureId = PictureId;
-        final String snapshotPictureName = PictureName;
-        final float snapshotZoom = zoom;
-        final float snapshotDegree = picture_degree;
-        final float snapshotAlpha = picture_alpha;
-        final float snapshotCornerRadiusRatio = picture_corner_radius_ratio;
-        final int snapshotCornerRadiusMask = picture_corner_radius_mask;
-        final float snapshotEdgeFeatherRatio = picture_edge_feather_ratio;
-        final int snapshotEdgeFeatherMask = picture_edge_feather_mask;
-        final int snapshotX = position_x;
-        final int snapshotY = position_y;
-        final boolean snapshotTouchAndMove = touch_and_move;
-        final boolean snapshotOverLayout = allow_picture_over_layout;
-        final boolean snapshotWasHidden = wasHidden;
+        final PictureSettingsSaveController.SingleSaveRequest saveRequest =
+                new PictureSettingsSaveController.SingleSaveRequest(
+                        pictureData,
+                        PictureId,
+                        PictureName,
+                        zoom,
+                        default_zoom,
+                        picture_degree,
+                        picture_alpha,
+                        picture_corner_radius_ratio,
+                        picture_corner_radius_mask,
+                        picture_edge_feather_ratio,
+                        picture_edge_feather_mask,
+                        position_x,
+                        position_y,
+                        touch_and_move,
+                        allow_picture_over_layout,
+                        wasHidden,
+                        positionChanged
+                );
         final Context appContext = requireContext().getApplicationContext();
-        new Thread(() -> {
-            if (!ImageMethods.commitPendingReplacementImage(snapshotPictureId)) {
+        AppExecutors.io().execute(() -> {
+            if (!PictureSettingsSaveController.saveSingle(appContext, saveRequest)) {
                 if (!isAdded() || getActivity() == null) {
                     return;
                 }
@@ -1924,19 +1071,6 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                 });
                 return;
             }
-            // JSON 序列化写磁盘（阻塞 IO）
-            pictureData.commit(snapshotPictureName);
-            // Bitmap 缩放 + 显示缓存压缩写磁盘（CPU + IO 密集）
-            ImageMethods.createAndSaveDisplayBitmap(
-                    snapshotPictureId,
-                    snapshotZoom,
-                    snapshotDegree,
-                    snapshotCornerRadiusRatio,
-                    snapshotCornerRadiusMask,
-                    snapshotEdgeFeatherRatio,
-                    snapshotEdgeFeatherMask
-            );
-            OverlayRuntimeController.finishPreview(appContext, snapshotPictureId);
             if (shouldAbortFragmentWork()) {
                 releaseSourceBitmap();
                 return;
@@ -1946,23 +1080,23 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                     releaseSourceBitmap();
                     return;
                 }
-                touch_and_move = snapshotTouchAndMove;
-                allow_picture_over_layout = snapshotOverLayout;
-                picture_alpha = snapshotAlpha;
-                picture_corner_radius_ratio = snapshotCornerRadiusRatio;
-                picture_corner_radius_mask = snapshotCornerRadiusMask;
-                picture_edge_feather_ratio = snapshotEdgeFeatherRatio;
-                picture_edge_feather_mask = snapshotEdgeFeatherMask;
-                position_x = snapshotX;
-                position_y = snapshotY;
-                wasHidden = snapshotWasHidden;
+                touch_and_move = saveRequest.touchAndMove;
+                allow_picture_over_layout = saveRequest.overLayout;
+                picture_alpha = saveRequest.alpha;
+                picture_corner_radius_ratio = saveRequest.cornerRadiusRatio;
+                picture_corner_radius_mask = saveRequest.cornerRadiusMask;
+                picture_edge_feather_ratio = saveRequest.edgeFeatherRatio;
+                picture_edge_feather_mask = saveRequest.edgeFeatherMask;
+                position_x = saveRequest.positionX;
+                position_y = saveRequest.positionY;
+                wasHidden = saveRequest.wasHidden;
                 releaseSourceBitmap();
                 changesSaved = true;
                 if (onComplete != null) {
                     onComplete.run();
                 }
             });
-        }).start();
+        });
     }
 
     public void clearEditView() {

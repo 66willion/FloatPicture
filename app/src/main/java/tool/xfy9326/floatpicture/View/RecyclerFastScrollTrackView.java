@@ -25,10 +25,12 @@ public class RecyclerFastScrollTrackView extends View {
         void onTrackReleased();
     }
 
-    private static final float TRACK_WIDTH_DP = 5f;
-    private static final float THUMB_WIDTH_DP = 14f;
-    private static final float THUMB_MIN_HEIGHT_DP = 54f;
-    private static final float CONTENT_VERTICAL_PADDING_DP = 10f;
+    private static final float TRACK_WIDTH_DP = 1.5f;
+    private static final float THUMB_WIDTH_DP = 3f;
+    private static final float THUMB_MIN_HEIGHT_DP = 42f;
+    private static final float CONTENT_VERTICAL_PADDING_DP = 0f;
+    private static final float TRACK_RIGHT_INSET_DP = 3f;
+    private static final float THUMB_RIGHT_INSET_DP = 2f;
     private static final float THUMB_GRIP_WIDTH_DP = 0f;
     private static final float THUMB_GRIP_HEIGHT_DP = 0f;
     private static final float THUMB_GRIP_GAP_DP = 0f;
@@ -61,7 +63,7 @@ public class RecyclerFastScrollTrackView extends View {
 
     private void init() {
         setClickable(true);
-        trackPaint.setColor(Color.rgb(48, 48, 48));
+        trackPaint.setColor(0x66333333);
         thumbPaint.setColor(Color.WHITE);
         thumbGripPaint.setColor(Color.WHITE);
     }
@@ -87,11 +89,12 @@ public class RecyclerFastScrollTrackView extends View {
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         updateGeometry();
+        trackPaint.setAlpha(dragging ? 150 : 90);
         canvas.drawRoundRect(trackRect, trackRect.width() / 2f, trackRect.width() / 2f, trackPaint);
         if (!hasScrollableContent()) {
             return;
         }
-        thumbPaint.setAlpha(dragging ? 255 : 230);
+        thumbPaint.setAlpha(dragging ? 245 : 210);
         canvas.drawRoundRect(thumbRect, thumbRect.width() / 2f, thumbRect.width() / 2f, thumbPaint);
     }
 
@@ -211,7 +214,7 @@ public class RecyclerFastScrollTrackView extends View {
     }
 
     private boolean isWithinRightDragArea(float x) {
-        return x >= trackRect.right && x <= getWidth();
+        return x >= 0 && x <= getWidth();
     }
 
     private void beginDrag(float x, float y) {
@@ -231,7 +234,8 @@ public class RecyclerFastScrollTrackView extends View {
         float contentTop = dpToPx(CONTENT_VERTICAL_PADDING_DP);
         float contentBottom = getHeight() - dpToPx(CONTENT_VERTICAL_PADDING_DP);
         float trackWidth = dpToPx(TRACK_WIDTH_DP);
-        float trackLeft = (getWidth() - trackWidth) / 2f;
+        float trackRight = getWidth() - dpToPx(TRACK_RIGHT_INSET_DP);
+        float trackLeft = trackRight - trackWidth;
         trackRect.set(trackLeft, contentTop, trackLeft + trackWidth, contentBottom);
 
         if (!hasScrollableContent()) {
@@ -251,7 +255,8 @@ public class RecyclerFastScrollTrackView extends View {
             thumbTop += (offset / (float) scrollableRange) * maxThumbTravel;
         }
         float thumbWidth = dpToPx(THUMB_WIDTH_DP);
-        float thumbLeft = (getWidth() - thumbWidth) / 2f;
+        float thumbRight = getWidth() - dpToPx(THUMB_RIGHT_INSET_DP);
+        float thumbLeft = thumbRight - thumbWidth;
         thumbRect.set(thumbLeft, thumbTop, thumbLeft + thumbWidth, thumbTop + thumbHeight);
     }
 

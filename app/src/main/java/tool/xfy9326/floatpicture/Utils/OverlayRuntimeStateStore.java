@@ -10,8 +10,6 @@ import org.json.JSONObject;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
-import tool.xfy9326.floatpicture.Methods.IOMethods;
-
 public final class OverlayRuntimeStateStore {
     private static final String STATE_FILE_NAME = "OverlayRuntimeState.json";
     private static final String KEY_TRUSTED_OVERLAY_ACTIVE = "trusted_overlay_active";
@@ -155,21 +153,10 @@ public final class OverlayRuntimeStateStore {
     }
 
     private static JSONObject readState() {
-        String content = IOMethods.readFile(Config.getDataDir() + STATE_FILE_NAME);
-        if (content != null) {
-            String normalized = content.trim();
-            if (!normalized.isEmpty()) {
-                try {
-                    return new JSONObject(normalized);
-                } catch (JSONException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-        return new JSONObject();
+        return JsonFileStore.read(STATE_FILE_NAME);
     }
 
     private static void writeState(JSONObject state) {
-        IOMethods.writeFile(state.toString(), Config.getDataDir() + STATE_FILE_NAME);
+        JsonFileStore.write(STATE_FILE_NAME, state);
     }
 }

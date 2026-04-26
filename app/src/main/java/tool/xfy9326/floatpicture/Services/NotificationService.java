@@ -11,7 +11,9 @@ import android.content.pm.ServiceInfo;
 import android.graphics.Bitmap;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.os.ResultReceiver;
 import android.view.View;
 import android.widget.RemoteViews;
@@ -26,9 +28,11 @@ import androidx.preference.PreferenceManager;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import tool.xfy9326.floatpicture.Activities.MainActivity;
 import tool.xfy9326.floatpicture.MainApplication;
+import tool.xfy9326.floatpicture.Utils.AppExecutors;
 import tool.xfy9326.floatpicture.Methods.IOMethods;
 import tool.xfy9326.floatpicture.Methods.ImageMethods;
 import tool.xfy9326.floatpicture.Methods.ManageMethods;
@@ -44,6 +48,8 @@ public class NotificationService extends Service {
     private static final String CHANNEL_ID = "channel_default";
 
     private final LinkedHashMap<String, PreviewSession> previewSessions = new LinkedHashMap<>();
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private final AtomicInteger notificationUpdateGeneration = new AtomicInteger();
     private RemoteViews remoteViews;
     private NotificationCompat.Builder builderManage;
 
@@ -138,6 +144,9 @@ public class NotificationService extends Service {
     }
 
     private boolean shouldInitializeRuntime(@Nullable Intent intent, @Nullable String action) {
+        if (OverlayRuntimeController.ACTION_RUNTIME_HIDE_ALL_WINDOWS.equals(action)) {
+            return false;
+        }
         if (OverlayRuntimeController.ACTION_RUNTIME_SYNC_PICTURE.equals(action)
                 && intent != null
                 && !intent.getBooleanExtra(OverlayRuntimeController.EXTRA_CREATE_IF_VISIBLE, true)) {
@@ -197,7 +206,7 @@ public class NotificationService extends Service {
                 return true;
             case OverlayRuntimeController.ACTION_RUNTIME_SET_WINDOW_VISIBLE:
                 handleSetWindowVisible(intent);
-                return true;
+                return false;
             case OverlayRuntimeController.ACTION_RUNTIME_SET_ALL_WINDOWS_VISIBLE:
                 if (setPureOverlayWindowsVisible(intent)) {
                     OverlayRuntimeController.notifyRuntimeStateChanged(this);
@@ -246,7 +255,6 @@ public class NotificationService extends Service {
         }
         boolean visible = intent.getBooleanExtra(OverlayRuntimeController.EXTRA_VISIBLE, false);
         ManageMethods.setWindowVisible(this, new tool.xfy9326.floatpicture.Utils.PictureData(), pictureId, visible);
-        OverlayRuntimeController.notifyRuntimeStateChanged(this);
     }
 
     private void handleSyncPicture(@Nullable Intent intent) {
@@ -411,6 +419,22 @@ public class NotificationService extends Service {
         if (builderManage == null || remoteViews == null) {
             return;
         }
+        int generation = notificationUpdateGeneration.incrementAndGet();
+        AppExecutors.io().execute(() -> {
+            NotificationUiState uiState = buildNotificationUiState();
+            mainHandler.post(() -> {
+                if (generation != notificationUpdateGeneration.get()
+                        || builderManage == null
+                        || remoteViews == null) {
+                    return;
+                }
+                applyNotificationUiState(uiState);
+            });
+        });
+    }
+
+    @NonNull
+    private NotificationUiState buildNotificationUiState() {
         boolean showControl = PreferenceManager.getDefaultSharedPreferences(this)
                 .getBoolean(Config.PREFERENCE_SHOW_NOTIFICATION_CONTROL, true);
         Set<String> targetIds = getPureOverlayNotificationTargetIds();
@@ -421,17 +445,21 @@ public class NotificationService extends Service {
         int pictureCount = targetIds != null
                 ? ManageMethods.getWindowCount(targetIds)
                 : ManageMethods.getWindowCount();
+        return new NotificationUiState(pureOverlayToggleVisible, anyVisible, pictureCount);
+    }
+
+    private void applyNotificationUiState(@NonNull NotificationUiState uiState) {
         remoteViews.setImageViewResource(R.id.imageview_notification_application, R.mipmap.ic_launcher);
         remoteViews.setTextViewText(
                 R.id.textview_picture_num,
-                getString(R.string.notification_picture_count, String.valueOf(pictureCount))
+                getString(R.string.notification_picture_count, String.valueOf(uiState.pictureCount))
         );
         remoteViews.setImageViewResource(
                 R.id.imageview_set_picture_view,
-                anyVisible ? R.drawable.ic_visible : R.drawable.ic_invisible
+                uiState.anyVisible ? R.drawable.ic_visible : R.drawable.ic_invisible
         );
-        remoteViews.setViewVisibility(R.id.layout_notification_toggle, pureOverlayToggleVisible ? View.VISIBLE : View.GONE);
-        if (pureOverlayToggleVisible) {
+        remoteViews.setViewVisibility(R.id.layout_notification_toggle, uiState.pureOverlayToggleVisible ? View.VISIBLE : View.GONE);
+        if (uiState.pureOverlayToggleVisible) {
             remoteViews.setOnClickPendingIntent(R.id.layout_notification_toggle, createToggleIntent());
         } else {
             remoteViews.setOnClickPendingIntent(R.id.layout_notification_toggle, null);
@@ -445,6 +473,18 @@ public class NotificationService extends Service {
                 notificationManager.notify(Config.NOTIFICATION_ID, notification);
             } catch (SecurityException ignored) {
             }
+        }
+    }
+
+    private static final class NotificationUiState {
+        private final boolean pureOverlayToggleVisible;
+        private final boolean anyVisible;
+        private final int pictureCount;
+
+        private NotificationUiState(boolean pureOverlayToggleVisible, boolean anyVisible, int pictureCount) {
+            this.pureOverlayToggleVisible = pureOverlayToggleVisible;
+            this.anyVisible = anyVisible;
+            this.pictureCount = pictureCount;
         }
     }
 
@@ -469,7 +509,6 @@ public class NotificationService extends Service {
                     previewSession.positionX,
                     previewSession.positionY
             );
-            OverlayRuntimeStateStore.saveWindowPosition(this, previewSession.pictureId, previewSession.positionX, previewSession.positionY);
             return;
         }
 
@@ -495,7 +534,6 @@ public class NotificationService extends Service {
                 previewSession.positionX,
                 previewSession.positionY
         );
-        OverlayRuntimeStateStore.saveWindowPosition(this, previewSession.pictureId, previewSession.positionX, previewSession.positionY);
     }
 
     @Nullable

@@ -32,6 +32,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import tool.xfy9326.floatpicture.R;
+import tool.xfy9326.floatpicture.Utils.AppExecutors;
 import tool.xfy9326.floatpicture.Utils.Config;
 import tool.xfy9326.floatpicture.Utils.PictureData;
 
@@ -233,31 +234,28 @@ public class ApplicationMethods {
     }
 
     public static void ClearUselessTemp(final Context mContext) {
-        new Thread(() -> clearUselessTempSync(mContext)).start();
+        Context appContext = mContext.getApplicationContext() != null ? mContext.getApplicationContext() : mContext;
+        AppExecutors.io().execute(() -> clearUselessTempSync(appContext));
     }
 
     public static void runStartupMaintenance(final Context context) {
-        Context appContext = context.getApplicationContext();
+        Context appContext = context.getApplicationContext() != null ? context.getApplicationContext() : context;
         if (!STARTUP_MAINTENANCE_RUNNING.compareAndSet(false, true)) {
             return;
         }
-        new Thread(() -> {
+        AppExecutors.io().execute(() -> {
             try {
                 clearUselessTempSync(appContext);
                 migrateDisplayCacheIfNeeded(appContext);
             } finally {
                 STARTUP_MAINTENANCE_RUNNING.set(false);
             }
-        }, "startup-maintenance").start();
+        });
     }
 
     public static MemoryReleaseResult releaseMemory(Context context) {
         int releasedWindowCount = OverlayRuntimeController.releaseMemory(context);
         int deletedTempFileCount = clearUselessTempSync(context);
-        Runtime runtime = Runtime.getRuntime();
-        runtime.gc();
-        System.runFinalization();
-        runtime.gc();
         return new MemoryReleaseResult(releasedWindowCount, deletedTempFileCount);
     }
 

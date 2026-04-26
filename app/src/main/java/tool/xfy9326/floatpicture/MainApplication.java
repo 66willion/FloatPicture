@@ -7,12 +7,10 @@ import android.os.Build;
 import android.view.View;
 
 import java.util.LinkedHashMap;
-import java.util.Map;
 
-import tool.xfy9326.floatpicture.Methods.ImageMethods;
 import tool.xfy9326.floatpicture.Tools.CrashHandler;
 import tool.xfy9326.floatpicture.Methods.ThemeMethods;
-import tool.xfy9326.floatpicture.View.FloatImageView;
+import tool.xfy9326.floatpicture.Utils.WindowRegistry;
 
 public class MainApplication extends Application {
     // 悬浮窗数量在实际使用中极少超过 20 个；超出时 LRU 淘汰最久未访问的条目并释放其 Bitmap，
@@ -20,7 +18,7 @@ public class MainApplication extends Application {
     private static final int MAX_VIEW_REGISTER_SIZE = 20;
 
     private static MainApplication instance;
-    private LinkedHashMap<String, View> ViewRegister;
+    private WindowRegistry windowRegistry;
     private boolean ApplicationInit;
     private boolean winVisible = true;
     private float safeWindowsAlpha = 0.8f;
@@ -34,22 +32,7 @@ public class MainApplication extends Application {
             CrashHandler.get().Catch(this);
         }
         ThemeMethods.applySavedTheme(this);
-        // accessOrder=true：每次 get/put 都把该条目移到链表尾部，头部为最久未访问（LRU）。
-        this.ViewRegister = new LinkedHashMap<String, View>(MAX_VIEW_REGISTER_SIZE, 0.75f, true) {
-            @Override
-            protected boolean removeEldestEntry(Map.Entry<String, View> eldest) {
-                if (size() > MAX_VIEW_REGISTER_SIZE) {
-                    if (eldest.getValue() instanceof FloatImageView floatImageView) {
-                        if (floatImageView.isAttachedToWindow()) {
-                            return false;
-                        }
-                        ImageMethods.releasePictureView(floatImageView);
-                    }
-                    return true;
-                }
-                return false;
-            }
-        };
+        windowRegistry = new WindowRegistry(MAX_VIEW_REGISTER_SIZE);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             this.safeWindowsAlpha = getSystemService(InputManager.class).getMaximumObscuringOpacityForTouch();
         }
@@ -80,33 +63,28 @@ public class MainApplication extends Application {
     }
 
     public void registerView(String id, View mView) {
-        ViewRegister.put(id, mView);
+        windowRegistry.register(id, mView);
     }
 
-    public LinkedHashMap<String, View> getRegister() {
-        return ViewRegister;
+    public LinkedHashMap<String, View> getRegisteredViewsSnapshot() {
+        return windowRegistry.snapshot();
     }
 
     public int getViewCount() {
-        return ViewRegister.size();
+        return windowRegistry.size();
     }
 
     public View getRegisteredView(String id) {
-        // LinkedHashMap(accessOrder=true) 的 get() 会更新访问顺序，保持 LRU 语义正确
-        return ViewRegister.getOrDefault(id, null);
+        return windowRegistry.get(id);
     }
 
     @SuppressWarnings("UnusedReturnValue")
     public boolean unregisterView(String id) {
-        if (ViewRegister.containsKey(id)) {
-            Object mView = ViewRegister.get(id);
-            if (mView instanceof FloatImageView) {
-                ((FloatImageView) mView).refreshDrawableState();
-            }
-            ViewRegister.remove(id);
-            return true;
-        }
-        return false;
+        return windowRegistry.unregister(id);
+    }
+
+    public boolean unregisterViewIfSame(String id, View expectedView) {
+        return windowRegistry.unregisterIfSame(id, expectedView);
     }
 }
 

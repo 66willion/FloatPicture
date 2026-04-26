@@ -1,31 +1,31 @@
 <merge xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
+    <tool.xfy9326.floatpicture.View.RecyclerFastScrollTrackView
+        android:id="@+id/fast_scroller_track"
+        android:layout_width="@dimen/main_fast_scroll_drag_width"
+        android:layout_height="match_parent"
+        android:layout_gravity="end" />
+
     <androidx.appcompat.widget.AppCompatImageButton
         android:id="@+id/fast_scroller_button_top"
-        android:layout_width="42dp"
-        android:layout_height="42dp"
+        android:layout_width="@dimen/main_fast_scroll_jump_button_size"
+        android:layout_height="@dimen/main_fast_scroll_jump_button_size"
+        android:layout_gravity="top|center_horizontal"
         android:background="@drawable/bg_fast_scroller_button"
         android:contentDescription="@string/main_fast_scroll_to_top"
-        android:padding="9dp"
+        android:padding="10dp"
         android:tint="@color/white"
         app:srcCompat="@drawable/ic_fast_scroll_top" />
 
-    <tool.xfy9326.floatpicture.View.RecyclerFastScrollTrackView
-        android:id="@+id/fast_scroller_track"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_marginTop="8dp"
-        android:layout_marginBottom="8dp"
-        android:layout_weight="1" />
-
     <androidx.appcompat.widget.AppCompatImageButton
         android:id="@+id/fast_scroller_button_bottom"
-        android:layout_width="42dp"
-        android:layout_height="42dp"
+        android:layout_width="@dimen/main_fast_scroll_jump_button_size"
+        android:layout_height="@dimen/main_fast_scroll_jump_button_size"
+        android:layout_gravity="bottom|center_horizontal"
         android:background="@drawable/bg_fast_scroller_button"
         android:contentDescription="@string/main_fast_scroll_to_bottom"
-        android:padding="9dp"
+        android:padding="10dp"
         android:tint="@color/white"
         app:srcCompat="@drawable/ic_fast_scroll_bottom" />
 

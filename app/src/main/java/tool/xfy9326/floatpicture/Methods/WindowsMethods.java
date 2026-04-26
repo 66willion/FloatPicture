@@ -36,6 +36,10 @@ public class WindowsMethods {
     }
 
     public static void createWindow(WindowManager windowManager, View pictureView, boolean touchable, boolean overLayout, float pictureAlpha, int layoutPositionX, int layoutPositionY) {
+        createWindow(windowManager, pictureView, touchable, overLayout, pictureAlpha, layoutPositionX, layoutPositionY, true);
+    }
+
+    public static void createWindow(WindowManager windowManager, View pictureView, boolean touchable, boolean overLayout, float pictureAlpha, int layoutPositionX, int layoutPositionY, boolean syncAfterCreate) {
         Context safeContext = getSafeContext(pictureView.getContext());
         WindowManager activeWindowManager = getWindowManager(safeContext);
         WindowManager.LayoutParams layoutParams = getLayoutWithPerWindowAlpha(
@@ -54,7 +58,9 @@ public class WindowsMethods {
                     activeWindowManager.updateViewLayout(pictureView, layoutParams);
                     syncAttachedWindowManager(pictureView, activeWindowManager);
                     syncLayoutAlpha(pictureView, layoutParams);
-                    syncAllWindows(safeContext);
+                    if (syncAfterCreate) {
+                        syncAllWindows(safeContext);
+                    }
                     return;
                 } catch (Exception e) {
                     Log.w("WindowsMethods", "createWindow updateViewLayout failed: " + e.getMessage());
@@ -81,7 +87,9 @@ public class WindowsMethods {
             layoutParams = fallbackLayoutParams;
         }
         syncLayoutAlpha(pictureView, layoutParams);
-        syncAllWindows(safeContext);
+        if (syncAfterCreate) {
+            syncAllWindows(safeContext);
+        }
     }
 
     public static WindowManager.LayoutParams getDefaultLayout(Context context, int layoutPositionX, int layoutPositionY, boolean touchable, boolean overLayout, float pictureAlpha) {
@@ -177,7 +185,7 @@ public class WindowsMethods {
     }
 
     public static void syncAllWindows(Context context) {
-        Map<String, View> register = ((MainApplication) context.getApplicationContext()).getRegister();
+        Map<String, View> register = ((MainApplication) context.getApplicationContext()).getRegisteredViewsSnapshot();
         if (register.isEmpty()) {
             return;
         }

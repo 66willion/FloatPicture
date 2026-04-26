@@ -3,45 +3,36 @@ package tool.xfy9326.floatpicture.View;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
-import android.graphics.Bitmap;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.widget.SwitchCompat;
 import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.RecyclerView;
 
-import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.PriorityBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import tool.xfy9326.floatpicture.Activities.MainActivity;
 import tool.xfy9326.floatpicture.Activities.PictureSettingsActivity;
 import tool.xfy9326.floatpicture.Methods.ImageMethods;
 import tool.xfy9326.floatpicture.Methods.OverlayRuntimeController;
 import tool.xfy9326.floatpicture.R;
+import tool.xfy9326.floatpicture.Utils.AppExecutors;
 import tool.xfy9326.floatpicture.Utils.Config;
 import tool.xfy9326.floatpicture.Utils.PictureData;
 
 public class ManageListAdapter extends AdvancedRecyclerView.Adapter<ManageListViewHolder> {
-    private static final int PREVIEW_LOADER_THREAD_COUNT = 2;
-    private static final int PREVIEW_PREFETCH_ITEM_COUNT = 2;
-    private static final int PREVIEW_PRIORITY_VISIBLE = 0;
-    private static final int PREVIEW_PRIORITY_PREFETCH = 1;
     private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
-    private static final AtomicLong PREVIEW_TASK_SEQUENCE = new AtomicLong();
-    private static final ThreadPoolExecutor PREVIEW_LOAD_EXECUTOR = createPreviewLoadExecutor();
 
     public interface EditPictureLauncher {
         void launch(Intent intent);
@@ -52,16 +43,10 @@ public class ManageListAdapter extends AdvancedRecyclerView.Adapter<ManageListVi
     }
 
     private final Activity mActivity;
-    private final Context previewContext;
+    private final Context appContext;
     private final EditPictureLauncher editPictureLauncher;
-    private final PictureData pictureData;
-    private final Object previewRequestLock = new Object();
-    private final ConcurrentHashMap<String, WeakReference<ManageListViewHolder>> attachedPreviewHolders = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, PreviewRequestSpec> previewRequestSpecs = new ConcurrentHashMap<>();
-    private final AtomicLong previewGeneration = new AtomicLong();
-    private volatile int visibleStartPosition = RecyclerView.NO_POSITION;
-    private volatile int visibleEndPosition = RecyclerView.NO_POSITION;
-    private volatile int visibleCenterPosition = RecyclerView.NO_POSITION;
+    private final ManageListPreviewLoader previewLoader;
+    private final AtomicInteger refreshGeneration = new AtomicInteger();
     private ArrayList<ManageListItem> items = new ArrayList<>();
     private final LinkedHashSet<String> selectedPictureIds = new LinkedHashSet<>();
     private BatchSelectionListener batchSelectionListener;
@@ -69,17 +54,34 @@ public class ManageListAdapter extends AdvancedRecyclerView.Adapter<ManageListVi
 
     public ManageListAdapter(Activity mActivity, EditPictureLauncher editPictureLauncher) {
         this.mActivity = mActivity;
-        previewContext = mActivity.getApplicationContext() != null ? mActivity.getApplicationContext() : mActivity;
+        appContext = mActivity.getApplicationContext() != null ? mActivity.getApplicationContext() : mActivity;
         this.editPictureLauncher = editPictureLauncher;
-        pictureData = new PictureData();
+        previewLoader = new ManageListPreviewLoader(appContext);
         setHasStableIds(true);
-        items = buildItems();
     }
 
     public void refreshData() {
-        invalidateQueuedPreviewRequests();
-        submitItems(buildItems());
-        scheduleCurrentViewportPreviewLoads(false);
+        refreshData(null);
+    }
+
+    public void refreshData(@Nullable Runnable completionCallback) {
+        previewLoader.invalidateQueuedPreviewRequests();
+        int generation = refreshGeneration.incrementAndGet();
+        ArrayList<ManageListItem> oldItems = copyItems(items);
+        AppExecutors.io().execute(() -> {
+            ArrayList<ManageListItem> newItems = buildItems();
+            DiffUtil.DiffResult diffResult = calculateDiff(oldItems, newItems);
+            MAIN_HANDLER.post(() -> {
+                if (generation != refreshGeneration.get() || !isActivityAlive()) {
+                    return;
+                }
+                submitItems(newItems, diffResult);
+                previewLoader.scheduleCurrentViewportPreviewLoads(false, this::getPictureIdForPosition);
+                if (completionCallback != null) {
+                    completionCallback.run();
+                }
+            });
+        });
     }
 
     public void setBatchSelectionListener(BatchSelectionListener batchSelectionListener) {
@@ -127,63 +129,22 @@ public class ManageListAdapter extends AdvancedRecyclerView.Adapter<ManageListVi
 
     public void updatePreviewViewport(int firstVisiblePosition, int lastVisiblePosition, boolean idle) {
         if (items.isEmpty() || firstVisiblePosition == RecyclerView.NO_POSITION || lastVisiblePosition == RecyclerView.NO_POSITION) {
-            visibleStartPosition = RecyclerView.NO_POSITION;
-            visibleEndPosition = RecyclerView.NO_POSITION;
-            visibleCenterPosition = RecyclerView.NO_POSITION;
-            invalidateQueuedPreviewRequests();
+            previewLoader.clearViewport();
             return;
         }
 
         int normalizedFirst = Math.max(Math.min(firstVisiblePosition, lastVisiblePosition), 0);
         int normalizedLast = Math.min(Math.max(firstVisiblePosition, lastVisiblePosition), items.size() - 1);
-        boolean viewportChanged = normalizedFirst != visibleStartPosition || normalizedLast != visibleEndPosition;
-
-        visibleStartPosition = normalizedFirst;
-        visibleEndPosition = normalizedLast;
-        visibleCenterPosition = normalizedFirst + ((normalizedLast - normalizedFirst) / 2);
+        boolean viewportChanged = previewLoader.updateViewport(normalizedFirst, normalizedLast);
 
         if (viewportChanged) {
-            invalidateQueuedPreviewRequests();
+            previewLoader.invalidateQueuedPreviewRequests();
         }
-        scheduleCurrentViewportPreviewLoads(idle);
+        previewLoader.scheduleCurrentViewportPreviewLoads(idle, this::getPictureIdForPosition);
     }
 
     public int refreshVisiblePreviewFallback(@NonNull RecyclerView recyclerView) {
-        if (visibleStartPosition == RecyclerView.NO_POSITION || visibleEndPosition == RecyclerView.NO_POSITION) {
-            return 0;
-        }
-        int missingPreviewCount = 0;
-        for (int position = visibleStartPosition; position <= visibleEndPosition; position++) {
-            ManageListItem item = getItem(position);
-            if (item == null) {
-                continue;
-            }
-            RecyclerView.ViewHolder rawHolder = recyclerView.findViewHolderForAdapterPosition(position);
-            if (!(rawHolder instanceof ManageListViewHolder)) {
-                requestPreviewLoad(position, PREVIEW_PRIORITY_VISIBLE, true);
-                missingPreviewCount++;
-                continue;
-            }
-            ManageListViewHolder holder = (ManageListViewHolder) rawHolder;
-            registerAttachedPreviewHolder(item.id, holder);
-            Object imageTag = holder.imageView_Picture_Preview.getTag();
-            boolean tagMatches = imageTag instanceof String && item.id.equals(imageTag);
-            if (!tagMatches) {
-                ImageMethods.releaseImageBitmap(holder.imageView_Picture_Preview);
-                holder.imageView_Picture_Preview.setTag(item.id);
-            }
-            if (holder.imageView_Picture_Preview.getDrawable() != null) {
-                continue;
-            }
-            Bitmap cachedPreview = ImageMethods.getCachedPreviewBitmap(item.id);
-            if (cachedPreview != null) {
-                holder.imageView_Picture_Preview.setImageBitmap(cachedPreview);
-                continue;
-            }
-            requestPreviewLoad(position, PREVIEW_PRIORITY_VISIBLE, true);
-            missingPreviewCount++;
-        }
-        return missingPreviewCount;
+        return previewLoader.refreshVisiblePreviewFallback(recyclerView, this::getPictureIdForPosition);
     }
 
     @Override
@@ -194,6 +155,7 @@ public class ManageListAdapter extends AdvancedRecyclerView.Adapter<ManageListVi
 
     private ArrayList<ManageListItem> buildItems() {
         PictureData.invalidateCache();
+        PictureData pictureData = new PictureData();
         LinkedHashMap<String, String> pictureInfo = pictureData.getListArray();
         ArrayList<ManageListItem> newItems = new ArrayList<>();
         if (pictureInfo != null) {
@@ -215,9 +177,8 @@ public class ManageListAdapter extends AdvancedRecyclerView.Adapter<ManageListVi
         return newItems;
     }
 
-    private void submitItems(ArrayList<ManageListItem> newItems) {
-        ArrayList<ManageListItem> oldItems = items;
-        DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(new DiffUtil.Callback() {
+    private DiffUtil.DiffResult calculateDiff(ArrayList<ManageListItem> oldItems, ArrayList<ManageListItem> newItems) {
+        return DiffUtil.calculateDiff(new DiffUtil.Callback() {
             @Override
             public int getOldListSize() {
                 return oldItems.size();
@@ -238,6 +199,9 @@ public class ManageListAdapter extends AdvancedRecyclerView.Adapter<ManageListVi
                 return oldItems.get(oldItemPosition).hasSameContent(newItems.get(newItemPosition));
             }
         });
+    }
+
+    private void submitItems(ArrayList<ManageListItem> newItems, DiffUtil.DiffResult diffResult) {
         items = newItems;
         pruneSelectedPictureIds();
         diffResult.dispatchUpdatesTo(this);
@@ -255,9 +219,8 @@ public class ManageListAdapter extends AdvancedRecyclerView.Adapter<ManageListVi
         if (item == null) {
             return;
         }
-        registerAttachedPreviewHolder(item.id, holder);
         holder.textView_Picture_Name.setText(item.pictureName);
-        bindPreview(holder, item.id, position);
+        previewLoader.bindPreview(holder, item.id, position);
         holder.textView_Picture_Error.setVisibility(item.pictureExists ? View.GONE : View.VISIBLE);
 
         holder.checkBox_Picture_Select.setOnCheckedChangeListener(null);
@@ -310,18 +273,14 @@ public class ManageListAdapter extends AdvancedRecyclerView.Adapter<ManageListVi
             if (currentItem == null) {
                 return;
             }
-            PictureData deletePictureData = new PictureData();
-            deletePictureData.setDataControl(currentItem.id);
-            deletePictureData.remove();
-            ImageMethods.clearAllTemp(mActivity, currentItem.id);
-            OverlayRuntimeController.deletePicture(mActivity, currentItem.id);
+            String pictureId = currentItem.id;
             holder.switch_Picture_Show.setOnCheckedChangeListener(null);
             holder.button_Picture_Edit.setOnClickListener(null);
             holder.button_Picture_Delete.setOnClickListener(null);
             holder.checkBox_Picture_Select.setOnCheckedChangeListener(null);
-            refreshData();
+            removeItemOptimistically(pictureId);
             MainActivity.SnackShow(mActivity, R.string.action_delete_window);
-            OverlayRuntimeController.refreshNotification(mActivity);
+            deletePictureAsync(pictureId);
         });
     }
 
@@ -340,9 +299,7 @@ public class ManageListAdapter extends AdvancedRecyclerView.Adapter<ManageListVi
         holder.button_Picture_Delete.setOnClickListener(null);
         holder.checkBox_Picture_Select.setOnCheckedChangeListener(null);
         holder.card_Picture_Item.setOnClickListener(null);
-        clearAttachedPreviewHolder(holder);
-        holder.imageView_Picture_Preview.setTag(null);
-        ImageMethods.releaseImageBitmap(holder.imageView_Picture_Preview);
+        previewLoader.recyclePreviewHolder(holder);
         super.onViewRecycled(holder);
     }
 
@@ -351,6 +308,11 @@ public class ManageListAdapter extends AdvancedRecyclerView.Adapter<ManageListVi
             return null;
         }
         return items.get(position);
+    }
+
+    private String getPictureIdForPosition(int position) {
+        ManageListItem item = getItem(position);
+        return item != null ? item.id : null;
     }
 
     private void toggleBatchSelection(int position) {
@@ -390,169 +352,60 @@ public class ManageListAdapter extends AdvancedRecyclerView.Adapter<ManageListVi
         batchSelectionListener.onSelectionChanged(selectedCount, totalCount, totalCount > 0 && selectedCount == totalCount);
     }
 
-    private void bindPreview(ManageListViewHolder holder, String pictureId, int adapterPosition) {
-        holder.imageView_Picture_Preview.setTag(pictureId);
-        ImageMethods.releaseImageBitmap(holder.imageView_Picture_Preview);
-        Bitmap cachedPreview = ImageMethods.getCachedPreviewBitmap(pictureId);
-        if (cachedPreview != null) {
-            holder.imageView_Picture_Preview.setImageBitmap(cachedPreview);
-            return;
-        }
-        requestPreviewLoad(adapterPosition, PREVIEW_PRIORITY_VISIBLE);
-    }
-
-    private static ThreadPoolExecutor createPreviewLoadExecutor() {
-        ThreadPoolExecutor executor = new ThreadPoolExecutor(
-                PREVIEW_LOADER_THREAD_COUNT,
-                PREVIEW_LOADER_THREAD_COUNT,
-                0L,
-                TimeUnit.MILLISECONDS,
-                new PriorityBlockingQueue<>()
-        );
-        executor.prestartAllCoreThreads();
-        return executor;
-    }
-
-    private void scheduleCurrentViewportPreviewLoads(boolean includePrefetch) {
-        if (visibleStartPosition == RecyclerView.NO_POSITION || visibleEndPosition == RecyclerView.NO_POSITION) {
-            return;
-        }
-        boolean replaceVisibleRequests = includePrefetch;
-        for (int position = visibleStartPosition; position <= visibleEndPosition; position++) {
-            requestPreviewLoad(position, PREVIEW_PRIORITY_VISIBLE, replaceVisibleRequests);
-        }
-        if (includePrefetch) {
-            scheduleNeighborPrefetchLoads();
-        }
-    }
-
-    private void scheduleNeighborPrefetchLoads() {
-        if (visibleStartPosition == RecyclerView.NO_POSITION || visibleEndPosition == RecyclerView.NO_POSITION) {
-            return;
-        }
-        for (int offset = 1; offset <= PREVIEW_PREFETCH_ITEM_COUNT; offset++) {
-            requestPreviewLoad(visibleStartPosition - offset, PREVIEW_PRIORITY_PREFETCH);
-            requestPreviewLoad(visibleEndPosition + offset, PREVIEW_PRIORITY_PREFETCH);
-        }
-    }
-
-    private void requestPreviewLoad(int adapterPosition, int priorityTier) {
-        requestPreviewLoad(adapterPosition, priorityTier, false);
-    }
-
-    private void requestPreviewLoad(int adapterPosition, int priorityTier, boolean replaceExistingRequest) {
-        ManageListItem item = getItem(adapterPosition);
-        if (item == null || ImageMethods.getCachedPreviewBitmap(item.id) != null) {
-            return;
-        }
-        long requestToken = PREVIEW_TASK_SEQUENCE.incrementAndGet();
-        PreviewRequestSpec requestSpec = new PreviewRequestSpec(
-                requestToken,
-                previewGeneration.get(),
-                priorityTier,
-                resolveDistanceScore(adapterPosition)
-        );
-        if (!registerPreviewRequest(item.id, requestSpec, replaceExistingRequest)) {
-            return;
-        }
-        PREVIEW_LOAD_EXECUTOR.execute(new PreviewLoadTask(item.id, adapterPosition, requestSpec, requestToken));
-    }
-
-    private boolean registerPreviewRequest(String pictureId,
-                                           PreviewRequestSpec requestSpec,
-                                           boolean replaceExistingRequest) {
-        synchronized (previewRequestLock) {
-            PreviewRequestSpec existingRequest = previewRequestSpecs.get(pictureId);
-            if (!replaceExistingRequest && existingRequest != null && existingRequest.isSameOrBetterThan(requestSpec)) {
-                return false;
+    private void removeItemOptimistically(@NonNull String pictureId) {
+        int removeIndex = -1;
+        ArrayList<ManageListItem> newItems = new ArrayList<>(items.size());
+        for (int index = 0; index < items.size(); index++) {
+            ManageListItem item = items.get(index);
+            if (item.id.equals(pictureId)) {
+                removeIndex = index;
+                continue;
             }
-            previewRequestSpecs.put(pictureId, requestSpec);
-            return true;
+            newItems.add(item.copy());
         }
-    }
-
-    private void clearPreviewRequest(String pictureId, PreviewRequestSpec requestSpec) {
-        synchronized (previewRequestLock) {
-            previewRequestSpecs.remove(pictureId, requestSpec);
-        }
-    }
-
-    private void invalidateQueuedPreviewRequests() {
-        previewGeneration.incrementAndGet();
-        PREVIEW_LOAD_EXECUTOR.getQueue().clear();
-        synchronized (previewRequestLock) {
-            previewRequestSpecs.clear();
-        }
-    }
-
-    private int resolveDistanceScore(int adapterPosition) {
-        if (visibleCenterPosition == RecyclerView.NO_POSITION) {
-            return 0;
-        }
-        return Math.abs(adapterPosition - visibleCenterPosition);
-    }
-
-    private boolean isPreviewRequestStillRelevant(String pictureId, int adapterPosition, PreviewRequestSpec requestSpec) {
-        if (requestSpec.generation != previewGeneration.get()) {
-            return false;
-        }
-        PreviewRequestSpec latestRequest = previewRequestSpecs.get(pictureId);
-        if (latestRequest == null || !latestRequest.equals(requestSpec)) {
-            return false;
-        }
-        if (requestSpec.priorityTier == PREVIEW_PRIORITY_VISIBLE) {
-            return isPositionWithinVisibleViewport(adapterPosition);
-        }
-        return true;
-    }
-
-    private boolean isPositionWithinVisibleViewport(int adapterPosition) {
-        if (visibleStartPosition == RecyclerView.NO_POSITION || visibleEndPosition == RecyclerView.NO_POSITION) {
-            return true;
-        }
-        return adapterPosition >= visibleStartPosition && adapterPosition <= visibleEndPosition;
-    }
-
-    private void registerAttachedPreviewHolder(String pictureId, ManageListViewHolder holder) {
-        attachedPreviewHolders.put(pictureId, new WeakReference<>(holder));
-    }
-
-    private void clearAttachedPreviewHolder(ManageListViewHolder holder) {
-        Object imageTag = holder.imageView_Picture_Preview.getTag();
-        if (!(imageTag instanceof String)) {
+        if (removeIndex < 0) {
             return;
         }
-        String pictureId = (String) imageTag;
-        WeakReference<ManageListViewHolder> holderReference = attachedPreviewHolders.get(pictureId);
-        if (holderReference != null && holderReference.get() == holder) {
-            attachedPreviewHolders.remove(pictureId, holderReference);
-        }
+        refreshGeneration.incrementAndGet();
+        items = newItems;
+        selectedPictureIds.remove(pictureId);
+        previewLoader.invalidateQueuedPreviewRequests();
+        notifyItemRemoved(removeIndex);
+        notifyBatchSelectionChanged();
     }
 
-    private void applyPreviewBitmapToAttachedHolder(String pictureId,
-                                                    int adapterPosition,
-                                                    Bitmap previewBitmap,
-                                                    PreviewRequestSpec requestSpec) {
-        try {
-            if (!isPreviewRequestStillRelevant(pictureId, adapterPosition, requestSpec)) {
-                return;
+    private void deletePictureAsync(@NonNull String pictureId) {
+        AppExecutors.io().execute(() -> {
+            try {
+                PictureData deletePictureData = new PictureData();
+                deletePictureData.setDataControl(pictureId);
+                deletePictureData.remove();
+                ImageMethods.clearAllTemp(appContext, pictureId);
+                OverlayRuntimeController.deletePicture(appContext, pictureId);
+            } catch (Exception e) {
+                Log.w("ManageListAdapter", "deletePictureAsync failed: " + pictureId, e);
+            } finally {
+                MAIN_HANDLER.post(() -> {
+                    if (!isActivityAlive()) {
+                        return;
+                    }
+                    refreshData();
+                    OverlayRuntimeController.refreshNotification(appContext, false);
+                });
             }
-            WeakReference<ManageListViewHolder> holderReference = attachedPreviewHolders.get(pictureId);
-            if (holderReference == null) {
-                return;
-            }
-            ManageListViewHolder holder = holderReference.get();
-            if (holder == null) {
-                attachedPreviewHolders.remove(pictureId, holderReference);
-                return;
-            }
-            Object imageTag = holder.imageView_Picture_Preview.getTag();
-            if (imageTag instanceof String && pictureId.equals(imageTag)) {
-                holder.imageView_Picture_Preview.setImageBitmap(previewBitmap);
-            }
-        } finally {
-            clearPreviewRequest(pictureId, requestSpec);
+        });
+    }
+
+    private boolean isActivityAlive() {
+        return !mActivity.isFinishing() && !mActivity.isDestroyed();
+    }
+
+    private static ArrayList<ManageListItem> copyItems(ArrayList<ManageListItem> sourceItems) {
+        ArrayList<ManageListItem> copiedItems = new ArrayList<>(sourceItems.size());
+        for (ManageListItem item : sourceItems) {
+            copiedItems.add(item.copy());
         }
+        return copiedItems;
     }
 
     private static final class ManageListItem {
@@ -590,98 +443,18 @@ public class ManageListAdapter extends AdvancedRecyclerView.Adapter<ManageListVi
                     && previewVersion == other.previewVersion
                     && pictureName.equals(other.pictureName);
         }
-    }
 
-    private static final class PreviewRequestSpec {
-        private final long requestToken;
-        private final long generation;
-        private final int priorityTier;
-        private final int distanceScore;
-
-        private PreviewRequestSpec(long requestToken, long generation, int priorityTier, int distanceScore) {
-            this.requestToken = requestToken;
-            this.generation = generation;
-            this.priorityTier = priorityTier;
-            this.distanceScore = distanceScore;
-        }
-
-        private boolean isSameOrBetterThan(PreviewRequestSpec other) {
-            if (generation != other.generation) {
-                return generation > other.generation;
-            }
-            if (priorityTier != other.priorityTier) {
-                return priorityTier < other.priorityTier;
-            }
-            return distanceScore <= other.distanceScore;
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (this == obj) {
-                return true;
-            }
-            if (!(obj instanceof PreviewRequestSpec)) {
-                return false;
-            }
-            PreviewRequestSpec other = (PreviewRequestSpec) obj;
-            return requestToken == other.requestToken
-                    && generation == other.generation
-                    && priorityTier == other.priorityTier
-                    && distanceScore == other.distanceScore;
-        }
-
-        @Override
-        public int hashCode() {
-            int result = Long.hashCode(requestToken);
-            result = 31 * result + Long.hashCode(generation);
-            result = 31 * result + priorityTier;
-            result = 31 * result + distanceScore;
-            return result;
+        private ManageListItem copy() {
+            return new ManageListItem(
+                    id,
+                    pictureName,
+                    visible,
+                    touchAndMove,
+                    overLayout,
+                    pictureExists,
+                    previewVersion
+            );
         }
     }
 
-    private final class PreviewLoadTask implements Runnable, Comparable<PreviewLoadTask> {
-        private final String pictureId;
-        private final int adapterPosition;
-        private final PreviewRequestSpec requestSpec;
-        private final long sequence;
-
-        private PreviewLoadTask(String pictureId, int adapterPosition, PreviewRequestSpec requestSpec, long sequence) {
-            this.pictureId = pictureId;
-            this.adapterPosition = adapterPosition;
-            this.requestSpec = requestSpec;
-            this.sequence = sequence;
-        }
-
-        @Override
-        public void run() {
-            boolean postedToMainThread = false;
-            try {
-                if (!isPreviewRequestStillRelevant(pictureId, adapterPosition, requestSpec)) {
-                    return;
-                }
-                Bitmap previewBitmap = ImageMethods.getPreviewBitmap(previewContext, pictureId);
-                if (previewBitmap == null || previewBitmap.isRecycled() || !isPreviewRequestStillRelevant(pictureId, adapterPosition, requestSpec)) {
-                    return;
-                }
-                postedToMainThread = true;
-                MAIN_HANDLER.post(() -> applyPreviewBitmapToAttachedHolder(pictureId, adapterPosition, previewBitmap, requestSpec));
-            } finally {
-                if (!postedToMainThread) {
-                    clearPreviewRequest(pictureId, requestSpec);
-                }
-            }
-        }
-
-        @Override
-        public int compareTo(@NonNull PreviewLoadTask other) {
-            if (requestSpec.priorityTier != other.requestSpec.priorityTier) {
-                return Integer.compare(requestSpec.priorityTier, other.requestSpec.priorityTier);
-            }
-            if (requestSpec.distanceScore != other.requestSpec.distanceScore) {
-                return Integer.compare(requestSpec.distanceScore, other.requestSpec.distanceScore);
-            }
-            return Long.compare(sequence, other.sequence);
-        }
-    }
 }

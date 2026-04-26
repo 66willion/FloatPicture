@@ -17,9 +17,9 @@ import android.net.Uri;
 import android.provider.Settings;
 import android.view.View;
 import android.widget.CheckBox;
-import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -45,32 +45,30 @@ import tool.xfy9326.floatpicture.Methods.OverlayRuntimeController;
 import tool.xfy9326.floatpicture.Methods.PermissionMethods;
 import tool.xfy9326.floatpicture.R;
 import tool.xfy9326.floatpicture.Services.TrustedOverlayAccessibilityService;
+import tool.xfy9326.floatpicture.Utils.AppExecutors;
 import tool.xfy9326.floatpicture.Utils.Config;
 import tool.xfy9326.floatpicture.Utils.OverlayRuntimeStateStore;
-import tool.xfy9326.floatpicture.Utils.PictureData;
 import tool.xfy9326.floatpicture.View.AdvancedRecyclerView;
-import tool.xfy9326.floatpicture.View.GlobalSettingsFragment;
 import tool.xfy9326.floatpicture.View.ManageListAdapter;
 import tool.xfy9326.floatpicture.View.RecyclerFastScrollerView;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 public class MainActivity extends AppCompatActivity {
     private static final int MAIN_LIST_VIEW_CACHE_SIZE = 8;
     private static final long PURE_OVERLAY_BUTTON_REENABLE_DELAY_MS = 300L;
-    private static final long MANAGE_LIST_PREVIEW_FALLBACK_FIRST_DELAY_MS = 40L;
-    private static final long MANAGE_LIST_PREVIEW_FALLBACK_SECOND_DELAY_MS = 140L;
+    private static final long STARTUP_SPLASH_MAX_WAIT_MS = 1500L;
+    private static final long STARTUP_SPLASH_FADE_MS = 180L;
     private static final int OPERATION_SNACKBAR_DURATION_MS = 200;
     private static final int MANAGE_LIST_LANDSCAPE_SPAN_COUNT = 2;
     private static final int MANAGE_LIST_LANDSCAPE_ITEM_GAP_DP = 8;
     private static final float FLOATING_BLUR_RADIUS_DP = 18f;
-    private static final int DRAWER_PAGE_MENU = 0;
-    private static final int DRAWER_PAGE_GLOBAL_SETTINGS = 1;
-    private static final int DRAWER_PAGE_ABOUT = 2;
-    private static final String DRAWER_GLOBAL_SETTINGS_FRAGMENT_TAG = "drawer_global_settings";
 
     private ManageListAdapter manageListAdapter;
+    private ManageListPreviewController manageListPreviewController;
+    private MainDrawerController mainDrawerController;
     private AdvancedRecyclerView recyclerView;
     private RecyclerFastScrollerView fastScrollerView;
     private FloatingActionButton randomWindowButton;
@@ -80,14 +78,12 @@ public class MainActivity extends AppCompatActivity {
     private MaterialButton drawerButton;
     private View batchSelectAllContainer;
     private CheckBox batchSelectAllCheckBox;
-    private View drawerMenuPage;
-    private View drawerGlobalSettingsPage;
-    private View drawerAboutPage;
+    private View startupSplashOverlay;
     private RecyclerView.ItemDecoration manageListSpacingDecoration;
     private boolean pureOverlayToggleInProgress = false;
+    private boolean startupSplashDismissed = false;
     private boolean batchEditMode = false;
     private boolean updatingBatchSelectAllState = false;
-    private int currentDrawerPage = DRAWER_PAGE_MENU;
     private long BackClickTime;
     private ActivityResultLauncher<String> picturePickerLauncher;
     private ActivityResultLauncher<String> batchPicturePickerLauncher;
@@ -98,21 +94,7 @@ public class MainActivity extends AppCompatActivity {
     private ActivityResultLauncher<Intent> trustedOverlaySettingsLauncher;
     private ActivityResultLauncher<String> notificationPermissionLauncher;
     private final Runnable trustedOverlayStateUpdater = this::updateTrustedOverlayButtonState;
-    private final Runnable manageListPreviewFirstFallbackRunnable = this::runManageListPreviewFirstFallback;
-    private final Runnable manageListPreviewSecondFallbackRunnable = this::runManageListPreviewSecondFallback;
-    private final RecyclerView.OnScrollListener manageListPreviewScrollListener = new RecyclerView.OnScrollListener() {
-        @Override
-        public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
-            updateManageListPreviewViewport(recyclerView, false);
-            handleManageListPreviewFallbackScheduling(recyclerView);
-        }
-
-        @Override
-        public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
-            updateManageListPreviewViewport(recyclerView, newState == RecyclerView.SCROLL_STATE_IDLE);
-            handleManageListPreviewFallbackScheduling(recyclerView);
-        }
-    };
+    private final Runnable startupSplashTimeoutRunnable = this::dismissStartupSplash;
     private final BroadcastReceiver overlayRuntimeStateReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(android.content.Context context, Intent intent) {
@@ -151,7 +133,11 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         deactivatePureOverlayModeIfNeeded();
-        refreshManageListData();
+        if (startupSplashDismissed) {
+            refreshManageListData();
+        } else {
+            refreshManageListData(this::dismissStartupSplash);
+        }
         updatePureOverlayButtonState();
         refreshTrustedOverlayButtonState();
     }
@@ -173,15 +159,22 @@ public class MainActivity extends AppCompatActivity {
         if (trustedOverlayButton != null) {
             trustedOverlayButton.removeCallbacks(trustedOverlayStateUpdater);
         }
+        if (startupSplashOverlay != null) {
+            startupSplashOverlay.removeCallbacks(startupSplashTimeoutRunnable);
+            startupSplashOverlay.animate().cancel();
+        }
+        if (manageListPreviewController != null) {
+            manageListPreviewController.detach();
+            manageListPreviewController = null;
+        }
         if (recyclerView != null) {
-            cancelManageListPreviewFallbacks(recyclerView);
-            recyclerView.removeOnScrollListener(manageListPreviewScrollListener);
             recyclerView.setAdapter(null);
         }
         if (fastScrollerView != null) {
             fastScrollerView.attachToRecyclerView(null);
         }
         manageListAdapter = null;
+        manageListPreviewController = null;
         recyclerView = null;
         fastScrollerView = null;
         randomWindowButton = null;
@@ -191,9 +184,8 @@ public class MainActivity extends AppCompatActivity {
         drawerButton = null;
         batchSelectAllContainer = null;
         batchSelectAllCheckBox = null;
-        drawerMenuPage = null;
-        drawerGlobalSettingsPage = null;
-        drawerAboutPage = null;
+        startupSplashOverlay = null;
+        mainDrawerController = null;
         super.onDestroy();
     }
 
@@ -223,14 +215,15 @@ public class MainActivity extends AppCompatActivity {
         recyclerView.setItemAnimator(null);
         recyclerView.setItemViewCacheSize(MAIN_LIST_VIEW_CACHE_SIZE);
         recyclerView.setEmptyView(findViewById(R.id.layout_widget_empty_view));
-        recyclerView.addOnScrollListener(manageListPreviewScrollListener);
-        recyclerView.post(() -> updateManageListPreviewViewport(recyclerView, true));
         fastScrollerView = findViewById(R.id.main_fast_scroller);
         if (fastScrollerView != null) {
             fastScrollerView.attachToRecyclerView(recyclerView);
             fastScrollerView.bringToFront();
             fastScrollerView.setTranslationZ(getResources().getDisplayMetrics().density * 18f);
         }
+        manageListPreviewController = new ManageListPreviewController(manageListAdapter, recyclerView, fastScrollerView);
+        manageListPreviewController.attach();
+        setupStartupSplash();
 
         randomWindowButton = findViewById(R.id.main_button_random_window);
         if (randomWindowButton != null) {
@@ -295,148 +288,15 @@ public class MainActivity extends AppCompatActivity {
         }
         updateBatchEditUi(false);
         applyFloatingBackgroundBlur(findViewById(R.id.main_drawer_capsule_blur));
-        setupDrawerPages(drawerLayout);
-        bindDrawerActions(drawerLayout);
-    }
-
-    private void bindDrawerActions(@NonNull DrawerLayout drawerLayout) {
-        bindDrawerPageAction(R.id.main_drawer_global_settings, () -> showDrawerPage(DRAWER_PAGE_GLOBAL_SETTINGS));
-        bindDrawerAction(drawerLayout, R.id.main_drawer_close_all_windows, this::hideAllWindowsSafely);
-        bindDrawerAction(drawerLayout, R.id.main_drawer_release_memory, this::releaseMemory);
-        bindDrawerAction(drawerLayout, R.id.main_drawer_batch_edit, this::enterBatchEditMode);
-        bindDrawerAction(drawerLayout, R.id.main_drawer_batch_import, this::launchBatchImportPicker);
-        bindDrawerPageAction(R.id.main_drawer_about, () -> showDrawerPage(DRAWER_PAGE_ABOUT));
-        bindDrawerAction(drawerLayout, R.id.main_drawer_back_to_launcher,
-                () -> MainActivity.this.moveTaskToBack(true));
-        bindDrawerAction(drawerLayout, R.id.main_drawer_exit,
-                () -> ApplicationMethods.CloseApplication(MainActivity.this));
-        bindDrawerPageAction(R.id.main_drawer_global_back, () -> showDrawerPage(DRAWER_PAGE_MENU));
-        bindDrawerPageAction(R.id.main_drawer_about_back, () -> showDrawerPage(DRAWER_PAGE_MENU));
-        bindDrawerAction(drawerLayout, R.id.main_drawer_about_open_source,
-                () -> startActivity(new Intent(MainActivity.this, LicenseActivity.class)));
-    }
-
-    private void bindDrawerAction(@NonNull DrawerLayout drawerLayout, int viewId, @NonNull Runnable action) {
-        View actionView = findViewById(viewId);
-        if (actionView == null) {
-            return;
-        }
-        actionView.setOnClickListener(view -> {
-            drawerLayout.closeDrawer(GravityCompat.START);
-            drawerLayout.post(action);
-        });
-    }
-
-    private void bindDrawerPageAction(int viewId, @NonNull Runnable action) {
-        View actionView = findViewById(viewId);
-        if (actionView == null) {
-            return;
-        }
-        actionView.setOnClickListener(view -> action.run());
-    }
-
-    private void setupDrawerPages(@NonNull DrawerLayout drawerLayout) {
-        drawerMenuPage = findViewById(R.id.main_drawer_menu_page);
-        drawerGlobalSettingsPage = findViewById(R.id.main_drawer_global_page);
-        drawerAboutPage = findViewById(R.id.main_drawer_about_page);
-        TextView aboutVersion = findViewById(R.id.main_drawer_about_version);
-        if (aboutVersion != null) {
-            aboutVersion.setText(getString(R.string.application_version) + ApplicationMethods.getApplicationVersion(this));
-        }
-        showDrawerPage(DRAWER_PAGE_MENU, false);
-        drawerLayout.addDrawerListener(new DrawerLayout.SimpleDrawerListener() {
-            @Override
-            public void onDrawerClosed(@NonNull View drawerView) {
-                showDrawerPage(DRAWER_PAGE_MENU, false);
-            }
-        });
-    }
-
-    private void showDrawerPage(int drawerPage) {
-        showDrawerPage(drawerPage, true);
-    }
-
-    private void showDrawerPage(int drawerPage, boolean animate) {
-        if (drawerPage == currentDrawerPage
-                && drawerMenuPage != null
-                && drawerMenuPage.getVisibility() == View.VISIBLE) {
-            return;
-        }
-        if (drawerPage == DRAWER_PAGE_GLOBAL_SETTINGS) {
-            ensureDrawerGlobalSettingsFragment();
-        }
-        View targetPage = getDrawerPageView(drawerPage);
-        View previousPage = getDrawerPageView(currentDrawerPage);
-        currentDrawerPage = drawerPage;
-        if (targetPage == null) {
-            return;
-        }
-        if (previousPage != null && previousPage != targetPage) {
-            hideDrawerPage(previousPage, animate);
-        }
-        showDrawerPageView(targetPage, animate);
-    }
-
-    private View getDrawerPageView(int drawerPage) {
-        if (drawerPage == DRAWER_PAGE_GLOBAL_SETTINGS) {
-            return drawerGlobalSettingsPage;
-        }
-        if (drawerPage == DRAWER_PAGE_ABOUT) {
-            return drawerAboutPage;
-        }
-        return drawerMenuPage;
-    }
-
-    private void showDrawerPageView(@NonNull View pageView, boolean animate) {
-        pageView.setVisibility(View.VISIBLE);
-        pageView.bringToFront();
-        if (!animate) {
-            pageView.setAlpha(1f);
-            pageView.setTranslationX(0f);
-            return;
-        }
-        float offset = getResources().getDisplayMetrics().density * 16f;
-        pageView.setAlpha(0f);
-        pageView.setTranslationX(offset);
-        pageView.animate()
-                .alpha(1f)
-                .translationX(0f)
-                .setDuration(160L)
-                .start();
-    }
-
-    private void hideDrawerPage(@NonNull View pageView, boolean animate) {
-        if (!animate) {
-            pageView.setVisibility(View.GONE);
-            pageView.setAlpha(1f);
-            pageView.setTranslationX(0f);
-            return;
-        }
-        float offset = -getResources().getDisplayMetrics().density * 10f;
-        pageView.animate()
-                .alpha(0f)
-                .translationX(offset)
-                .setDuration(120L)
-                .withEndAction(() -> {
-                    pageView.setVisibility(View.GONE);
-                    pageView.setAlpha(1f);
-                    pageView.setTranslationX(0f);
-                })
-                .start();
-    }
-
-    private void ensureDrawerGlobalSettingsFragment() {
-        if (getSupportFragmentManager().findFragmentByTag(DRAWER_GLOBAL_SETTINGS_FRAGMENT_TAG) != null) {
-            return;
-        }
-        getSupportFragmentManager()
-                .beginTransaction()
-                .replace(
-                        R.id.main_drawer_global_settings_container,
-                        new GlobalSettingsFragment(),
-                        DRAWER_GLOBAL_SETTINGS_FRAGMENT_TAG
-                )
-                .commit();
+        mainDrawerController = new MainDrawerController(
+                this,
+                drawerLayout,
+                this::hideAllWindowsSafely,
+                this::releaseMemory,
+                this::enterBatchEditMode,
+                this::launchBatchImportPicker
+        );
+        mainDrawerController.setup();
     }
 
     private RecyclerView.LayoutManager createManageListLayoutManager() {
@@ -476,6 +336,42 @@ public class MainActivity extends AppCompatActivity {
         }
         float radius = FLOATING_BLUR_RADIUS_DP * getResources().getDisplayMetrics().density;
         backgroundView.setRenderEffect(RenderEffect.createBlurEffect(radius, radius, Shader.TileMode.CLAMP));
+    }
+
+    private void setupStartupSplash() {
+        startupSplashOverlay = findViewById(R.id.main_splash_overlay);
+        if (startupSplashOverlay == null) {
+            startupSplashDismissed = true;
+            return;
+        }
+        startupSplashOverlay.bringToFront();
+        startupSplashOverlay.setAlpha(1f);
+        startupSplashOverlay.setVisibility(View.VISIBLE);
+        startupSplashOverlay.setClickable(true);
+        startupSplashOverlay.removeCallbacks(startupSplashTimeoutRunnable);
+        startupSplashOverlay.postDelayed(startupSplashTimeoutRunnable, STARTUP_SPLASH_MAX_WAIT_MS);
+    }
+
+    private void dismissStartupSplash() {
+        if (startupSplashDismissed) {
+            return;
+        }
+        startupSplashDismissed = true;
+        if (startupSplashOverlay == null) {
+            return;
+        }
+        startupSplashOverlay.removeCallbacks(startupSplashTimeoutRunnable);
+        startupSplashOverlay.animate()
+                .alpha(0f)
+                .setDuration(STARTUP_SPLASH_FADE_MS)
+                .withEndAction(() -> {
+                    if (startupSplashOverlay == null) {
+                        return;
+                    }
+                    startupSplashOverlay.setVisibility(View.GONE);
+                    startupSplashOverlay.setClickable(false);
+                })
+                .start();
     }
 
     private void registerLaunchers() {
@@ -544,71 +440,18 @@ public class MainActivity extends AppCompatActivity {
         if (uris == null || uris.isEmpty()) {
             return;
         }
-        final ArrayList<Uri> selectedUris = new ArrayList<>(uris);
         final String defaultPictureName = getString(R.string.new_picture_name);
-        new Thread(() -> {
-            Context appContext = getApplicationContext();
-            ArrayList<String> importedPictureIds = new ArrayList<>();
-            for (Uri uri : selectedUris) {
-                if (uri == null) {
-                    continue;
-                }
-                String pictureId = ImageMethods.setNewImage(appContext, uri);
-                if (pictureId == null || importedPictureIds.contains(pictureId)) {
-                    continue;
-                }
-                initializeImportedPictureData(appContext, pictureId, defaultPictureName);
-                importedPictureIds.add(pictureId);
+        MainActionController.importPictures(this, uris, defaultPictureName, importedPictureIds -> {
+            if (isFinishing() || isDestroyed()) {
+                MainActionController.cleanupImportedPictures(this, importedPictureIds);
+                return;
             }
-            runOnUiThread(() -> {
-                if (isFinishing() || isDestroyed()) {
-                    cleanupImportedPictures(importedPictureIds);
-                    return;
-                }
-                if (importedPictureIds.isEmpty()) {
-                    SnackShow(this, R.string.action_batch_import_failed);
-                    return;
-                }
-                launchBatchPictureSettings(importedPictureIds, true);
-            });
-        }).start();
-    }
-
-    private void initializeImportedPictureData(Context context, String pictureId, String pictureName) {
-        PictureData importedPictureData = new PictureData();
-        importedPictureData.setDataControl(pictureId);
-        float defaultZoom = ImageMethods.getDefaultZoom(context, pictureId, false);
-        importedPictureData.put(Config.DATA_PICTURE_SHOW_ENABLED, false);
-        importedPictureData.put(Config.DATA_PICTURE_POSITION_X, Config.DATA_DEFAULT_PICTURE_POSITION_X);
-        importedPictureData.put(Config.DATA_PICTURE_POSITION_Y, Config.DATA_DEFAULT_PICTURE_POSITION_Y);
-        importedPictureData.put(Config.DATA_PICTURE_ZOOM, defaultZoom);
-        importedPictureData.put(Config.DATA_PICTURE_DEFAULT_ZOOM, defaultZoom);
-        importedPictureData.put(Config.DATA_PICTURE_ALPHA, Config.DATA_DEFAULT_PICTURE_ALPHA);
-        importedPictureData.put(Config.DATA_PICTURE_DEGREE, Config.DATA_DEFAULT_PICTURE_DEGREE);
-        importedPictureData.put(Config.DATA_PICTURE_CORNER_RADIUS_RATIO, Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_RATIO);
-        importedPictureData.put(Config.DATA_PICTURE_CORNER_RADIUS_MASK, Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_MASK);
-        importedPictureData.put(Config.DATA_PICTURE_EDGE_FEATHER_RATIO, Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_RATIO);
-        importedPictureData.put(Config.DATA_PICTURE_EDGE_FEATHER_MASK, Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_MASK);
-        importedPictureData.put(Config.DATA_PICTURE_TOUCH_AND_MOVE, Config.DATA_DEFAULT_PICTURE_TOUCH_AND_MOVE);
-        importedPictureData.put(Config.DATA_ALLOW_PICTURE_OVER_LAYOUT, Config.DATA_DEFAULT_ALLOW_PICTURE_OVER_LAYOUT);
-        importedPictureData.commit(pictureName);
-    }
-
-    private void cleanupImportedPictures(ArrayList<String> pictureIds) {
-        if (pictureIds == null || pictureIds.isEmpty()) {
-            return;
-        }
-        Context appContext = getApplicationContext();
-        for (String pictureId : pictureIds) {
-            if (pictureId == null || pictureId.isEmpty()) {
-                continue;
+            if (importedPictureIds.isEmpty()) {
+                SnackShow(this, R.string.action_batch_import_failed);
+                return;
             }
-            PictureData importedPictureData = new PictureData();
-            importedPictureData.setDataControl(pictureId);
-            importedPictureData.remove();
-            ImageMethods.clearAllTemp(appContext, pictureId);
-            OverlayRuntimeController.deletePicture(appContext, pictureId);
-        }
+            launchBatchPictureSettings(importedPictureIds, true);
+        });
     }
 
     private void onAddPictureSettingsResult(ActivityResult result) {
@@ -616,8 +459,8 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         manageListAdapter.refreshData();
-        if (recyclerView != null) {
-            recyclerView.post(() -> updateManageListPreviewViewport(recyclerView, true));
+        if (manageListPreviewController != null) {
+            manageListPreviewController.refreshViewportWhenReady();
         }
         SnackShow(this, R.string.action_add_window);
         OverlayRuntimeController.refreshNotification(this);
@@ -628,8 +471,8 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         manageListAdapter.refreshData();
-        if (recyclerView != null) {
-            recyclerView.post(() -> updateManageListPreviewViewport(recyclerView, true));
+        if (manageListPreviewController != null) {
+            manageListPreviewController.refreshViewportWhenReady();
         }
     }
 
@@ -693,24 +536,21 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         randomWindowButton.setEnabled(false);
-        new Thread(() -> {
-            int result = OverlayRuntimeController.showRandomWindow(getApplicationContext());
-            runOnUiThread(() -> {
-                if (randomWindowButton != null) {
-                    randomWindowButton.setEnabled(true);
-                }
-                if (isFinishing() || isDestroyed()) {
-                    return;
-                }
-                if (result == OverlayRuntimeController.RANDOM_WINDOW_RESULT_SUCCESS) {
-                    SnackShow(this, R.string.action_random_window_success);
-                } else if (result == OverlayRuntimeController.RANDOM_WINDOW_RESULT_NO_CANDIDATE) {
-                    SnackShow(this, R.string.action_random_window_no_candidate);
-                } else {
-                    SnackShow(this, R.string.action_random_window_failed);
-                }
-            });
-        }).start();
+        MainActionController.showRandomWindow(this, result -> {
+            if (randomWindowButton != null) {
+                randomWindowButton.setEnabled(true);
+            }
+            if (isFinishing() || isDestroyed()) {
+                return;
+            }
+            if (result == OverlayRuntimeController.RANDOM_WINDOW_RESULT_SUCCESS) {
+                SnackShow(this, R.string.action_random_window_success);
+            } else if (result == OverlayRuntimeController.RANDOM_WINDOW_RESULT_NO_CANDIDATE) {
+                SnackShow(this, R.string.action_random_window_no_candidate);
+            } else {
+                SnackShow(this, R.string.action_random_window_failed);
+            }
+        });
     }
 
     private void hideAllWindowsSafely() {
@@ -739,29 +579,26 @@ public class MainActivity extends AppCompatActivity {
             releaseMemoryButton.setEnabled(false);
         }
         trimRecyclerPreviewCache();
-        new Thread(() -> {
-            ApplicationMethods.MemoryReleaseResult result = ApplicationMethods.releaseMemory(getApplicationContext());
-            runOnUiThread(() -> {
-                if (releaseMemoryButton != null) {
-                    releaseMemoryButton.setEnabled(true);
-                }
-                if (isFinishing() || isDestroyed()) {
-                    return;
-                }
-                CoordinatorLayout coordinatorLayout = findViewById(R.id.main_layout_content);
-                Snackbar snackbar = ApplicationMethods.makeStyledSnackbar(
-                        this,
-                        coordinatorLayout,
-                        getString(
-                                R.string.action_release_memory_result,
-                                result.getReleasedWindowCount(),
-                                result.getDeletedTempFileCount()
-                        ),
-                        OPERATION_SNACKBAR_DURATION_MS
-                );
-                snackbar.show();
-            });
-        }).start();
+        MainActionController.releaseMemory(this, result -> {
+            if (releaseMemoryButton != null) {
+                releaseMemoryButton.setEnabled(true);
+            }
+            if (isFinishing() || isDestroyed()) {
+                return;
+            }
+            CoordinatorLayout coordinatorLayout = findViewById(R.id.main_layout_content);
+            Snackbar snackbar = ApplicationMethods.makeStyledSnackbar(
+                    this,
+                    coordinatorLayout,
+                    getString(
+                            R.string.action_release_memory_result,
+                            result.getReleasedWindowCount(),
+                            result.getDeletedTempFileCount()
+                    ),
+                    OPERATION_SNACKBAR_DURATION_MS
+            );
+            snackbar.show();
+        });
     }
 
     private void trimRecyclerPreviewCache() {
@@ -819,19 +656,27 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         boolean enabled = ApplicationMethods.isPureOverlayModeEnabled(this);
+        Context appContext = getApplicationContext() != null ? getApplicationContext() : this;
         if (enabled) {
             pureOverlayToggleInProgress = true;
             pureOverlayButton.setEnabled(false);
-            ApplicationMethods.setPureOverlayModeEnabled(this, false);
-            OverlayRuntimeStateStore.clearPureOverlayManagedPictureIds(this);
-            OverlayRuntimeController.refreshNotification(this);
-            updatePureOverlayButtonState();
-            pureOverlayButton.postDelayed(() -> {
-                pureOverlayToggleInProgress = false;
-                if (!isFinishing() && !isDestroyed()) {
-                    pureOverlayButton.setEnabled(true);
-                }
-            }, PURE_OVERLAY_BUTTON_REENABLE_DELAY_MS);
+            AppExecutors.io().execute(() -> {
+                ApplicationMethods.setPureOverlayModeEnabled(appContext, false);
+                OverlayRuntimeStateStore.clearPureOverlayManagedPictureIds(appContext);
+                runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed()) {
+                        return;
+                    }
+                    OverlayRuntimeController.refreshNotification(appContext);
+                    updatePureOverlayButtonState();
+                    pureOverlayButton.postDelayed(() -> {
+                        pureOverlayToggleInProgress = false;
+                        if (!isFinishing() && !isDestroyed()) {
+                            pureOverlayButton.setEnabled(true);
+                        }
+                    }, PURE_OVERLAY_BUTTON_REENABLE_DELAY_MS);
+                });
+            });
             return;
         }
         if (!PermissionMethods.hasOverlayPermission(this)) {
@@ -840,24 +685,34 @@ public class MainActivity extends AppCompatActivity {
             }
             return;
         }
-        if (!ManageMethods.hasVisibleWindowsConfigured(this)) {
-            SnackShow(this, R.string.main_pure_overlay_requires_visible_window);
-            return;
-        }
-        java.util.Set<String> pureOverlayManagedPictureIds = ManageMethods.getVisibleConfiguredPictureIds(this);
-        if (pureOverlayManagedPictureIds.isEmpty()) {
-            SnackShow(this, R.string.main_pure_overlay_requires_visible_window);
-            return;
-        }
         pureOverlayToggleInProgress = true;
         pureOverlayButton.setEnabled(false);
-        OverlayRuntimeStateStore.savePureOverlayManagedPictureIds(this, pureOverlayManagedPictureIds);
-        ApplicationMethods.setPureOverlayModeEnabled(this, true);
-        ApplicationMethods.startNotificationControl(this);
-        updatePureOverlayButtonState();
-        pureOverlayButton.post(() -> {
-            pureOverlayToggleInProgress = false;
-            ApplicationMethods.CloseMainUi(this);
+        AppExecutors.io().execute(() -> {
+            Set<String> pureOverlayManagedPictureIds = ManageMethods.getVisibleConfiguredPictureIds(appContext);
+            if (pureOverlayManagedPictureIds.isEmpty()) {
+                runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed()) {
+                        return;
+                    }
+                    pureOverlayToggleInProgress = false;
+                    pureOverlayButton.setEnabled(true);
+                    SnackShow(this, R.string.main_pure_overlay_requires_visible_window);
+                });
+                return;
+            }
+            OverlayRuntimeStateStore.savePureOverlayManagedPictureIds(appContext, pureOverlayManagedPictureIds);
+            ApplicationMethods.setPureOverlayModeEnabled(appContext, true);
+            runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed()) {
+                    return;
+                }
+                ApplicationMethods.startNotificationControl(this);
+                updatePureOverlayButtonState();
+                pureOverlayButton.post(() -> {
+                    pureOverlayToggleInProgress = false;
+                    ApplicationMethods.CloseMainUi(this);
+                });
+            });
         });
     }
 
@@ -877,8 +732,8 @@ public class MainActivity extends AppCompatActivity {
     private void handleBackPressed() {
         DrawerLayout drawerLayout = findViewById(R.id.main_drawer_layout);
         if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
-            if (currentDrawerPage != DRAWER_PAGE_MENU) {
-                showDrawerPage(DRAWER_PAGE_MENU);
+            if (mainDrawerController != null && !mainDrawerController.isMenuPage()) {
+                mainDrawerController.showMenuPage();
                 return;
             }
             drawerLayout.closeDrawer(GravityCompat.START);
@@ -898,16 +753,27 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void refreshManageListData() {
+        refreshManageListData(null);
+    }
+
+    private void refreshManageListData(@Nullable Runnable completionCallback) {
         if (manageListAdapter == null) {
+            if (completionCallback != null) {
+                completionCallback.run();
+            }
             return;
         }
-        manageListAdapter.refreshData();
-        if (recyclerView != null) {
-            recyclerView.post(() -> updateManageListPreviewViewport(recyclerView, true));
-        }
-        if (fastScrollerView != null) {
-            fastScrollerView.refreshScrollerState();
-        }
+        manageListAdapter.refreshData(() -> {
+            if (manageListPreviewController != null) {
+                manageListPreviewController.refreshViewportWhenReady();
+            }
+            if (fastScrollerView != null) {
+                fastScrollerView.refreshScrollerState();
+            }
+            if (completionCallback != null) {
+                completionCallback.run();
+            }
+        });
     }
 
     private void enterBatchEditMode() {
@@ -953,68 +819,6 @@ public class MainActivity extends AppCompatActivity {
         batchSelectAllCheckBox.setEnabled(totalCount > 0);
         batchSelectAllCheckBox.setChecked(allSelected);
         updatingBatchSelectAllState = false;
-    }
-
-    private void updateManageListPreviewViewport(@NonNull RecyclerView targetRecyclerView, boolean idle) {
-        if (manageListAdapter == null) {
-            return;
-        }
-        RecyclerView.LayoutManager layoutManager = targetRecyclerView.getLayoutManager();
-        if (!(layoutManager instanceof LinearLayoutManager)) {
-            return;
-        }
-        LinearLayoutManager linearLayoutManager = (LinearLayoutManager) layoutManager;
-        int firstVisiblePosition = linearLayoutManager.findFirstVisibleItemPosition();
-        int lastVisiblePosition = linearLayoutManager.findLastVisibleItemPosition();
-        manageListAdapter.updatePreviewViewport(firstVisiblePosition, lastVisiblePosition, idle);
-    }
-
-    private void handleManageListPreviewFallbackScheduling(@NonNull RecyclerView targetRecyclerView) {
-        if (targetRecyclerView.getScrollState() == RecyclerView.SCROLL_STATE_IDLE) {
-            scheduleManageListPreviewFallbacks(targetRecyclerView);
-        } else {
-            cancelManageListPreviewFallbacks(targetRecyclerView);
-        }
-    }
-
-    private void scheduleManageListPreviewFallbacks(@NonNull RecyclerView targetRecyclerView) {
-        cancelManageListPreviewFallbacks(targetRecyclerView);
-        targetRecyclerView.postDelayed(
-                manageListPreviewFirstFallbackRunnable,
-                MANAGE_LIST_PREVIEW_FALLBACK_FIRST_DELAY_MS
-        );
-    }
-
-    private void cancelManageListPreviewFallbacks(@NonNull RecyclerView targetRecyclerView) {
-        targetRecyclerView.removeCallbacks(manageListPreviewFirstFallbackRunnable);
-        targetRecyclerView.removeCallbacks(manageListPreviewSecondFallbackRunnable);
-    }
-
-    private void runManageListPreviewFirstFallback() {
-        if (manageListAdapter == null || recyclerView == null || recyclerView.getScrollState() != RecyclerView.SCROLL_STATE_IDLE) {
-            return;
-        }
-        int remainingBlankCount = manageListAdapter.refreshVisiblePreviewFallback(recyclerView);
-        if (fastScrollerView != null) {
-            fastScrollerView.refreshScrollerState();
-        }
-        recyclerView.removeCallbacks(manageListPreviewSecondFallbackRunnable);
-        if (remainingBlankCount > 0) {
-            recyclerView.postDelayed(
-                    manageListPreviewSecondFallbackRunnable,
-                    MANAGE_LIST_PREVIEW_FALLBACK_SECOND_DELAY_MS
-            );
-        }
-    }
-
-    private void runManageListPreviewSecondFallback() {
-        if (manageListAdapter == null || recyclerView == null || recyclerView.getScrollState() != RecyclerView.SCROLL_STATE_IDLE) {
-            return;
-        }
-        manageListAdapter.refreshVisiblePreviewFallback(recyclerView);
-        if (fastScrollerView != null) {
-            fastScrollerView.refreshScrollerState();
-        }
     }
 
     private void registerOverlayRuntimeReceiver() {

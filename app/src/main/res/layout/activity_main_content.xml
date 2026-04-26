@@ -28,7 +28,7 @@
                 android:clipToPadding="false"
                 android:paddingStart="8dp"
                 android:paddingTop="6dp"
-                android:paddingEnd="72dp"
+                android:paddingEnd="8dp"
                 android:paddingBottom="184dp"
                 android:scrollbars="none"
                 app:layoutManager="LinearLayoutManager" />
@@ -39,18 +39,10 @@
 
             <tool.xfy9326.floatpicture.View.RecyclerFastScrollerView
                 android:id="@+id/main_fast_scroller"
-                android:layout_width="48dp"
+                android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:layout_gravity="end"
-                android:layout_marginTop="8dp"
-                android:layout_marginEnd="6dp"
-                android:layout_marginBottom="12dp"
-                android:background="@drawable/bg_fast_scroller_panel"
+                android:layout_gravity="fill"
                 android:elevation="18dp"
-                android:paddingStart="4dp"
-                android:paddingTop="8dp"
-                android:paddingEnd="4dp"
-                android:paddingBottom="8dp"
                 android:translationZ="18dp" />
 
         </FrameLayout>
@@ -131,7 +123,7 @@
         android:layout_width="144dp"
         android:layout_height="144dp"
         android:layout_gravity="bottom|end"
-        android:layout_marginEnd="64dp"
+        android:layout_marginEnd="@dimen/main_fast_scroll_drag_width"
         android:layout_marginBottom="18dp"
         android:elevation="18dp"
         android:translationZ="18dp"
@@ -217,5 +209,25 @@
         </GridLayout>
 
     </com.google.android.material.card.MaterialCardView>
+
+    <FrameLayout
+        android:id="@+id/main_splash_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@android:color/black"
+        android:clickable="true"
+        android:elevation="64dp"
+        android:focusable="true"
+        android:translationZ="64dp">
+
+        <tool.xfy9326.floatpicture.View.StartupSplashImageView
+            android:id="@+id/main_splash_image"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:contentDescription="@null"
+            android:importantForAccessibility="no"
+            android:src="@drawable/splash_start" />
+
+    </FrameLayout>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

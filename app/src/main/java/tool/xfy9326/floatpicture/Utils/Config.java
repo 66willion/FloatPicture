@@ -75,6 +75,10 @@ public class Config {
 
     public final static String PREFERENCE_BOOT_AUTO_RUN = "boot_auto_run";
     public final static String PREFERENCE_SHOW_NOTIFICATION_CONTROL = "show_notification_control";
+    public final static String PREFERENCE_PURE_OVERLAY_QUICK_TOGGLE = "pure_overlay_quick_toggle";
+    public final static String PREFERENCE_PURE_OVERLAY_QUICK_TOGGLE_ENABLED = "pure_overlay_quick_toggle_enabled";
+    public final static String PREFERENCE_PURE_OVERLAY_QUICK_TOGGLE_X = "pure_overlay_quick_toggle_x";
+    public final static String PREFERENCE_PURE_OVERLAY_QUICK_TOGGLE_Y = "pure_overlay_quick_toggle_y";
     public final static String PREFERENCE_NEW_PICTURE_QUALITY = "new_picture_quality";
     public final static String PREFERENCE_TOUCHABLE_POSITION_EDIT = "touchable_position_edit";
     public final static String PREFERENCE_TRUSTED_OVERLAY_ACCESSIBILITY = "trusted_overlay_accessibility";

@@ -116,6 +116,10 @@
     <string name="settings_picture_touchable_and_moveable_warn">Please be sure that this picture window is not large and you can still control and close it!\n\nThe position you moved to in edit mode will be the default position of this window.</string>
     <string name="settings_global_show_notification_control">Show notification control board</string>
     <string name="settings_global_show_notification_control_sum">Can set windows\' visibility by this.</string>
+    <string name="settings_global_pure_overlay_quick_toggle">Pure overlay quick dot</string>
+    <string name="settings_global_pure_overlay_quick_toggle_show">Show pure overlay quick dot</string>
+    <string name="settings_global_pure_overlay_quick_toggle_summary_enabled">Enabled, X: %1$d, Y: %2$d</string>
+    <string name="settings_global_pure_overlay_quick_toggle_summary_disabled">Disabled, X: %1$d, Y: %2$d</string>
     <string name="restart_to_apply_changes">Restart the application to apply this change!</string>
     <string name="loading">Loading &#8230; &#8230;</string>
     <string name="main_random_window">Random show one picture</string>

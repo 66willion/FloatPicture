@@ -2,10 +2,12 @@ package tool.xfy9326.floatpicture.View;
 
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.Point;
 import android.provider.Settings;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.SeekBar;
 import android.widget.TextView;
@@ -24,24 +26,28 @@ import java.util.Objects;
 import tool.xfy9326.floatpicture.R;
 import tool.xfy9326.floatpicture.Methods.ApplicationMethods;
 import tool.xfy9326.floatpicture.Methods.ThemeMethods;
+import tool.xfy9326.floatpicture.Services.PureOverlayQuickToggleController;
 import tool.xfy9326.floatpicture.Services.TrustedOverlayAccessibilityService;
 import tool.xfy9326.floatpicture.Utils.Config;
 
 public class GlobalSettingsFragment extends PreferenceFragmentCompat {
     private LayoutInflater inflater;
     private SharedPreferences sharedPreferences;
+    private PureOverlayQuickToggleController pureOverlayQuickToggleController;
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         inflater = LayoutInflater.from(requireActivity());
         sharedPreferences = PreferenceManager.getDefaultSharedPreferences(requireContext());
+        pureOverlayQuickToggleController = new PureOverlayQuickToggleController(requireContext());
     }
 
     @Override
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
         addPreferencesFromResource(R.xml.fragment_global_settings);
         PreferenceSet();
+        updatePureOverlayQuickToggleSummary();
         updateTrustedOverlaySummary();
     }
 
@@ -60,7 +66,17 @@ public class GlobalSettingsFragment extends PreferenceFragmentCompat {
     @Override
     public void onResume() {
         super.onResume();
+        updatePureOverlayQuickToggleSummary();
         updateTrustedOverlaySummary();
+    }
+
+    @Override
+    public void onDestroy() {
+        if (pureOverlayQuickToggleController != null) {
+            pureOverlayQuickToggleController.hidePreview();
+            pureOverlayQuickToggleController = null;
+        }
+        super.onDestroy();
     }
 
     @NonNull
@@ -80,6 +96,10 @@ public class GlobalSettingsFragment extends PreferenceFragmentCompat {
         });
         requirePreference(Config.PREFERENCE_NEW_PICTURE_QUALITY).setOnPreferenceClickListener(preference -> {
             PictureQualitySet();
+            return true;
+        });
+        requirePreference(Config.PREFERENCE_PURE_OVERLAY_QUICK_TOGGLE).setOnPreferenceClickListener(preference -> {
+            showPureOverlayQuickToggleDialog();
             return true;
         });
         requireSwitchPreference(Config.PREFERENCE_TRUSTED_OVERLAY_ACCESSIBILITY).setOnPreferenceChangeListener((preference, newValue) -> {
@@ -107,6 +127,14 @@ public class GlobalSettingsFragment extends PreferenceFragmentCompat {
         preference.setSummary(active
                 ? R.string.settings_global_trusted_overlay_accessibility_sum_enabled
                 : R.string.settings_global_trusted_overlay_accessibility_sum_authorized);
+    }
+
+    private void updatePureOverlayQuickToggleSummary() {
+        Preference preference = findPreference(Config.PREFERENCE_PURE_OVERLAY_QUICK_TOGGLE);
+        if (preference == null) {
+            return;
+        }
+        preference.setSummary(PureOverlayQuickToggleController.buildSummary(requireContext()));
     }
 
     private void PictureQualitySet() {
@@ -157,5 +185,135 @@ public class GlobalSettingsFragment extends PreferenceFragmentCompat {
         });
         dialog.setNegativeButton(R.string.cancel, null);
         dialog.show();
+    }
+
+    private void showPureOverlayQuickToggleDialog() {
+        Point maxPosition = PureOverlayQuickToggleController.getPositionBounds(requireContext());
+        Point currentPosition = PureOverlayQuickToggleController.resolveSavedPosition(requireContext());
+        boolean enabled = PureOverlayQuickToggleController.isEnabled(requireContext());
+        PureOverlayQuickToggleController previewController = pureOverlayQuickToggleController;
+        View dialogView = inflater.inflate(
+                R.layout.dialog_set_pure_overlay_quick_toggle,
+                requireActivity().findViewById(R.id.layout_dialog_set_pure_overlay_quick_toggle)
+        );
+        final SeekBar seekBarX = dialogView.findViewById(R.id.seekbar_set_pure_overlay_quick_toggle_x);
+        seekBarX.setMax(maxPosition.x);
+        seekBarX.setProgress(currentPosition.x);
+        final EditText editTextX = dialogView.findViewById(R.id.edittext_set_pure_overlay_quick_toggle_x);
+        editTextX.setText(String.valueOf(currentPosition.x));
+        final SeekBar seekBarY = dialogView.findViewById(R.id.seekbar_set_pure_overlay_quick_toggle_y);
+        seekBarY.setMax(maxPosition.y);
+        seekBarY.setProgress(currentPosition.y);
+        final EditText editTextY = dialogView.findViewById(R.id.edittext_set_pure_overlay_quick_toggle_y);
+        editTextY.setText(String.valueOf(currentPosition.y));
+        final CheckBox showCheckBox = dialogView.findViewById(R.id.checkbox_show_pure_overlay_quick_toggle);
+        showCheckBox.setChecked(enabled);
+        final int[] positionXTemp = {currentPosition.x};
+        final int[] positionYTemp = {currentPosition.y};
+        if (previewController != null) {
+            previewController.showPreview(positionXTemp[0], positionYTemp[0]);
+        }
+        seekBarX.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                positionXTemp[0] = progress;
+                editTextX.setText(String.valueOf(progress));
+                if (previewController != null) {
+                    previewController.showPreview(positionXTemp[0], positionYTemp[0]);
+                }
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
+        });
+        seekBarY.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                positionYTemp[0] = progress;
+                editTextY.setText(String.valueOf(progress));
+                if (previewController != null) {
+                    previewController.showPreview(positionXTemp[0], positionYTemp[0]);
+                }
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
+        });
+        editTextX.setOnEditorActionListener((v, actionId, event) -> {
+            Integer parsedValue = parseQuickTogglePosition(editTextX, maxPosition.x);
+            if (parsedValue == null) {
+                ApplicationMethods.showToast(requireContext(), R.string.settings_picture_position_warn);
+                return false;
+            }
+            positionXTemp[0] = parsedValue;
+            editTextX.setText(String.valueOf(parsedValue));
+            seekBarX.setProgress(parsedValue);
+            if (previewController != null) {
+                previewController.showPreview(positionXTemp[0], positionYTemp[0]);
+            }
+            return false;
+        });
+        editTextY.setOnEditorActionListener((v, actionId, event) -> {
+            Integer parsedValue = parseQuickTogglePosition(editTextY, maxPosition.y);
+            if (parsedValue == null) {
+                ApplicationMethods.showToast(requireContext(), R.string.settings_picture_position_warn);
+                return false;
+            }
+            positionYTemp[0] = parsedValue;
+            editTextY.setText(String.valueOf(parsedValue));
+            seekBarY.setProgress(parsedValue);
+            if (previewController != null) {
+                previewController.showPreview(positionXTemp[0], positionYTemp[0]);
+            }
+            return false;
+        });
+        AlertDialog.Builder dialog = new AlertDialog.Builder(requireActivity());
+        dialog.setTitle(R.string.settings_global_pure_overlay_quick_toggle);
+        dialog.setView(dialogView);
+        dialog.setPositiveButton(R.string.done, (__, which) -> {
+            Integer parsedX = parseQuickTogglePosition(editTextX, maxPosition.x);
+            Integer parsedY = parseQuickTogglePosition(editTextY, maxPosition.y);
+            int savedX = parsedX != null ? parsedX : positionXTemp[0];
+            int savedY = parsedY != null ? parsedY : positionYTemp[0];
+            PureOverlayQuickToggleController.saveSettings(requireContext(), showCheckBox.isChecked(), savedX, savedY);
+            updatePureOverlayQuickToggleSummary();
+            if (previewController != null) {
+                previewController.hidePreview();
+            }
+        });
+        dialog.setNegativeButton(R.string.cancel, (__, which) -> {
+            if (previewController != null) {
+                previewController.hidePreview();
+            }
+        });
+        AlertDialog alertDialog = dialog.show();
+        alertDialog.setOnDismissListener(dialogInterface -> {
+            if (previewController != null) {
+                previewController.hidePreview();
+            }
+        });
+    }
+
+    @Nullable
+    private Integer parseQuickTogglePosition(@NonNull EditText editText, int maxValue) {
+        try {
+            int value = Integer.parseInt(editText.getText().toString().trim());
+            if (value < 0 || value > maxValue) {
+                return null;
+            }
+            return value;
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
 }

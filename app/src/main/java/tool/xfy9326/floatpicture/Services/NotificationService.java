@@ -50,6 +50,7 @@ public class NotificationService extends Service {
     private final LinkedHashMap<String, PreviewSession> previewSessions = new LinkedHashMap<>();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final AtomicInteger notificationUpdateGeneration = new AtomicInteger();
+    private PureOverlayQuickToggleController pureOverlayQuickToggleController;
     private RemoteViews remoteViews;
     private NotificationCompat.Builder builderManage;
 
@@ -84,6 +85,7 @@ public class NotificationService extends Service {
     public void onCreate() {
         super.onCreate();
         createNotificationChannel(this, NotificationManagerCompat.from(this));
+        pureOverlayQuickToggleController = new PureOverlayQuickToggleController(this);
     }
 
     @Override
@@ -99,6 +101,7 @@ public class NotificationService extends Service {
         if (OverlayRuntimeController.ACTION_RUNTIME_SHUTDOWN.equals(action)) {
             return START_NOT_STICKY;
         }
+        refreshPureOverlayQuickToggle();
         if (refreshNotification) {
             updateNotification();
         }
@@ -113,6 +116,10 @@ public class NotificationService extends Service {
 
     @Override
     public void onDestroy() {
+        if (pureOverlayQuickToggleController != null) {
+            pureOverlayQuickToggleController.release();
+            pureOverlayQuickToggleController = null;
+        }
         recyclePreviewSessions();
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE);
         builderManage = null;
@@ -386,6 +393,9 @@ public class NotificationService extends Service {
     }
 
     private void shutdownRuntime() {
+        if (pureOverlayQuickToggleController != null) {
+            pureOverlayQuickToggleController.release();
+        }
         recyclePreviewSessions();
         ManageMethods.CloseAllWindows(this);
         ((MainApplication) getApplicationContext()).setAppInit(false);
@@ -433,6 +443,12 @@ public class NotificationService extends Service {
         });
     }
 
+    private void refreshPureOverlayQuickToggle() {
+        if (pureOverlayQuickToggleController != null) {
+            pureOverlayQuickToggleController.refresh();
+        }
+    }
+
     @NonNull
     private NotificationUiState buildNotificationUiState() {
         boolean showControl = PreferenceManager.getDefaultSharedPreferences(this)
@@ -474,6 +490,7 @@ public class NotificationService extends Service {
             } catch (SecurityException ignored) {
             }
         }
+        refreshPureOverlayQuickToggle();
     }
 
     private static final class NotificationUiState {

@@ -34,6 +34,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import tool.xfy9326.floatpicture.R;
 import tool.xfy9326.floatpicture.Utils.AppExecutors;
 import tool.xfy9326.floatpicture.Utils.Config;
+import tool.xfy9326.floatpicture.Utils.OverlayRuntimeStateStore;
 import tool.xfy9326.floatpicture.Utils.PictureData;
 
 public class ApplicationMethods {
@@ -69,15 +70,21 @@ public class ApplicationMethods {
     }
 
     public static boolean isPureOverlayModeEnabled(Context context) {
+        Boolean runtimeState = OverlayRuntimeStateStore.getPureOverlayModeEnabled(context);
+        if (runtimeState != null) {
+            return runtimeState;
+        }
         return PreferenceManager.getDefaultSharedPreferences(context)
                 .getBoolean(Config.PREFERENCE_PURE_OVERLAY_MODE, false);
     }
 
     public static boolean setPureOverlayModeEnabled(Context context, boolean enabled) {
-        return PreferenceManager.getDefaultSharedPreferences(context)
+        boolean saved = PreferenceManager.getDefaultSharedPreferences(context)
                 .edit()
                 .putBoolean(Config.PREFERENCE_PURE_OVERLAY_MODE, enabled)
                 .commit();
+        OverlayRuntimeStateStore.setPureOverlayModeEnabled(context, enabled);
+        return saved;
     }
 
     private static void closeNotificationControl(Context context) {

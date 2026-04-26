@@ -707,6 +707,7 @@ public class MainActivity extends AppCompatActivity {
                     return;
                 }
                 ApplicationMethods.startNotificationControl(this);
+                OverlayRuntimeController.refreshNotification(appContext, false);
                 updatePureOverlayButtonState();
                 pureOverlayButton.post(() -> {
                     pureOverlayToggleInProgress = false;

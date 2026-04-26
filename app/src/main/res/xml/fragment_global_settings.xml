@@ -36,6 +36,11 @@
             app:title="@string/settings_global_show_notification_control" />
         <Preference
             app:iconSpaceReserved="false"
+            app:key="pure_overlay_quick_toggle"
+            app:layout="@layout/preference_global_capsule"
+            app:title="@string/settings_global_pure_overlay_quick_toggle" />
+        <Preference
+            app:iconSpaceReserved="false"
             app:key="new_picture_quality"
             app:layout="@layout/preference_global_capsule"
             app:summary="@string/settings_global_picture_quality_sum"

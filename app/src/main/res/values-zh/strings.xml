@@ -117,6 +117,10 @@
     <string name="settings_picture_touchable_and_moveable_warn">请确保这个图片窗口不是过大并且你依然可以控制并且关闭它！\n\n编辑模式下移动到的位置将会是该窗口的默认出现位置。</string>
     <string name="settings_global_show_notification_control_sum">可以通过这个控制窗口是否可见</string>
     <string name="settings_global_show_notification_control">显示通知栏控制面板</string>
+    <string name="settings_global_pure_overlay_quick_toggle">纯悬浮快捷点</string>
+    <string name="settings_global_pure_overlay_quick_toggle_show">显示纯悬浮快捷点</string>
+    <string name="settings_global_pure_overlay_quick_toggle_summary_enabled">已开启，X: %1$d，Y: %2$d</string>
+    <string name="settings_global_pure_overlay_quick_toggle_summary_disabled">已关闭，X: %1$d，Y: %2$d</string>
     <string name="restart_to_apply_changes">重启程序以应用更改！</string>
     <string name="loading">正在加载中 ··· ···</string>
     <string name="main_random_window">随机显示一张</string>

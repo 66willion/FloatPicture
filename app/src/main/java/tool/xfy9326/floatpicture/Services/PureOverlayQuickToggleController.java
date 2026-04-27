@@ -14,6 +14,7 @@ import android.os.Looper;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
 
@@ -34,11 +35,13 @@ public final class PureOverlayQuickToggleController {
     private static final String TAG = "PureOverlayQuickToggle";
     private static final int TOUCH_TARGET_DP = 40;
     private static final int DOT_SIZE_DP = 14;
-    private static final int PREVIEW_TOUCH_TARGET_DP = 44;
+    private static final int PREVIEW_TOUCH_TARGET_DP = TOUCH_TARGET_DP;
     private static final int PREVIEW_DOT_SIZE_DP = 18;
     private static final int DEFAULT_MARGIN_DP = 16;
     private static final long TRUSTED_ATTACH_RETRY_DELAY_MS = 250L;
     private static final int TRUSTED_ATTACH_MAX_RETRY = 4;
+    private static final int POSITION_CORRECTION_MAX_ATTEMPTS = 3;
+    private static final int POSITION_CORRECTION_TOLERANCE_PX = 1;
 
     private final Context appContext;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -302,13 +305,16 @@ public final class PureOverlayQuickToggleController {
             try {
                 windowManager.updateViewLayout(toggleView, layoutParams);
                 saveWindowManager(toggleView, windowManager);
+                schedulePositionCorrection(toggleView, windowManager, x, y);
                 return;
             } catch (Exception e) {
                 Log.w(TAG, "updateViewLayout failed, recreating quick toggle: " + e.getMessage());
                 removeView(toggleView, getSavedWindowManager(toggleView));
             }
         }
-        attachView(windowManager, toggleView, layoutParams);
+        if (attachView(windowManager, toggleView, layoutParams)) {
+            schedulePositionCorrection(toggleView, windowManager, x, y);
+        }
     }
 
     private boolean attachView(@NonNull WindowManager windowManager,
@@ -334,6 +340,52 @@ public final class PureOverlayQuickToggleController {
         }
         trustedAttachRetryCount++;
         mainHandler.postDelayed(this::refreshNow, TRUSTED_ATTACH_RETRY_DELAY_MS);
+    }
+
+    private void schedulePositionCorrection(@NonNull FrameLayout view,
+                                            @NonNull WindowManager windowManager,
+                                            int targetX,
+                                            int targetY) {
+        view.post(() -> correctPositionIfNeeded(view, windowManager, targetX, targetY, 0));
+    }
+
+    private void correctPositionIfNeeded(@NonNull FrameLayout view,
+                                         @NonNull WindowManager fallbackWindowManager,
+                                         int targetX,
+                                         int targetY,
+                                         int attempt) {
+        if (!view.isAttachedToWindow()) {
+            return;
+        }
+        int[] location = new int[2];
+        view.getLocationOnScreen(location);
+        int offsetX = targetX - location[0];
+        int offsetY = targetY - location[1];
+        if (Math.abs(offsetX) <= POSITION_CORRECTION_TOLERANCE_PX
+                && Math.abs(offsetY) <= POSITION_CORRECTION_TOLERANCE_PX) {
+            return;
+        }
+        WindowManager.LayoutParams layoutParams = getCurrentLayoutParams(view);
+        if (layoutParams == null) {
+            return;
+        }
+        layoutParams.x += offsetX;
+        layoutParams.y += offsetY;
+        WindowManager windowManager = getSavedWindowManager(view);
+        if (windowManager == null) {
+            windowManager = fallbackWindowManager;
+        }
+        try {
+            windowManager.updateViewLayout(view, layoutParams);
+            saveWindowManager(view, windowManager);
+        } catch (Exception e) {
+            Log.w(TAG, "position correction failed: " + e.getMessage());
+            return;
+        }
+        if (attempt + 1 < POSITION_CORRECTION_MAX_ATTEMPTS) {
+            WindowManager nextWindowManager = windowManager;
+            view.post(() -> correctPositionIfNeeded(view, nextWindowManager, targetX, targetY, attempt + 1));
+        }
     }
 
     private void removeView(@NonNull FrameLayout view, @Nullable WindowManager windowManager) {
@@ -371,6 +423,15 @@ public final class PureOverlayQuickToggleController {
         if (view == previewView) {
             previewWindowManager = windowManager;
         }
+    }
+
+    @Nullable
+    private WindowManager.LayoutParams getCurrentLayoutParams(@NonNull View view) {
+        ViewGroup.LayoutParams layoutParams = view.getLayoutParams();
+        if (layoutParams instanceof WindowManager.LayoutParams windowLayoutParams) {
+            return windowLayoutParams;
+        }
+        return null;
     }
 
     private void toggleManagedWindows() {

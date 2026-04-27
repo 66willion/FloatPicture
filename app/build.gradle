@@ -24,8 +24,8 @@ android {
         applicationId "tool.xfy9326.floatpicture"
         minSdk = 21
         targetSdk = 34
-        versionCode 107
-        versionName "2.2.71"
+        versionCode 108
+        versionName "2.2.72"
 
         resourceConfigurations.add("zh")
 

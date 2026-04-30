@@ -13,12 +13,39 @@ import java.util.Set;
 public final class OverlayRuntimeStateStore {
     private static final String STATE_FILE_NAME = "OverlayRuntimeState.json";
     private static final String KEY_TRUSTED_OVERLAY_ACTIVE = "trusted_overlay_active";
+    private static final String KEY_PURE_OVERLAY_MODE_ENABLED = "pure_overlay_mode_enabled";
     private static final String KEY_WINDOW_POSITIONS = "window_positions";
     private static final String KEY_PURE_OVERLAY_MANAGED_PICTURE_IDS = "pure_overlay_managed_picture_ids";
+    private static final String KEY_PURE_OVERLAY_QUICK_TOGGLE = "pure_overlay_quick_toggle";
+    private static final String KEY_ENABLED = "enabled";
     private static final String KEY_POSITION_X = "x";
     private static final String KEY_POSITION_Y = "y";
 
     private OverlayRuntimeStateStore() {
+    }
+
+    public static final class PureOverlayQuickToggleSettings {
+        private final boolean enabled;
+        private final int x;
+        private final int y;
+
+        private PureOverlayQuickToggleSettings(boolean enabled, int x, int y) {
+            this.enabled = enabled;
+            this.x = x;
+            this.y = y;
+        }
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public int getX() {
+            return x;
+        }
+
+        public int getY() {
+            return y;
+        }
     }
 
     public static synchronized void setTrustedOverlayActive(Context context, boolean active) {
@@ -33,6 +60,50 @@ public final class OverlayRuntimeStateStore {
 
     public static synchronized boolean isTrustedOverlayActive(Context context) {
         return readState().optBoolean(KEY_TRUSTED_OVERLAY_ACTIVE, false);
+    }
+
+    public static synchronized void setPureOverlayModeEnabled(Context context, boolean enabled) {
+        JSONObject state = readState();
+        try {
+            state.put(KEY_PURE_OVERLAY_MODE_ENABLED, enabled);
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+        writeState(state);
+    }
+
+    public static synchronized Boolean getPureOverlayModeEnabled(Context context) {
+        JSONObject state = readState();
+        if (!state.has(KEY_PURE_OVERLAY_MODE_ENABLED)) {
+            return null;
+        }
+        return state.optBoolean(KEY_PURE_OVERLAY_MODE_ENABLED, false);
+    }
+
+    public static synchronized void savePureOverlayQuickToggleSettings(Context context, boolean enabled, int x, int y) {
+        JSONObject state = readState();
+        JSONObject settings = new JSONObject();
+        try {
+            settings.put(KEY_ENABLED, enabled);
+            settings.put(KEY_POSITION_X, x);
+            settings.put(KEY_POSITION_Y, y);
+            state.put(KEY_PURE_OVERLAY_QUICK_TOGGLE, settings);
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+        writeState(state);
+    }
+
+    public static synchronized PureOverlayQuickToggleSettings getPureOverlayQuickToggleSettings(Context context) {
+        JSONObject settings = readState().optJSONObject(KEY_PURE_OVERLAY_QUICK_TOGGLE);
+        if (settings == null) {
+            return null;
+        }
+        return new PureOverlayQuickToggleSettings(
+                settings.optBoolean(KEY_ENABLED, false),
+                settings.optInt(KEY_POSITION_X, 0),
+                settings.optInt(KEY_POSITION_Y, 0)
+        );
     }
 
     public static synchronized void savePureOverlayManagedPictureIds(Context context, Set<String> pictureIds) {

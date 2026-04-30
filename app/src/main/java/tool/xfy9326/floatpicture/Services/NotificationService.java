@@ -443,7 +443,7 @@ public class NotificationService extends Service {
 
     private boolean startNotificationWindowsVisibleChange(@NonNull Set<String> targetIds, boolean visible) {
         notificationWindowToggleInProgress = true;
-        ManageMethods.setWindowsVisibleAsync(this, targetIds, visible, () -> notificationWindowToggleInProgress = false);
+        ManageMethods.setWindowsVisibleAsync(this, targetIds, visible, false, () -> notificationWindowToggleInProgress = false);
         return true;
     }
 

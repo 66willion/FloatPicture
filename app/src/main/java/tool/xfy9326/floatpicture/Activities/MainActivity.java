@@ -76,6 +76,7 @@ public class MainActivity extends AppCompatActivity {
     private FloatingActionButton pureOverlayButton;
     private FloatingActionButton trustedOverlayButton;
     private MaterialButton drawerButton;
+    private MaterialButton closeAllButton;
     private View batchSelectAllContainer;
     private CheckBox batchSelectAllCheckBox;
     private View startupSplashOverlay;
@@ -182,6 +183,7 @@ public class MainActivity extends AppCompatActivity {
         pureOverlayButton = null;
         trustedOverlayButton = null;
         drawerButton = null;
+        closeAllButton = null;
         batchSelectAllContainer = null;
         batchSelectAllCheckBox = null;
         startupSplashOverlay = null;
@@ -266,6 +268,13 @@ public class MainActivity extends AppCompatActivity {
             });
         }
         applyFloatingBackgroundBlur(findViewById(R.id.main_button_drawer_blur));
+        closeAllButton = findViewById(R.id.main_button_close_all);
+        if (closeAllButton != null) {
+            closeAllButton.bringToFront();
+            closeAllButton.setTranslationZ(18f);
+            closeAllButton.setOnClickListener(view -> hideAllWindowsSafely());
+        }
+        applyFloatingBackgroundBlur(findViewById(R.id.main_button_close_all_blur));
         batchSelectAllContainer = findViewById(R.id.main_batch_select_all_container);
         batchSelectAllCheckBox = findViewById(R.id.main_check_batch_select_all);
         if (batchSelectAllContainer != null) {

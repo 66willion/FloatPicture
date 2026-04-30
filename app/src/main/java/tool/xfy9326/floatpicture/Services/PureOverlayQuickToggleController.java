@@ -99,6 +99,11 @@ public final class PureOverlayQuickToggleController {
     }
 
     public static boolean isEnabled(@NonNull Context context) {
+        OverlayRuntimeStateStore.PureOverlayQuickToggleSettings runtimeSettings =
+                OverlayRuntimeStateStore.getPureOverlayQuickToggleSettings(context);
+        if (runtimeSettings != null) {
+            return runtimeSettings.isEnabled();
+        }
         return PreferenceManager.getDefaultSharedPreferences(context)
                 .getBoolean(Config.PREFERENCE_PURE_OVERLAY_QUICK_TOGGLE_ENABLED, false);
     }
@@ -110,10 +115,21 @@ public final class PureOverlayQuickToggleController {
         editor.putInt(Config.PREFERENCE_PURE_OVERLAY_QUICK_TOGGLE_X, clampedPosition.x);
         editor.putInt(Config.PREFERENCE_PURE_OVERLAY_QUICK_TOGGLE_Y, clampedPosition.y);
         editor.apply();
+        OverlayRuntimeStateStore.savePureOverlayQuickToggleSettings(
+                context,
+                enabled,
+                clampedPosition.x,
+                clampedPosition.y
+        );
     }
 
     @NonNull
     public static Point resolveSavedPosition(@NonNull Context context) {
+        OverlayRuntimeStateStore.PureOverlayQuickToggleSettings runtimeSettings =
+                OverlayRuntimeStateStore.getPureOverlayQuickToggleSettings(context);
+        if (runtimeSettings != null) {
+            return clampPosition(context, runtimeSettings.getX(), runtimeSettings.getY());
+        }
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context);
         Point maxPosition = getPositionBounds(context);
         int defaultX = Math.max(0, maxPosition.x - dp(context, DEFAULT_MARGIN_DP));
@@ -438,7 +454,7 @@ public final class PureOverlayQuickToggleController {
         boolean visible = !ManageMethods.hasVisibleRuntimeWindows(appContext, targetIds);
         managedWindowToggleInProgress = true;
         setQuickToggleInteractionEnabled(false);
-        ManageMethods.setWindowsVisibleAsync(appContext, targetIds, visible, () -> {
+        ManageMethods.setWindowsVisibleAsync(appContext, targetIds, visible, false, () -> {
             managedWindowToggleInProgress = false;
             setQuickToggleInteractionEnabled(true);
         });

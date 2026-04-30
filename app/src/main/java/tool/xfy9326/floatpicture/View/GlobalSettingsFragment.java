@@ -25,6 +25,7 @@ import java.util.Objects;
 
 import tool.xfy9326.floatpicture.R;
 import tool.xfy9326.floatpicture.Methods.ApplicationMethods;
+import tool.xfy9326.floatpicture.Methods.OverlayRuntimeController;
 import tool.xfy9326.floatpicture.Methods.ThemeMethods;
 import tool.xfy9326.floatpicture.Services.PureOverlayQuickToggleController;
 import tool.xfy9326.floatpicture.Services.TrustedOverlayAccessibilityService;
@@ -286,6 +287,7 @@ public class GlobalSettingsFragment extends PreferenceFragmentCompat {
             int savedX = parsedX != null ? parsedX : positionXTemp[0];
             int savedY = parsedY != null ? parsedY : positionYTemp[0];
             PureOverlayQuickToggleController.saveSettings(requireContext(), showCheckBox.isChecked(), savedX, savedY);
+            OverlayRuntimeController.refreshNotification(requireContext(), false);
             updatePureOverlayQuickToggleSummary();
             if (previewController != null) {
                 previewController.hidePreview();

@@ -661,18 +661,23 @@ public class ManageMethods {
                 }
             }
         }
-        finishWindowsVisibleChange(context, changedIds, visible, visualStateChanged, null);
+        finishWindowsVisibleChange(context, changedIds, visible, true, visualStateChanged, null);
     }
 
     public static void setWindowsVisibleAsync(Context context, Set<String> targetIds, boolean visible, Runnable completionCallback) {
+        setWindowsVisibleAsync(context, targetIds, visible, true, completionCallback);
+    }
+
+    public static void setWindowsVisibleAsync(Context context, Set<String> targetIds, boolean visible, boolean persistVisibility, Runnable completionCallback) {
         Context appContext = context.getApplicationContext() != null ? context.getApplicationContext() : context;
         LinkedHashSet<String> targetIdSnapshot = targetIds == null ? new LinkedHashSet<>() : new LinkedHashSet<>(targetIds);
-        MAIN_HANDLER.post(() -> startWindowsVisibleBatch(appContext, targetIdSnapshot, visible, completionCallback));
+        MAIN_HANDLER.post(() -> startWindowsVisibleBatch(appContext, targetIdSnapshot, visible, persistVisibility, completionCallback));
     }
 
     private static void startWindowsVisibleBatch(Context context,
                                                  LinkedHashSet<String> targetIds,
                                                  boolean visible,
+                                                 boolean persistVisibility,
                                                  Runnable completionCallback) {
         if (targetIds == null || targetIds.isEmpty()) {
             updateGlobalVisibleState(context);
@@ -690,6 +695,7 @@ public class ManageMethods {
                 context,
                 new ArrayList<>(targetIds),
                 visible,
+                persistVisibility,
                 linkedHashMap,
                 pictureData,
                 new LinkedHashSet<>(),
@@ -702,6 +708,7 @@ public class ManageMethods {
     private static void processWindowsVisibleBatch(Context context,
                                                    ArrayList<String> targetIds,
                                                    boolean visible,
+                                                   boolean persistVisibility,
                                                    LinkedHashMap<String, String> linkedHashMap,
                                                    PictureData pictureData,
                                                    LinkedHashSet<String> changedIds,
@@ -739,6 +746,7 @@ public class ManageMethods {
                     context,
                     targetIds,
                     visible,
+                    persistVisibility,
                     linkedHashMap,
                     pictureData,
                     changedIds,
@@ -748,15 +756,16 @@ public class ManageMethods {
             ), WINDOW_VISIBILITY_BATCH_DELAY_MS);
             return;
         }
-        finishWindowsVisibleChange(context, changedIds, visible, batchVisualStateChanged, completionCallback);
+        finishWindowsVisibleChange(context, changedIds, visible, persistVisibility, batchVisualStateChanged, completionCallback);
     }
 
     private static void finishWindowsVisibleChange(Context context,
                                                    Set<String> changedIds,
                                                    boolean visible,
+                                                   boolean persistVisibility,
                                                    boolean visualStateChanged,
                                                    Runnable completionCallback) {
-        if (changedIds != null && !changedIds.isEmpty()) {
+        if (persistVisibility && changedIds != null && !changedIds.isEmpty()) {
             finishVisibilityChangesAsync(context, changedIds, visible, completionCallback);
             return;
         }

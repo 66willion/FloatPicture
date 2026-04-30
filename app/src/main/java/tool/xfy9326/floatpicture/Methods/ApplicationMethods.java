@@ -8,6 +8,8 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
@@ -30,11 +32,11 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import tool.xfy9326.floatpicture.R;
 import tool.xfy9326.floatpicture.Utils.AppExecutors;
 import tool.xfy9326.floatpicture.Utils.Config;
-import tool.xfy9326.floatpicture.Utils.OverlayRuntimeStateStore;
 import tool.xfy9326.floatpicture.Utils.PictureData;
 
 public class ApplicationMethods {
@@ -42,7 +44,23 @@ public class ApplicationMethods {
     private static final int DISPLAY_CACHE_VERSION_PNG = 1;
     private static final int DISPLAY_CACHE_VERSION_WEBP_LOSSLESS = 3;
     private static final int DOUBLE_CLICK_SNACKBAR_DURATION_MS = 1000;
+    private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
     private static final AtomicBoolean STARTUP_MAINTENANCE_RUNNING = new AtomicBoolean(false);
+    private static final String[] ORIGINAL_PICTURE_RELATED_SUFFIXES = new String[]{
+            "",
+            ".pending",
+            ".pending.new",
+            ".pending.transaction",
+            ".pending.backup",
+            ".backup",
+            ".commit.transaction"
+    };
+    private static final String[] DISPLAY_CACHE_RELATED_SUFFIXES = new String[]{
+            "",
+            ".pending",
+            ".backup",
+            ".transaction"
+    };
     private static volatile boolean waitDoubleClick;
 
     public static final class MemoryReleaseResult {
@@ -63,17 +81,17 @@ public class ApplicationMethods {
         }
     }
 
+    public interface MemoryReleaseCallback {
+        void onComplete(MemoryReleaseResult result);
+    }
+
     public static void startNotificationControl(Context context) {
-        if (PermissionMethods.hasOverlayPermission(context)) {
+        if (PermissionMethods.canStartOverlayRuntime(context)) {
             OverlayRuntimeController.startRuntime(context);
         }
     }
 
     public static boolean isPureOverlayModeEnabled(Context context) {
-        Boolean runtimeState = OverlayRuntimeStateStore.getPureOverlayModeEnabled(context);
-        if (runtimeState != null) {
-            return runtimeState;
-        }
         return PreferenceManager.getDefaultSharedPreferences(context)
                 .getBoolean(Config.PREFERENCE_PURE_OVERLAY_MODE, false);
     }
@@ -83,7 +101,6 @@ public class ApplicationMethods {
                 .edit()
                 .putBoolean(Config.PREFERENCE_PURE_OVERLAY_MODE, enabled)
                 .commit();
-        OverlayRuntimeStateStore.setPureOverlayModeEnabled(context, enabled);
         return saved;
     }
 
@@ -260,10 +277,53 @@ public class ApplicationMethods {
         });
     }
 
-    public static MemoryReleaseResult releaseMemory(Context context) {
-        int releasedWindowCount = OverlayRuntimeController.releaseMemory(context);
-        int deletedTempFileCount = clearUselessTempSync(context);
-        return new MemoryReleaseResult(releasedWindowCount, deletedTempFileCount);
+    public static void releaseMemory(Context context, MemoryReleaseCallback callback) {
+        Context appContext = context.getApplicationContext() != null ? context.getApplicationContext() : context;
+        AtomicInteger releasedWindowCount = new AtomicInteger(0);
+        AtomicInteger deletedTempFileCount = new AtomicInteger(0);
+        AtomicBoolean releaseComplete = new AtomicBoolean(false);
+        AtomicBoolean cleanupComplete = new AtomicBoolean(false);
+        AtomicBoolean resultDelivered = new AtomicBoolean(false);
+
+        OverlayRuntimeController.releaseMemory(appContext, count -> {
+            releasedWindowCount.set(count);
+            releaseComplete.set(true);
+            completeMemoryReleaseIfReady(
+                    releasedWindowCount,
+                    deletedTempFileCount,
+                    releaseComplete,
+                    cleanupComplete,
+                    resultDelivered,
+                    callback
+            );
+        });
+        AppExecutors.io().execute(() -> {
+            int deletedCount = clearUselessTempSync(appContext);
+            MAIN_HANDLER.post(() -> {
+                deletedTempFileCount.set(deletedCount);
+                cleanupComplete.set(true);
+                completeMemoryReleaseIfReady(
+                        releasedWindowCount,
+                        deletedTempFileCount,
+                        releaseComplete,
+                        cleanupComplete,
+                        resultDelivered,
+                        callback
+                );
+            });
+        });
+    }
+
+    private static void completeMemoryReleaseIfReady(AtomicInteger releasedWindowCount,
+                                                     AtomicInteger deletedTempFileCount,
+                                                     AtomicBoolean releaseComplete,
+                                                     AtomicBoolean cleanupComplete,
+                                                     AtomicBoolean resultDelivered,
+                                                     MemoryReleaseCallback callback) {
+        if (!releaseComplete.get() || !cleanupComplete.get() || !resultDelivered.compareAndSet(false, true)) {
+            return;
+        }
+        callback.onComplete(new MemoryReleaseResult(releasedWindowCount.get(), deletedTempFileCount.get()));
     }
 
     private static int clearUselessTempSync(Context mContext) {
@@ -273,10 +333,16 @@ public class ApplicationMethods {
         if (pictureList != null) {
             validIds.addAll(pictureList.keySet());
         }
-        int deletedCount = 0;
-        deletedCount += clearOrphanFiles(new File(Config.getOriginalPictureDir()), validIds);
+        int deletedCount = recoverPictureWorkFiles(validIds);
+        deletedCount += clearOrphanFiles(
+                new File(Config.getOriginalPictureDir()),
+                buildValidRelatedFileNames(validIds, ORIGINAL_PICTURE_RELATED_SUFFIXES)
+        );
         deletedCount += clearOrphanFiles(new File(Config.getPictureDir()), validIds);
-        deletedCount += clearOrphanFiles(new File(Config.getPictureTempDir()), validIds);
+        deletedCount += clearOrphanFiles(
+                new File(Config.getPictureTempDir()),
+                buildValidRelatedFileNames(validIds, DISPLAY_CACHE_RELATED_SUFFIXES)
+        );
         return deletedCount;
     }
 
@@ -377,5 +443,32 @@ public class ApplicationMethods {
             }
         }
         return deletedCount;
+    }
+
+    private static int recoverPictureWorkFiles(Set<String> validIds) {
+        if (validIds == null || validIds.isEmpty()) {
+            return 0;
+        }
+        int cleanedCount = 0;
+        for (String id : validIds) {
+            cleanedCount += PictureFileStore.recoverPictureWorkFiles(id);
+        }
+        return cleanedCount;
+    }
+
+    private static HashSet<String> buildValidRelatedFileNames(Set<String> validIds, String[] relatedSuffixes) {
+        HashSet<String> validFileNames = new HashSet<>();
+        if (validIds == null || validIds.isEmpty() || relatedSuffixes == null || relatedSuffixes.length == 0) {
+            return validFileNames;
+        }
+        for (String id : validIds) {
+            if (id == null || id.isEmpty()) {
+                continue;
+            }
+            for (String suffix : relatedSuffixes) {
+                validFileNames.add(id + suffix);
+            }
+        }
+        return validFileNames;
     }
 }

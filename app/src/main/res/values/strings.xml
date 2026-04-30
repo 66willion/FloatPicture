@@ -1,5 +1,6 @@
 <resources>
     <string name="app_name">FloatPicture</string>
+    <string name="application_crash_message">The app encountered an error and will close.</string>
     <string name="done">Done</string>
     <string name="cancel">Cancel</string>
     <string name="save">Save</string>
@@ -68,6 +69,7 @@
     <string name="settings_global_picture_quality_warn">Please input a correct picture quality!</string>
     <string name="application_thank_list">Thanks to all the people who has helped me.</string>
     <string name="error_picture_not_found">Can\'t find picture temp!</string>
+    <string name="error_picture_preview_failed">Can\'t load picture preview!</string>
     <string name="settings_picture_alpha">Set picture transparency</string>
     <string name="settings_picture_alpha_sum">Have transparent effects for regular pictures.</string>
     <string name="transparency">Transparency:</string>

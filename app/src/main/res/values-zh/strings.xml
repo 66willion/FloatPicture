@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">悬浮图片</string>
+    <string name="application_crash_message">应用遇到异常，即将退出</string>
     <string name="adapter_image_description">图片预览</string>
     <string name="done">确认</string>
     <string name="cancel">取消</string>

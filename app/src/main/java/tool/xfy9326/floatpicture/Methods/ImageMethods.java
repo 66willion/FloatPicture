@@ -7,16 +7,24 @@ import android.graphics.Point;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
+import android.os.Process;
 import android.util.DisplayMetrics;
+import android.util.Log;
 import android.util.LruCache;
 import android.widget.ImageView;
 
+import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 
 import java.io.File;
 import java.util.Collections;
+import java.util.Map;
 import java.util.Set;
+import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicLong;
 
 import tool.xfy9326.floatpicture.MainApplication;
 import tool.xfy9326.floatpicture.R;
@@ -24,16 +32,31 @@ import tool.xfy9326.floatpicture.Utils.Config;
 import tool.xfy9326.floatpicture.View.FloatImageView;
 
 public class ImageMethods {
+    private static final String TAG = "ImageMethods";
     private static final int MANAGE_PREVIEW_WIDTH_DP = 72;
     private static final int MANAGE_PREVIEW_HEIGHT_DP = 96;
     private static final int MANAGE_PREVIEW_CACHE_SIZE = 24;
+    private static final AtomicLong DISPLAY_CACHE_REBUILD_SEQUENCE = new AtomicLong();
+    private static final ConcurrentHashMap<String, Long> DISPLAY_CACHE_REBUILD_TOKENS = new ConcurrentHashMap<>();
+    private static final ExecutorService DISPLAY_CACHE_REBUILD_EXECUTOR = Executors.newSingleThreadExecutor(runnable -> {
+        Thread thread = new Thread(() -> {
+            Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND);
+            runnable.run();
+        }, "floatpicture-display-cache");
+        thread.setDaemon(false);
+        return thread;
+    });
     private static final Object MANAGE_PREVIEW_CACHE_LOCK = new Object();
     private static final Set<Bitmap> MANAGE_PREVIEW_BITMAP_SET = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private static final Map<ImageView, Bitmap> MANAGE_PREVIEW_BOUND_BITMAPS = new WeakHashMap<>();
     private static final LruCache<String, Bitmap> MANAGE_PREVIEW_CACHE = new LruCache<String, Bitmap>(MANAGE_PREVIEW_CACHE_SIZE) {
         @Override
         protected void entryRemoved(boolean evicted, String key, Bitmap oldValue, Bitmap newValue) {
-            if (oldValue != null && oldValue != newValue) {
-                MANAGE_PREVIEW_BITMAP_SET.remove(oldValue);
+            synchronized (MANAGE_PREVIEW_CACHE_LOCK) {
+                if (oldValue != null && oldValue != newValue) {
+                    MANAGE_PREVIEW_BITMAP_SET.remove(oldValue);
+                    recycleManagePreviewBitmapIfUnusedLocked(oldValue);
+                }
             }
         }
     };
@@ -78,6 +101,7 @@ public class ImageMethods {
         boolean hadPendingReplacement = PictureFileStore.hasPendingReplacementImage(id);
         boolean committed = PictureFileStore.commitPendingReplacementImage(id);
         if (committed && hadPendingReplacement) {
+            ImageBitmapProcessor.invalidateSourceBitmapSize(id);
             invalidateManagePreviewCache(id);
         }
         return committed;
@@ -163,14 +187,34 @@ public class ImageMethods {
     }
 
     public static Bitmap getEditBitmap(Context mContext, Bitmap bitmap) {
+        if (bitmap == null || bitmap.isRecycled()) {
+            return getEditBitmap(mContext, 50, 50);
+        }
         return getEditBitmap(mContext, bitmap.getWidth(), bitmap.getHeight());
     }
 
     private static Bitmap getEditBitmap(Context mContext, int width, int height) {
-        Bitmap transparent_bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(transparent_bitmap);
-        canvas.drawColor(ContextCompat.getColor(mContext, R.color.colorImageViewEditBackground));
-        return transparent_bitmap;
+        int bitmapWidth = Math.max(width, 1);
+        int bitmapHeight = Math.max(height, 1);
+        Bitmap transparentBitmap;
+        try {
+            transparentBitmap = Bitmap.createBitmap(bitmapWidth, bitmapHeight, Bitmap.Config.ARGB_8888);
+        } catch (OutOfMemoryError e) {
+            Log.e(TAG, "Edit placeholder ran out of memory: " + bitmapWidth + "x" + bitmapHeight, e);
+            return null;
+        } catch (IllegalArgumentException e) {
+            Log.w(TAG, "Edit placeholder rejected bitmap size: " + bitmapWidth + "x" + bitmapHeight, e);
+            return null;
+        }
+        try {
+            Canvas canvas = new Canvas(transparentBitmap);
+            canvas.drawColor(ContextCompat.getColor(mContext, R.color.colorImageViewEditBackground));
+            return transparentBitmap;
+        } catch (RuntimeException e) {
+            Log.w(TAG, "Failed to draw edit placeholder", e);
+            recycleBitmap(transparentBitmap);
+            return null;
+        }
     }
 
     public static Bitmap resizeBitmap(Bitmap bitmap, float zoom, float degree) {
@@ -266,12 +310,15 @@ public class ImageMethods {
         if (pictureSize != null) {
             return getDefaultZoom(mContext, pictureSize.x, pictureSize.y, isMax);
         }
-        Bitmap bitmap = getEditSourceBitmap(mContext, id);
-        float defaultZoom = getDefaultZoom(mContext, bitmap, isMax);
-        recycleBitmap(bitmap);
-        return defaultZoom;
+        Log.w(TAG, "Unable to resolve default zoom because source image size is unavailable: " + id);
+        return 0f;
     }
 
+    public static Point getSourceBitmapSize(String id) {
+        return ImageBitmapProcessor.getSourceBitmapSize(id);
+    }
+
+    @Nullable
     public static Bitmap getDisplayBitmap(Context mContext, String id, float zoom, float degree) {
         return getDisplayBitmap(
                 mContext,
@@ -285,6 +332,7 @@ public class ImageMethods {
         );
     }
 
+    @Nullable
     public static Bitmap getDisplayBitmap(Context mContext,
                                           String id,
                                           float zoom,
@@ -303,6 +351,7 @@ public class ImageMethods {
         );
     }
 
+    @Nullable
     public static Bitmap getDisplayBitmap(Context mContext,
                                           String id,
                                           float zoom,
@@ -311,11 +360,7 @@ public class ImageMethods {
                                           int cornerRadiusMask,
                                           float edgeFeatherRatio,
                                           int edgeFeatherMask) {
-        Bitmap displayBitmap = getBitmapFromFile(PictureFileStore.getDisplayFile(id));
-        if (displayBitmap != null) {
-            return displayBitmap;
-        }
-        Bitmap renderedBitmap = createAndSaveDisplayBitmap(
+        return getDisplayBitmapOrNull(
                 id,
                 zoom,
                 degree,
@@ -324,7 +369,29 @@ public class ImageMethods {
                 edgeFeatherRatio,
                 edgeFeatherMask
         );
-        return renderedBitmap != null ? renderedBitmap : getEditBitmap(mContext, 50, 50);
+    }
+
+    @Nullable
+    public static Bitmap getDisplayBitmapOrNull(String id,
+                                                float zoom,
+                                                float degree,
+                                                float cornerRadiusRatio,
+                                                int cornerRadiusMask,
+                                                float edgeFeatherRatio,
+                                                int edgeFeatherMask) {
+        Bitmap displayBitmap = getBitmapFromFile(PictureFileStore.getDisplayFile(id));
+        if (displayBitmap != null) {
+            return displayBitmap;
+        }
+        return createAndSaveDisplayBitmap(
+                id,
+                zoom,
+                degree,
+                cornerRadiusRatio,
+                cornerRadiusMask,
+                edgeFeatherRatio,
+                edgeFeatherMask
+        );
     }
 
     static long getDisplayBitmapVersion(String id) {
@@ -374,6 +441,9 @@ public class ImageMethods {
                                                     int cornerRadiusMask,
                                                     float edgeFeatherRatio,
                                                     int edgeFeatherMask) {
+        if (sourceBitmap == null || sourceBitmap.isRecycled()) {
+            return null;
+        }
         Bitmap renderedBitmap = ImageBitmapProcessor.renderDisplayBitmap(
                 sourceBitmap,
                 zoom,
@@ -383,8 +453,93 @@ public class ImageMethods {
                 edgeFeatherRatio,
                 edgeFeatherMask
         );
-        saveDisplayBitmap(id, renderedBitmap, false);
+        if (renderedBitmap == null) {
+            return null;
+        }
+        if (!saveDisplayBitmap(id, renderedBitmap, false)) {
+            if (renderedBitmap != sourceBitmap) {
+                recycleBitmap(renderedBitmap);
+            }
+            return null;
+        }
         return renderedBitmap;
+    }
+
+    public static boolean stageDisplayBitmap(String id,
+                                             float zoom,
+                                             float degree,
+                                             float cornerRadiusRatio,
+                                             int cornerRadiusMask,
+                                             float edgeFeatherRatio,
+                                             int edgeFeatherMask) {
+        Bitmap renderedBitmap = ImageBitmapProcessor.buildDisplayBitmap(
+                id,
+                zoom,
+                degree,
+                cornerRadiusRatio,
+                cornerRadiusMask,
+                edgeFeatherRatio,
+                edgeFeatherMask
+        );
+        if (renderedBitmap == null) {
+            return false;
+        }
+        try {
+            return PictureFileStore.savePendingDisplayBitmap(id, renderedBitmap, false);
+        } finally {
+            recycleBitmap(renderedBitmap);
+        }
+    }
+
+    public static boolean commitStagedDisplayBitmap(String id) {
+        boolean committed = PictureFileStore.commitPendingDisplayBitmap(id);
+        if (committed) {
+            invalidateManagePreviewCache(id);
+        }
+        return committed;
+    }
+
+    public static void clearStagedDisplayBitmap(String id) {
+        PictureFileStore.clearPendingDisplayBitmap(id);
+    }
+
+    public static boolean clearDisplayBitmapCache(String id) {
+        if (id == null || id.isEmpty()) {
+            return true;
+        }
+        DISPLAY_CACHE_REBUILD_TOKENS.remove(id);
+        boolean cleared = PictureFileStore.clearDisplayBitmap(id);
+        if (cleared) {
+            invalidateManagePreviewCache(id);
+        }
+        return cleared;
+    }
+
+    public static void rebuildDisplayBitmapAsync(Context context,
+                                                 String id,
+                                                 float zoom,
+                                                 float degree,
+                                                 float cornerRadiusRatio,
+                                                 int cornerRadiusMask,
+                                                 float edgeFeatherRatio,
+                                                 int edgeFeatherMask) {
+        if (context == null || id == null || id.isEmpty()) {
+            return;
+        }
+        Context appContext = context.getApplicationContext() != null ? context.getApplicationContext() : context;
+        long rebuildToken = DISPLAY_CACHE_REBUILD_SEQUENCE.incrementAndGet();
+        DISPLAY_CACHE_REBUILD_TOKENS.put(id, rebuildToken);
+        DISPLAY_CACHE_REBUILD_EXECUTOR.execute(() -> rebuildDisplayBitmap(
+                appContext,
+                id,
+                rebuildToken,
+                zoom,
+                degree,
+                cornerRadiusRatio,
+                cornerRadiusMask,
+                edgeFeatherRatio,
+                edgeFeatherMask
+        ));
     }
 
     public static Bitmap createAndSaveDisplayBitmap(String id, float zoom, float degree) {
@@ -431,10 +586,61 @@ public class ImageMethods {
                 edgeFeatherRatio,
                 edgeFeatherMask
         );
-        if (renderedBitmap != null) {
-            saveDisplayBitmap(id, renderedBitmap, false);
+        if (renderedBitmap == null) {
+            return null;
+        }
+        if (!saveDisplayBitmap(id, renderedBitmap, false)) {
+            recycleBitmap(renderedBitmap);
+            return null;
         }
         return renderedBitmap;
+    }
+
+    private static void rebuildDisplayBitmap(Context appContext,
+                                             String id,
+                                             long rebuildToken,
+                                             float zoom,
+                                             float degree,
+                                             float cornerRadiusRatio,
+                                             int cornerRadiusMask,
+                                             float edgeFeatherRatio,
+                                             int edgeFeatherMask) {
+        boolean committed = false;
+        try {
+            if (!isDisplayCacheRebuildCurrent(id, rebuildToken)) {
+                return;
+            }
+            boolean staged = stageDisplayBitmap(
+                    id,
+                    zoom,
+                    degree,
+                    cornerRadiusRatio,
+                    cornerRadiusMask,
+                    edgeFeatherRatio,
+                    edgeFeatherMask
+            );
+            if (!staged || !isDisplayCacheRebuildCurrent(id, rebuildToken)) {
+                return;
+            }
+            committed = commitStagedDisplayBitmap(id);
+        } catch (OutOfMemoryError e) {
+            Log.e(TAG, "Display cache rebuild ran out of memory: " + id, e);
+        } catch (RuntimeException e) {
+            Log.e(TAG, "Display cache rebuild failed: " + id, e);
+        } finally {
+            if (!committed) {
+                clearStagedDisplayBitmap(id);
+            }
+            DISPLAY_CACHE_REBUILD_TOKENS.remove(id, rebuildToken);
+        }
+        if (committed) {
+            OverlayRuntimeController.syncPicture(appContext, id, false);
+        }
+    }
+
+    private static boolean isDisplayCacheRebuildCurrent(String id, long rebuildToken) {
+        Long currentToken = DISPLAY_CACHE_REBUILD_TOKENS.get(id);
+        return currentToken != null && currentToken == rebuildToken;
     }
 
     public static void recycleBitmap(Bitmap bitmap) {
@@ -467,6 +673,7 @@ public class ImageMethods {
         return 1;
     }
 
+    @Nullable
     public static Bitmap getPreviewBitmap(Context mContext, String id) {
         Bitmap cachedPreview = getCachedPreviewBitmap(id);
         if (cachedPreview != null) {
@@ -488,7 +695,7 @@ public class ImageMethods {
                 return preview;
             }
         }
-        return getEditBitmap(mContext, 50, 50);
+        return null;
     }
 
     public static Bitmap getCachedPreviewBitmap(String id) {
@@ -506,6 +713,32 @@ public class ImageMethods {
         }
     }
 
+    public static void setManagePreviewBitmap(ImageView imageView, Bitmap previewBitmap) {
+        if (imageView == null) {
+            return;
+        }
+        synchronized (MANAGE_PREVIEW_CACHE_LOCK) {
+            Bitmap previousBitmap = getBitmapFromDrawable(imageView.getDrawable());
+            if (previewBitmap != null && previewBitmap.isRecycled()) {
+                previewBitmap = null;
+            }
+            Bitmap previousBoundBitmap = MANAGE_PREVIEW_BOUND_BITMAPS.get(imageView);
+            if (previousBoundBitmap != null && previousBoundBitmap != previewBitmap) {
+                MANAGE_PREVIEW_BOUND_BITMAPS.remove(imageView);
+                recycleManagePreviewBitmapIfUnusedLocked(previousBoundBitmap);
+            }
+            if (previewBitmap != null && MANAGE_PREVIEW_BITMAP_SET.contains(previewBitmap)) {
+                MANAGE_PREVIEW_BOUND_BITMAPS.put(imageView, previewBitmap);
+            } else {
+                MANAGE_PREVIEW_BOUND_BITMAPS.remove(imageView);
+            }
+            imageView.setImageBitmap(previewBitmap);
+            if (previousBitmap != null && previousBitmap != previewBitmap) {
+                recycleManagePreviewBitmapIfUnusedLocked(previousBitmap);
+            }
+        }
+    }
+
     public static long getManagePreviewVersion(String id) {
         File displayFile = PictureFileStore.getDisplayFile(id);
         if (displayFile.exists()) {
@@ -520,21 +753,34 @@ public class ImageMethods {
 
     public static void invalidateManagePreviewCache(String id) {
         synchronized (MANAGE_PREVIEW_CACHE_LOCK) {
-            Bitmap removedBitmap = MANAGE_PREVIEW_CACHE.remove(id);
-            if (removedBitmap != null) {
-                MANAGE_PREVIEW_BITMAP_SET.remove(removedBitmap);
-            }
+            MANAGE_PREVIEW_CACHE.remove(id);
         }
     }
 
     public static void clearManagePreviewCache() {
         synchronized (MANAGE_PREVIEW_CACHE_LOCK) {
+            Bitmap[] previewBitmaps = MANAGE_PREVIEW_BITMAP_SET.toArray(new Bitmap[0]);
             MANAGE_PREVIEW_CACHE.evictAll();
             MANAGE_PREVIEW_BITMAP_SET.clear();
+            for (Bitmap previewBitmap : previewBitmaps) {
+                recycleManagePreviewBitmapIfUnusedLocked(previewBitmap);
+            }
         }
     }
 
     public static Bitmap getEditSourceBitmap(Context mContext, String id) {
+        Bitmap bitmap = getEditSourceBitmapOrNull(id);
+        if (bitmap != null) {
+            return bitmap;
+        }
+        return getEditBitmap(mContext, 50, 50);
+    }
+
+    @Nullable
+    public static Bitmap getEditSourceBitmapOrNull(String id) {
+        if (id == null || id.isEmpty()) {
+            return null;
+        }
         File originalFile = PictureFileStore.getOriginalFile(id);
         if (originalFile.exists()) {
             Bitmap bitmap = ImageBitmapProcessor.decodeSourceBitmap(originalFile, 0, 0, false);
@@ -553,7 +799,7 @@ public class ImageMethods {
         if (displayBitmap != null) {
             return displayBitmap;
         }
-        return getEditBitmap(mContext, 50, 50);
+        return null;
     }
 
     public static Bitmap getShowBitmap(Context mContext, String id) {
@@ -585,7 +831,7 @@ public class ImageMethods {
         }
         Bitmap bitmap = getBitmapFromDrawable(imageView.getDrawable());
         imageView.setImageDrawable(null);
-        if (bitmap != null && MANAGE_PREVIEW_BITMAP_SET.contains(bitmap)) {
+        if (releaseManagePreviewBitmap(imageView, bitmap)) {
             return;
         }
         recycleBitmap(bitmap, null);
@@ -606,12 +852,14 @@ public class ImageMethods {
         }
         mainApplication.unregisterView(id);
         invalidateManagePreviewCache(id);
+        ImageBitmapProcessor.invalidateSourceBitmapSize(id);
         PictureFileStore.deleteAllPictureFiles(id);
     }
 
-    private static void saveDisplayBitmap(String id, Bitmap bitmap, boolean recycle) {
-        PictureFileStore.saveDisplayBitmap(id, bitmap, recycle);
+    private static boolean saveDisplayBitmap(String id, Bitmap bitmap, boolean recycle) {
+        boolean saved = PictureFileStore.saveDisplayBitmap(id, bitmap, recycle);
         invalidateManagePreviewCache(id);
+        return saved;
     }
 
     private static void cachePreviewBitmap(String id, Bitmap previewBitmap) {
@@ -619,10 +867,7 @@ public class ImageMethods {
             return;
         }
         synchronized (MANAGE_PREVIEW_CACHE_LOCK) {
-            Bitmap previousBitmap = MANAGE_PREVIEW_CACHE.put(id, previewBitmap);
-            if (previousBitmap != null && previousBitmap != previewBitmap) {
-                MANAGE_PREVIEW_BITMAP_SET.remove(previousBitmap);
-            }
+            MANAGE_PREVIEW_CACHE.put(id, previewBitmap);
             MANAGE_PREVIEW_BITMAP_SET.add(previewBitmap);
         }
     }
@@ -632,6 +877,42 @@ public class ImageMethods {
             return bitmapDrawable.getBitmap();
         }
         return null;
+    }
+
+    private static boolean releaseManagePreviewBitmap(ImageView imageView, Bitmap currentBitmap) {
+        synchronized (MANAGE_PREVIEW_CACHE_LOCK) {
+            Bitmap boundBitmap = MANAGE_PREVIEW_BOUND_BITMAPS.remove(imageView);
+            if (boundBitmap != null) {
+                recycleManagePreviewBitmapIfUnusedLocked(boundBitmap);
+                return boundBitmap == currentBitmap || currentBitmap == null;
+            }
+            if (currentBitmap != null && MANAGE_PREVIEW_BITMAP_SET.contains(currentBitmap)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static void recycleManagePreviewBitmapIfUnusedLocked(Bitmap bitmap) {
+        if (bitmap == null || bitmap.isRecycled()) {
+            return;
+        }
+        if (MANAGE_PREVIEW_BITMAP_SET.contains(bitmap) || isManagePreviewBitmapBoundLocked(bitmap)) {
+            return;
+        }
+        bitmap.recycle();
+    }
+
+    private static boolean isManagePreviewBitmapBoundLocked(Bitmap bitmap) {
+        if (bitmap == null) {
+            return false;
+        }
+        for (Bitmap boundBitmap : MANAGE_PREVIEW_BOUND_BITMAPS.values()) {
+            if (boundBitmap == bitmap) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void recycleBitmap(Bitmap bitmap, Bitmap keepBitmap) {

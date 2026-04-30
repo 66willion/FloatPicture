@@ -84,7 +84,7 @@ public class PictureSettingsActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
-        if (mPictureSettingsFragment != null) {
+        if (mPictureSettingsFragment != null && isFinishing() && !isChangingConfigurations()) {
             mPictureSettingsFragment.clearEditView();
         }
         super.onDestroy();

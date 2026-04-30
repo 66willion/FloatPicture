@@ -76,10 +76,13 @@ public class IOMethods {
     static boolean copyUriToFile(Context context, Uri uri, String path) {
         ContentResolver contentResolver = context.getContentResolver();
         File file = new File(path);
+        boolean targetPrepared = false;
+        boolean copied = false;
         try {
             if (CheckFile(file, true)) {
                 return false;
             }
+            targetPrepared = true;
             try (InputStream inputStream = contentResolver.openInputStream(uri);
                  OutputStream outputStream = new FileOutputStream(file)) {
                 if (inputStream == null) {
@@ -91,10 +94,15 @@ public class IOMethods {
                     outputStream.write(buffer, 0, readBytes);
                 }
                 outputStream.flush();
-                return true;
             }
+            copied = true;
+            return true;
         } catch (IOException e) {
             e.printStackTrace();
+        } finally {
+            if (targetPrepared && !copied) {
+                deleteIncompleteCopy(file);
+            }
         }
         return false;
     }
@@ -103,10 +111,13 @@ public class IOMethods {
         if (source == null || target == null || !source.exists() || !source.isFile()) {
             return false;
         }
+        boolean targetPrepared = false;
+        boolean copied = false;
         try {
             if (CheckFile(target, true)) {
                 return false;
             }
+            targetPrepared = true;
             try (InputStream inputStream = new FileInputStream(source);
                  OutputStream outputStream = new FileOutputStream(target)) {
                 byte[] buffer = new byte[8192];
@@ -115,29 +126,70 @@ public class IOMethods {
                     outputStream.write(buffer, 0, readBytes);
                 }
                 outputStream.flush();
-                return true;
             }
+            copied = true;
+            return true;
         } catch (IOException e) {
             e.printStackTrace();
+        } finally {
+            if (targetPrepared && !copied) {
+                deleteIncompleteCopy(target);
+            }
         }
         return false;
     }
 
     @SuppressWarnings("SameParameterValue")
-    static void saveBitmapLossless(Bitmap bitmap, String path, boolean recycle) {
+    static boolean saveBitmapLossless(Bitmap bitmap, String path, boolean recycle) {
+        if (bitmap == null || bitmap.isRecycled()) {
+            return false;
+        }
         File file = new File(path);
+        boolean targetPrepared = false;
+        boolean saved = false;
         try {
-            if (!CheckFile(file, true)) {
-                try (OutputStream outputStream = new FileOutputStream(file)) {
-                    bitmap.compress(getLosslessCompressFormat(), 100, outputStream);
-                }
-                if (recycle) {
-                    bitmap.recycle();
-                }
+            if (CheckFile(file, true)) {
+                return false;
             }
+            targetPrepared = true;
+            try (FileOutputStream outputStream = new FileOutputStream(file)) {
+                if (!bitmap.compress(getLosslessCompressFormat(), 100, outputStream)) {
+                    return false;
+                }
+                outputStream.flush();
+                outputStream.getFD().sync();
+            }
+            if (!isValidBitmapFile(file)) {
+                return false;
+            }
+            saved = true;
+            if (recycle) {
+                bitmap.recycle();
+            }
+            return true;
         } catch (IOException e) {
             e.printStackTrace();
+        } finally {
+            if (targetPrepared && !saved) {
+                deleteIncompleteCopy(file);
+            }
         }
+        return false;
+    }
+
+    private static boolean isValidBitmapFile(File file) {
+        if (file == null || !file.exists() || !file.isFile() || file.length() <= 0L) {
+            return false;
+        }
+        BitmapFactory.Options options = new BitmapFactory.Options();
+        options.inJustDecodeBounds = true;
+        try {
+            BitmapFactory.decodeFile(file.getAbsolutePath(), options);
+        } catch (OutOfMemoryError | RuntimeException e) {
+            e.printStackTrace();
+            return false;
+        }
+        return options.outWidth > 0 && options.outHeight > 0;
     }
 
     public static String readAssetText(Context mContext, String path) {
@@ -178,6 +230,12 @@ public class IOMethods {
             }
         }
         return true;
+    }
+
+    private static void deleteIncompleteCopy(File file) {
+        if (file.exists() && file.isFile()) {
+            file.delete();
+        }
     }
 
     private static boolean CheckFile(File file, boolean delete) throws IOException {

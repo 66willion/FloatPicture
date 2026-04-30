@@ -195,7 +195,8 @@ public class MainActivity extends AppCompatActivity {
             PermissionMethods.askOverlayPermission(this, this::launchOverlayPermissionRequest);
         }
         ViewSet();
-        if (PermissionMethods.hasOverlayPermission(this)) {
+        if (PermissionMethods.canStartOverlayRuntime(this)) {
+            ApplicationMethods.startNotificationControl(this);
             IOMethods.setNoMedia();
         }
     }
@@ -233,10 +234,8 @@ public class MainActivity extends AppCompatActivity {
         FloatingActionButton floatingActionButton = findViewById(R.id.main_button_add);
         if (floatingActionButton != null) {
             floatingActionButton.setOnClickListener(view -> {
-                if (PermissionMethods.hasOverlayPermission(MainActivity.this)) {
+                if (ensureOverlayRuntimeStartable()) {
                     picturePickerLauncher.launch("image/*");
-                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    PermissionMethods.askOverlayPermission(MainActivity.this, this::launchOverlayPermissionRequest);
                 }
             });
         }
@@ -395,7 +394,12 @@ public class MainActivity extends AppCompatActivity {
         );
         trustedOverlaySettingsLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
-                result -> refreshTrustedOverlayButtonState()
+                result -> {
+                    refreshTrustedOverlayButtonState();
+                    if (PermissionMethods.canStartOverlayRuntime(this)) {
+                        ApplicationMethods.startNotificationControl(this);
+                    }
+                }
         );
         notificationPermissionLauncher = registerForActivityResult(
                 new ActivityResultContracts.RequestPermission(),
@@ -515,11 +519,20 @@ public class MainActivity extends AppCompatActivity {
         batchPictureSettingsLauncher.launch(intent);
     }
 
+    private boolean ensureOverlayRuntimeStartable() {
+        if (PermissionMethods.canStartOverlayRuntime(this)) {
+            ApplicationMethods.startNotificationControl(this);
+            IOMethods.setNoMedia();
+            return true;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            PermissionMethods.askOverlayPermission(this, this::launchOverlayPermissionRequest);
+        }
+        return false;
+    }
+
     private void launchBatchImportPicker() {
-        if (!PermissionMethods.hasOverlayPermission(this)) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                PermissionMethods.askOverlayPermission(this, this::launchOverlayPermissionRequest);
-            }
+        if (!ensureOverlayRuntimeStartable()) {
             return;
         }
         batchPicturePickerLauncher.launch("image/*");
@@ -529,10 +542,7 @@ public class MainActivity extends AppCompatActivity {
         if (randomWindowButton == null || pureOverlayToggleInProgress) {
             return;
         }
-        if (!PermissionMethods.hasOverlayPermission(this)) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                PermissionMethods.askOverlayPermission(this, this::launchOverlayPermissionRequest);
-            }
+        if (!ensureOverlayRuntimeStartable()) {
             return;
         }
         randomWindowButton.setEnabled(false);
@@ -557,10 +567,7 @@ public class MainActivity extends AppCompatActivity {
         if (pureOverlayToggleInProgress) {
             return;
         }
-        if (!PermissionMethods.hasOverlayPermission(this)) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                PermissionMethods.askOverlayPermission(this, this::launchOverlayPermissionRequest);
-            }
+        if (!ensureOverlayRuntimeStartable()) {
             return;
         }
         hideAllWindows();
@@ -646,7 +653,7 @@ public class MainActivity extends AppCompatActivity {
         if (managedPictureIdsPresent) {
             OverlayRuntimeStateStore.clearPureOverlayManagedPictureIds(this);
         }
-        if (pureOverlayModeEnabled && PermissionMethods.hasOverlayPermission(this)) {
+        if (pureOverlayModeEnabled && PermissionMethods.canStartOverlayRuntime(this)) {
             OverlayRuntimeController.refreshNotification(this);
         }
     }
@@ -679,10 +686,7 @@ public class MainActivity extends AppCompatActivity {
             });
             return;
         }
-        if (!PermissionMethods.hasOverlayPermission(this)) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                PermissionMethods.askOverlayPermission(this, this::launchOverlayPermissionRequest);
-            }
+        if (!ensureOverlayRuntimeStartable()) {
             return;
         }
         pureOverlayToggleInProgress = true;

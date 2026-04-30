@@ -221,6 +221,7 @@ public class ManageListAdapter extends AdvancedRecyclerView.Adapter<ManageListVi
         }
         holder.textView_Picture_Name.setText(item.pictureName);
         previewLoader.bindPreview(holder, item.id, position);
+        holder.textView_Picture_Error.setText(R.string.error_picture_not_found);
         holder.textView_Picture_Error.setVisibility(item.pictureExists ? View.GONE : View.VISIBLE);
 
         holder.checkBox_Picture_Select.setOnCheckedChangeListener(null);
@@ -280,7 +281,7 @@ public class ManageListAdapter extends AdvancedRecyclerView.Adapter<ManageListVi
             holder.checkBox_Picture_Select.setOnCheckedChangeListener(null);
             removeItemOptimistically(pictureId);
             MainActivity.SnackShow(mActivity, R.string.action_delete_window);
-            deletePictureAsync(pictureId);
+            requestDeletePicture(pictureId);
         });
     }
 
@@ -301,6 +302,12 @@ public class ManageListAdapter extends AdvancedRecyclerView.Adapter<ManageListVi
         holder.card_Picture_Item.setOnClickListener(null);
         previewLoader.recyclePreviewHolder(holder);
         super.onViewRecycled(holder);
+    }
+
+    @Override
+    public void onDetachedFromRecyclerView(@NonNull RecyclerView recyclerView) {
+        previewLoader.release();
+        super.onDetachedFromRecyclerView(recyclerView);
     }
 
     private ManageListItem getItem(int position) {
@@ -374,26 +381,16 @@ public class ManageListAdapter extends AdvancedRecyclerView.Adapter<ManageListVi
         notifyBatchSelectionChanged();
     }
 
-    private void deletePictureAsync(@NonNull String pictureId) {
-        AppExecutors.io().execute(() -> {
-            try {
-                PictureData deletePictureData = new PictureData();
-                deletePictureData.setDataControl(pictureId);
-                deletePictureData.remove();
-                ImageMethods.clearAllTemp(appContext, pictureId);
-                OverlayRuntimeController.deletePicture(appContext, pictureId);
-            } catch (Exception e) {
-                Log.w("ManageListAdapter", "deletePictureAsync failed: " + pictureId, e);
-            } finally {
-                MAIN_HANDLER.post(() -> {
-                    if (!isActivityAlive()) {
-                        return;
-                    }
-                    refreshData();
-                    OverlayRuntimeController.refreshNotification(appContext, false);
-                });
+    private void requestDeletePicture(@NonNull String pictureId) {
+        try {
+            OverlayRuntimeController.deletePicture(appContext, pictureId);
+        } catch (Exception e) {
+            Log.w("ManageListAdapter", "requestDeletePicture failed: " + pictureId, e);
+            if (isActivityAlive()) {
+                refreshData();
+                OverlayRuntimeController.refreshNotification(appContext, false);
             }
-        });
+        }
     }
 
     private boolean isActivityAlive() {

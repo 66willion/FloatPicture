@@ -13,8 +13,8 @@ import tool.xfy9326.floatpicture.Methods.ThemeMethods;
 import tool.xfy9326.floatpicture.Utils.WindowRegistry;
 
 public class MainApplication extends Application {
-    // 悬浮窗数量在实际使用中极少超过 20 个；超出时 LRU 淘汰最久未访问的条目并释放其 Bitmap，
-    // 防止无限积累导致 OOM。若用户真的添加超过上限，被淘汰的窗口下次显示时会重新从磁盘加载。
+    // 注册表对可释放窗口缓存做 20 个软上限：超出时只按 LRU 淘汰未附着的条目并释放 Bitmap。
+    // 如果所有条目仍附着在 WindowManager 上，会暂时超过上限，避免误删正在显示的悬浮窗。
     private static final int MAX_VIEW_REGISTER_SIZE = 20;
 
     private static MainApplication instance;

@@ -164,12 +164,12 @@ public class GlobalSettingsFragment extends PreferenceFragmentCompat {
             }
         });
         editText.setOnEditorActionListener((v, actionId, event) -> {
-            int edittext_temp = Integer.parseInt(v.getText().toString());
-            if (edittext_temp > 0) {
-                seekBar.setProgress(edittext_temp);
-            } else {
+            Integer editTextValue = parsePictureQuality(editText);
+            if (editTextValue == null) {
                 ApplicationMethods.showToast(requireContext(), R.string.settings_global_picture_quality_warn);
+                return false;
             }
+            seekBar.setProgress(editTextValue);
             return false;
         });
         dialog.setView(mView);
@@ -309,6 +309,19 @@ public class GlobalSettingsFragment extends PreferenceFragmentCompat {
         try {
             int value = Integer.parseInt(editText.getText().toString().trim());
             if (value < 0 || value > maxValue) {
+                return null;
+            }
+            return value;
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    @Nullable
+    private Integer parsePictureQuality(@NonNull EditText editText) {
+        try {
+            int value = Integer.parseInt(editText.getText().toString().trim());
+            if (value <= 0 || value > 100) {
                 return null;
             }
             return value;

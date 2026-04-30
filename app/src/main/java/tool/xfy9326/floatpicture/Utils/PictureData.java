@@ -19,6 +19,7 @@ public class PictureData {
     private JSONObject detailObject;
     private JSONObject listObject;
     private JSONObject dataObject;
+    private final LinkedHashMap<String, Object> dirtyValues = new LinkedHashMap<>();
 
     public PictureData() {
     }
@@ -32,6 +33,7 @@ public class PictureData {
         loadListObject();
         loadDataObject();
         this.detailObject = getDetailObject(this.id);
+        dirtyValues.clear();
     }
 
     private JSONObject loadListObject() {
@@ -52,34 +54,27 @@ public class PictureData {
 
     @SuppressWarnings("SameParameterValue")
     public void put(String name, boolean value) {
-        try {
-            detailObject.put(name, value);
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
+        putValue(name, value);
     }
 
     @SuppressWarnings("unused")
     public void put(String name, String value) {
-        try {
-            detailObject.put(name, CodeMethods.unicodeEncode(value));
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
+        putValue(name, CodeMethods.unicodeEncode(value));
     }
 
     public void put(String name, int value) {
-        try {
-            detailObject.put(name, value);
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
+        putValue(name, value);
     }
 
     @SuppressWarnings("SameParameterValue")
     public void put(String name, float value) {
+        putValue(name, value);
+    }
+
+    private void putValue(String name, Object value) {
         try {
             detailObject.put(name, value);
+            dirtyValues.put(name, value);
         } catch (JSONException e) {
             e.printStackTrace();
         }
@@ -136,8 +131,8 @@ public class PictureData {
         return defaultValue;
     }
 
-    public void commit(String pictureName) {
-        JsonFileStore.updateAll(new String[]{ListFileName, DataFileName}, jsonObjects -> {
+    public boolean commit(String pictureName) {
+        return JsonFileStore.updateAll(new String[]{ListFileName, DataFileName}, jsonObjects -> {
             JSONObject currentListObject = jsonObjects.get(ListFileName);
             JSONObject currentDataObject = jsonObjects.get(DataFileName);
             if (currentListObject == null || currentDataObject == null) {
@@ -146,28 +141,63 @@ public class PictureData {
             if (pictureName != null) {
                 currentListObject.put(id, pictureName);
             }
-            currentDataObject.put(id, detailObject);
+            JSONObject currentDetailObject = mergeDirtyValues(currentDataObject);
+            currentDataObject.put(id, currentDetailObject);
             listObject = JsonFileStore.copy(currentListObject);
             dataObject = JsonFileStore.copy(currentDataObject);
             detailObject = getDetailObject(this.id);
+            dirtyValues.clear();
             return true;
         });
     }
 
-    public void commitData() {
-        JsonFileStore.update(DataFileName, currentDataObject -> {
-            currentDataObject.put(id, detailObject);
+    public boolean commitData() {
+        return JsonFileStore.update(DataFileName, currentDataObject -> {
+            if (dirtyValues.isEmpty()) {
+                return false;
+            }
+            JSONObject currentDetailObject = mergeDirtyValues(currentDataObject);
+            currentDataObject.put(id, currentDetailObject);
             dataObject = JsonFileStore.copy(currentDataObject);
             detailObject = getDetailObject(this.id);
+            dirtyValues.clear();
             return true;
         });
     }
 
-    public void setAllPictureShowEnabled(LinkedHashMap<String, String> pictureList, boolean visible) {
-        if (pictureList == null || pictureList.isEmpty()) {
-            return;
+    public static boolean updatePictureValues(Map<String, LinkedHashMap<String, Object>> dirtyValuesById) {
+        if (dirtyValuesById == null || dirtyValuesById.isEmpty()) {
+            return true;
         }
-        JsonFileStore.update(DataFileName, currentDataObject -> {
+        return JsonFileStore.update(DataFileName, currentDataObject -> {
+            boolean changed = false;
+            for (Map.Entry<String, LinkedHashMap<String, Object>> pictureEntry : dirtyValuesById.entrySet()) {
+                String pictureId = pictureEntry.getKey();
+                LinkedHashMap<String, Object> pictureDirtyValues = pictureEntry.getValue();
+                if (pictureId == null || pictureId.isEmpty()
+                        || pictureDirtyValues == null
+                        || pictureDirtyValues.isEmpty()) {
+                    continue;
+                }
+                JSONObject currentDetailObject = currentDataObject.optJSONObject(pictureId);
+                if (currentDetailObject == null) {
+                    currentDetailObject = new JSONObject();
+                }
+                for (Map.Entry<String, Object> valueEntry : pictureDirtyValues.entrySet()) {
+                    currentDetailObject.put(valueEntry.getKey(), valueEntry.getValue());
+                }
+                currentDataObject.put(pictureId, currentDetailObject);
+                changed = true;
+            }
+            return changed;
+        });
+    }
+
+    public boolean setAllPictureShowEnabled(LinkedHashMap<String, String> pictureList, boolean visible) {
+        if (pictureList == null || pictureList.isEmpty()) {
+            return true;
+        }
+        return JsonFileStore.update(DataFileName, currentDataObject -> {
             for (String pictureId : pictureList.keySet()) {
                 if (pictureId == null || pictureId.isEmpty()) {
                     continue;
@@ -183,11 +213,11 @@ public class PictureData {
         });
     }
 
-    public void setPictureShowEnabled(Set<String> pictureIds, boolean visible) {
+    public boolean setPictureShowEnabled(Set<String> pictureIds, boolean visible) {
         if (pictureIds == null || pictureIds.isEmpty()) {
-            return;
+            return true;
         }
-        JsonFileStore.update(DataFileName, currentDataObject -> {
+        return JsonFileStore.update(DataFileName, currentDataObject -> {
             for (String pictureId : pictureIds) {
                 putPictureShowEnabled(currentDataObject, pictureId, visible);
             }
@@ -195,11 +225,11 @@ public class PictureData {
         });
     }
 
-    public void setPicturesShowEnabled(Map<String, Boolean> visibilityById) {
+    public boolean setPicturesShowEnabled(Map<String, Boolean> visibilityById) {
         if (visibilityById == null || visibilityById.isEmpty()) {
-            return;
+            return true;
         }
-        JsonFileStore.update(DataFileName, currentDataObject -> {
+        return JsonFileStore.update(DataFileName, currentDataObject -> {
             for (Map.Entry<String, Boolean> entry : visibilityById.entrySet()) {
                 String pictureId = entry.getKey();
                 Boolean visible = entry.getValue();
@@ -212,8 +242,8 @@ public class PictureData {
         });
     }
 
-    public void remove() {
-        JsonFileStore.updateAll(new String[]{ListFileName, DataFileName}, jsonObjects -> {
+    public boolean remove() {
+        return JsonFileStore.updateAll(new String[]{ListFileName, DataFileName}, jsonObjects -> {
             JSONObject currentListObject = jsonObjects.get(ListFileName);
             JSONObject currentDataObject = jsonObjects.get(DataFileName);
             if (currentListObject == null || currentDataObject == null || !currentListObject.has(id)) {
@@ -236,6 +266,17 @@ public class PictureData {
             }
         }
         return new JSONObject();
+    }
+
+    private JSONObject mergeDirtyValues(JSONObject currentDataObject) throws JSONException {
+        JSONObject currentDetailObject = currentDataObject.optJSONObject(id);
+        if (currentDetailObject == null) {
+            currentDetailObject = new JSONObject();
+        }
+        for (Map.Entry<String, Object> entry : dirtyValues.entrySet()) {
+            currentDetailObject.put(entry.getKey(), entry.getValue());
+        }
+        return currentDetailObject;
     }
 
     private static void putPictureShowEnabled(JSONObject currentDataObject, String pictureId, boolean visible) throws JSONException {

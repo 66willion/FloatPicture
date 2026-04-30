@@ -12,11 +12,13 @@ import androidx.recyclerview.widget.RecyclerView;
 import java.lang.ref.WeakReference;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.PriorityBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 import tool.xfy9326.floatpicture.Methods.ImageMethods;
+import tool.xfy9326.floatpicture.R;
 
 final class ManageListPreviewLoader {
     private static final int PREVIEW_LOADER_THREAD_COUNT = 2;
@@ -25,9 +27,9 @@ final class ManageListPreviewLoader {
     private static final int PREVIEW_PRIORITY_PREFETCH = 1;
     private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
     private static final AtomicLong PREVIEW_TASK_SEQUENCE = new AtomicLong();
-    private static final ThreadPoolExecutor PREVIEW_LOAD_EXECUTOR = createPreviewLoadExecutor();
 
     private final Context previewContext;
+    private final ThreadPoolExecutor previewLoadExecutor = createPreviewLoadExecutor();
     private final Object previewRequestLock = new Object();
     private final ConcurrentHashMap<String, WeakReference<ManageListViewHolder>> attachedPreviewHolders = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, PreviewRequestSpec> previewRequestSpecs = new ConcurrentHashMap<>();
@@ -35,6 +37,7 @@ final class ManageListPreviewLoader {
     private volatile int visibleStartPosition = RecyclerView.NO_POSITION;
     private volatile int visibleEndPosition = RecyclerView.NO_POSITION;
     private volatile int visibleCenterPosition = RecyclerView.NO_POSITION;
+    private volatile boolean released = false;
 
     ManageListPreviewLoader(@NonNull Context previewContext) {
         this.previewContext = previewContext;
@@ -85,7 +88,7 @@ final class ManageListPreviewLoader {
             }
             Bitmap cachedPreview = ImageMethods.getCachedPreviewBitmap(pictureId);
             if (cachedPreview != null) {
-                holder.imageView_Picture_Preview.setImageBitmap(cachedPreview);
+                ImageMethods.setManagePreviewBitmap(holder.imageView_Picture_Preview, cachedPreview);
                 continue;
             }
             requestPreviewLoad(position, pictureId, PREVIEW_PRIORITY_VISIBLE, true);
@@ -101,7 +104,7 @@ final class ManageListPreviewLoader {
         ImageMethods.releaseImageBitmap(holder.imageView_Picture_Preview);
         Bitmap cachedPreview = ImageMethods.getCachedPreviewBitmap(pictureId);
         if (cachedPreview != null) {
-            holder.imageView_Picture_Preview.setImageBitmap(cachedPreview);
+            ImageMethods.setManagePreviewBitmap(holder.imageView_Picture_Preview, cachedPreview);
             return;
         }
         requestPreviewLoad(adapterPosition, pictureId, PREVIEW_PRIORITY_VISIBLE);
@@ -128,10 +131,20 @@ final class ManageListPreviewLoader {
 
     void invalidateQueuedPreviewRequests() {
         previewGeneration.incrementAndGet();
-        PREVIEW_LOAD_EXECUTOR.getQueue().clear();
+        previewLoadExecutor.getQueue().clear();
         synchronized (previewRequestLock) {
             previewRequestSpecs.clear();
         }
+    }
+
+    void release() {
+        if (released) {
+            return;
+        }
+        released = true;
+        clearViewport();
+        attachedPreviewHolders.clear();
+        previewLoadExecutor.shutdownNow();
     }
 
     private void scheduleNeighborPrefetchLoads(@NonNull PreviewItemProvider itemProvider) {
@@ -155,6 +168,9 @@ final class ManageListPreviewLoader {
         if (pictureId == null || ImageMethods.getCachedPreviewBitmap(pictureId) != null) {
             return;
         }
+        if (released) {
+            return;
+        }
         long requestToken = PREVIEW_TASK_SEQUENCE.incrementAndGet();
         PreviewRequestSpec requestSpec = new PreviewRequestSpec(
                 requestToken,
@@ -165,7 +181,11 @@ final class ManageListPreviewLoader {
         if (!registerPreviewRequest(pictureId, requestSpec, replaceExistingRequest)) {
             return;
         }
-        PREVIEW_LOAD_EXECUTOR.execute(new PreviewLoadTask(pictureId, adapterPosition, requestSpec, requestToken));
+        try {
+            previewLoadExecutor.execute(new PreviewLoadTask(pictureId, adapterPosition, requestSpec, requestToken));
+        } catch (RejectedExecutionException e) {
+            clearPreviewRequest(pictureId, requestSpec);
+        }
     }
 
     private boolean registerPreviewRequest(String pictureId,
@@ -195,6 +215,9 @@ final class ManageListPreviewLoader {
     }
 
     private boolean isPreviewRequestStillRelevant(String pictureId, int adapterPosition, PreviewRequestSpec requestSpec) {
+        if (released) {
+            return false;
+        }
         if (requestSpec.generation != previewGeneration.get()) {
             return false;
         }
@@ -233,7 +256,7 @@ final class ManageListPreviewLoader {
 
     private void applyPreviewBitmapToAttachedHolder(String pictureId,
                                                     int adapterPosition,
-                                                    Bitmap previewBitmap,
+                                                    @Nullable Bitmap previewBitmap,
                                                     PreviewRequestSpec requestSpec) {
         try {
             if (!isPreviewRequestStillRelevant(pictureId, adapterPosition, requestSpec)) {
@@ -250,7 +273,13 @@ final class ManageListPreviewLoader {
             }
             Object imageTag = holder.imageView_Picture_Preview.getTag();
             if (imageTag instanceof String && pictureId.equals(imageTag)) {
-                holder.imageView_Picture_Preview.setImageBitmap(previewBitmap);
+                if (previewBitmap != null && !previewBitmap.isRecycled()) {
+                    ImageMethods.setManagePreviewBitmap(holder.imageView_Picture_Preview, previewBitmap);
+                    return;
+                }
+                ImageMethods.releaseImageBitmap(holder.imageView_Picture_Preview);
+                holder.textView_Picture_Error.setText(R.string.error_picture_preview_failed);
+                holder.textView_Picture_Error.setVisibility(android.view.View.VISIBLE);
             }
         } finally {
             clearPreviewRequest(pictureId, requestSpec);
@@ -343,7 +372,7 @@ final class ManageListPreviewLoader {
                     return;
                 }
                 Bitmap previewBitmap = ImageMethods.getPreviewBitmap(previewContext, pictureId);
-                if (previewBitmap == null || previewBitmap.isRecycled() || !isPreviewRequestStillRelevant(pictureId, adapterPosition, requestSpec)) {
+                if (!isPreviewRequestStillRelevant(pictureId, adapterPosition, requestSpec)) {
                     return;
                 }
                 postedToMainThread = true;

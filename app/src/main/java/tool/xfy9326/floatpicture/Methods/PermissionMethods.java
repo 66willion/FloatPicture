@@ -15,11 +15,34 @@ import androidx.appcompat.app.AlertDialog;
 import java.lang.ref.WeakReference;
 
 import tool.xfy9326.floatpicture.R;
+import tool.xfy9326.floatpicture.Services.TrustedOverlayAccessibilityService;
 
 public class PermissionMethods {
 
     public static boolean hasOverlayPermission(Context context) {
+        return canCreateOverlayWindow(context);
+    }
+
+    public static boolean canCreateOverlayWindow(Context context) {
+        return hasSystemOverlayPermission(context) || hasTrustedOverlayPermission();
+    }
+
+    public static boolean canStartOverlayRuntime(Context context) {
+        return hasSystemOverlayPermission(context) || hasTrustedOverlayAuthorization(context);
+    }
+
+    private static boolean hasSystemOverlayPermission(Context context) {
         return Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(context);
+    }
+
+    private static boolean hasTrustedOverlayPermission() {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1
+                && TrustedOverlayAccessibilityService.getInstance() != null;
+    }
+
+    private static boolean hasTrustedOverlayAuthorization(Context context) {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1
+                && TrustedOverlayAccessibilityService.isAuthorized(context);
     }
 
     public static Intent createOverlayPermissionIntent(Context context) {
@@ -30,7 +53,7 @@ public class PermissionMethods {
 
     @RequiresApi(Build.VERSION_CODES.M)
     public static void askOverlayPermission(final Activity activity, final Runnable launchPermissionRequest) {
-        if (!hasOverlayPermission(activity)) {
+        if (!canStartOverlayRuntime(activity)) {
             AlertDialog.Builder overlayPermission = new AlertDialog.Builder(activity);
             overlayPermission.setTitle(R.string.permission_warn);
             overlayPermission.setMessage(R.string.permission_warn_overlay_explanation);
@@ -50,7 +73,7 @@ public class PermissionMethods {
             if (ctx == null) {
                 return;
             }
-            if (!hasOverlayPermission(ctx)) {
+            if (!canStartOverlayRuntime(ctx)) {
                 ApplicationMethods.showToast(ctx, R.string.permission_warn_overlay_intent);
             } else {
                 OverlayRuntimeController.startRuntime(ctx);

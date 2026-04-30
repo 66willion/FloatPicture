@@ -50,7 +50,7 @@ public class TrustedOverlayAccessibilityService extends AccessibilityService {
     }
 
     public static boolean isActive(Context context) {
-        return instance != null || OverlayRuntimeStateStore.isTrustedOverlayActive(context);
+        return instance != null;
     }
 
     public static Context getWindowContext(Context fallbackContext) {

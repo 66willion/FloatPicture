@@ -2,6 +2,7 @@ package tool.xfy9326.floatpicture.View;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.util.Log;
 import android.view.MotionEvent;
 import android.view.WindowManager;
 
@@ -9,11 +10,12 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.widget.AppCompatImageView;
 
 import tool.xfy9326.floatpicture.Methods.WindowsMethods;
-import tool.xfy9326.floatpicture.Utils.AppExecutors;
 import tool.xfy9326.floatpicture.Utils.Config;
 import tool.xfy9326.floatpicture.Utils.OverlayRuntimeStateStore;
 
 public class FloatImageView extends AppCompatImageView {
+    private static final String TAG = "FloatImageView";
+
     private String PictureId = "";
     private boolean moveable = false;
     private boolean overLayout = false;
@@ -30,6 +32,7 @@ public class FloatImageView extends AppCompatImageView {
     private float y = 0;
     private float mNowPositionX = Config.DATA_DEFAULT_PICTURE_POSITION_X;
     private float mNowPositionY = Config.DATA_DEFAULT_PICTURE_POSITION_Y;
+    private boolean positionUpdateFailureLogged = false;
 
     public FloatImageView(Context context) {
         super(context);
@@ -101,6 +104,7 @@ public class FloatImageView extends AppCompatImageView {
                 case MotionEvent.ACTION_DOWN -> {
                     mTouchStartX = event.getX();
                     mTouchStartY = event.getY();
+                    positionUpdateFailureLogged = false;
                 }
                 case MotionEvent.ACTION_MOVE -> {
                     getNowPosition();
@@ -108,8 +112,9 @@ public class FloatImageView extends AppCompatImageView {
                 }
                 case MotionEvent.ACTION_UP -> {
                     getNowPosition();
-                    updatePosition();
-                    saveWindowPositionAsync((int) mNowPositionX, (int) mNowPositionY);
+                    if (updatePosition()) {
+                        saveWindowPosition((int) mNowPositionX, (int) mNowPositionY);
+                    }
                     mTouchStartX = mTouchStartY = 0;
                 }
             }
@@ -131,19 +136,42 @@ public class FloatImageView extends AppCompatImageView {
         mNowPositionY = y - mTouchStartY;
     }
 
-    private void updatePosition() {
+    private boolean updatePosition() {
+        if (!isAttachedToWindow()) {
+            attachedWindowManager = null;
+            return false;
+        }
         WindowManager.LayoutParams params = WindowsMethods.getDefaultLayout(getContext(), (int) mNowPositionX, (int) mNowPositionY, moveable, overLayout, pictureAlpha);
         // 拖动时复用上次由 WindowsMethods 同步过来的 layoutAlpha，
         // 避免单窗口路径（getDefaultLayout）覆盖掉多窗口联合公式计算的值。
         params.alpha = layoutAlpha;
         WindowManager windowManager = attachedWindowManager != null ? attachedWindowManager : WindowsMethods.getWindowManager(getContext());
-        windowManager.updateViewLayout(this, params);
+        if (windowManager == null) {
+            return false;
+        }
+        try {
+            windowManager.updateViewLayout(this, params);
+            attachedWindowManager = windowManager;
+            positionUpdateFailureLogged = false;
+            return true;
+        } catch (RuntimeException e) {
+            attachedWindowManager = null;
+            if (!positionUpdateFailureLogged) {
+                Log.w(TAG, "Failed to update floating window position: " + e.getMessage());
+                positionUpdateFailureLogged = true;
+            }
+            return false;
+        }
     }
 
-    private void saveWindowPositionAsync(int positionX, int positionY) {
+    private void saveWindowPosition(int positionX, int positionY) {
         String pictureId = PictureId;
         Context appContext = getContext().getApplicationContext() != null ? getContext().getApplicationContext() : getContext();
-        AppExecutors.io().execute(() -> OverlayRuntimeStateStore.saveWindowPosition(appContext, pictureId, positionX, positionY));
+        try {
+            OverlayRuntimeStateStore.saveWindowPosition(appContext, pictureId, positionX, positionY);
+        } catch (RuntimeException e) {
+            Log.w(TAG, "Failed to save floating window position: " + e.getMessage());
+        }
     }
 
 }

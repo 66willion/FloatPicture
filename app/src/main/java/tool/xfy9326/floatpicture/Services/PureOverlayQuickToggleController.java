@@ -22,6 +22,9 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.preference.PreferenceManager;
 
+import java.util.LinkedHashSet;
+import java.util.Set;
+
 import tool.xfy9326.floatpicture.Activities.MainActivity;
 import tool.xfy9326.floatpicture.Methods.ApplicationMethods;
 import tool.xfy9326.floatpicture.Methods.ManageMethods;
@@ -54,6 +57,7 @@ public final class PureOverlayQuickToggleController {
     private FrameLayout previewView;
     @Nullable
     private WindowManager previewWindowManager;
+    private boolean managedWindowToggleInProgress = false;
 
     public PureOverlayQuickToggleController(@NonNull Context context) {
         Context applicationContext = context.getApplicationContext();
@@ -95,11 +99,6 @@ public final class PureOverlayQuickToggleController {
     }
 
     public static boolean isEnabled(@NonNull Context context) {
-        OverlayRuntimeStateStore.PureOverlayQuickToggleSettings runtimeSettings =
-                OverlayRuntimeStateStore.getPureOverlayQuickToggleSettings(context);
-        if (runtimeSettings != null) {
-            return runtimeSettings.isEnabled();
-        }
         return PreferenceManager.getDefaultSharedPreferences(context)
                 .getBoolean(Config.PREFERENCE_PURE_OVERLAY_QUICK_TOGGLE_ENABLED, false);
     }
@@ -111,21 +110,10 @@ public final class PureOverlayQuickToggleController {
         editor.putInt(Config.PREFERENCE_PURE_OVERLAY_QUICK_TOGGLE_X, clampedPosition.x);
         editor.putInt(Config.PREFERENCE_PURE_OVERLAY_QUICK_TOGGLE_Y, clampedPosition.y);
         editor.apply();
-        OverlayRuntimeStateStore.savePureOverlayQuickToggleSettings(
-                context,
-                enabled,
-                clampedPosition.x,
-                clampedPosition.y
-        );
     }
 
     @NonNull
     public static Point resolveSavedPosition(@NonNull Context context) {
-        OverlayRuntimeStateStore.PureOverlayQuickToggleSettings runtimeSettings =
-                OverlayRuntimeStateStore.getPureOverlayQuickToggleSettings(context);
-        if (runtimeSettings != null) {
-            return clampPosition(context, runtimeSettings.getX(), runtimeSettings.getY());
-        }
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context);
         Point maxPosition = getPositionBounds(context);
         int defaultX = Math.max(0, maxPosition.x - dp(context, DEFAULT_MARGIN_DP));
@@ -165,6 +153,7 @@ public final class PureOverlayQuickToggleController {
     }
 
     private void releaseNow() {
+        managedWindowToggleInProgress = false;
         hidePreviewNow();
         releaseQuickToggleNow();
     }
@@ -435,16 +424,30 @@ public final class PureOverlayQuickToggleController {
     }
 
     private void toggleManagedWindows() {
+        if (managedWindowToggleInProgress) {
+            return;
+        }
         if (!shouldShowQuickToggle(appContext)) {
             releaseQuickToggleNow();
             return;
         }
-        java.util.Set<String> targetIds = OverlayRuntimeStateStore.getPureOverlayManagedPictureIds(appContext);
+        Set<String> targetIds = new LinkedHashSet<>(OverlayRuntimeStateStore.getPureOverlayManagedPictureIds(appContext));
         if (targetIds.isEmpty()) {
             return;
         }
-        boolean visible = !ManageMethods.hasVisibleWindowsConfigured(appContext, targetIds);
-        ManageMethods.setWindowsVisible(appContext, targetIds, visible);
+        boolean visible = !ManageMethods.hasVisibleRuntimeWindows(appContext, targetIds);
+        managedWindowToggleInProgress = true;
+        setQuickToggleInteractionEnabled(false);
+        ManageMethods.setWindowsVisibleAsync(appContext, targetIds, visible, () -> {
+            managedWindowToggleInProgress = false;
+            setQuickToggleInteractionEnabled(true);
+        });
+    }
+
+    private void setQuickToggleInteractionEnabled(boolean enabled) {
+        if (quickToggleView != null) {
+            quickToggleView.setEnabled(enabled);
+        }
     }
 
     private void openMainActivity() {
@@ -461,7 +464,7 @@ public final class PureOverlayQuickToggleController {
     }
 
     private static boolean canCreateOverlayWindow(@NonNull Context context) {
-        return PermissionMethods.hasOverlayPermission(context) || hasActiveTrustedOverlayService();
+        return PermissionMethods.canCreateOverlayWindow(context);
     }
 
     private boolean requiresViewRebuild(@Nullable FrameLayout view) {

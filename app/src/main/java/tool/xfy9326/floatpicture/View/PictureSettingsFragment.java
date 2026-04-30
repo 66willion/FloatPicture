@@ -3,6 +3,7 @@ package tool.xfy9326.floatpicture.View;
 import static tool.xfy9326.floatpicture.View.PictureSettingsValueFormatter.formatRatioPercent;
 import static tool.xfy9326.floatpicture.View.PictureSettingsValueFormatter.roundToThreeDecimals;
 
+import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -175,8 +176,9 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
     @Override
     public void onDestroy() {
         fragmentClosing = true;
-        boolean finishing = getActivity() != null && getActivity().isFinishing();
-        if (PictureId != null) {
+        Activity activity = getActivity();
+        boolean finishing = activity != null && activity.isFinishing() && !activity.isChangingConfigurations();
+        if (finishing && PictureId != null) {
             ImageMethods.clearStagedReplacementImage(PictureId);
         }
         if (Edit_Mode && finishing && !changesSaved && PictureId != null) {
@@ -216,7 +218,13 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                     dismissDialogIfShowing(alertDialog);
                     return;
                 }
-                requireActivity().runOnUiThread(() -> {
+                Activity activity = getActivity();
+                if (shouldAbortFragmentWork(activity)) {
+                    discardLoadedSettings(appContext, loadedSettings);
+                    dismissDialogIfShowing(alertDialog);
+                    return;
+                }
+                activity.runOnUiThread(() -> {
                     if (shouldAbortFragmentWork()) {
                         discardLoadedSettings(appContext, loadedSettings);
                         dismissDialogIfShowing(alertDialog);
@@ -452,17 +460,19 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
     }
 
     private void finishWithError(AlertDialog alertDialog) {
-        if (!isAdded()) {
+        Activity activity = getActivity();
+        if (shouldAbortFragmentWork(activity)) {
             return;
         }
-        requireActivity().runOnUiThread(() -> {
-            if (!isAdded() || getActivity() == null) {
+        activity.runOnUiThread(() -> {
+            Activity currentActivity = getActivity();
+            if (shouldAbortFragmentWork(currentActivity)) {
                 return;
             }
             dismissDialogIfShowing(alertDialog);
             fragmentClosing = true;
-            ApplicationMethods.showToast(requireContext(), R.string.picture_settings_open_failed);
-            requireActivity().finish();
+            ApplicationMethods.showToast(currentActivity, R.string.picture_settings_open_failed);
+            currentActivity.finish();
         });
     }
 
@@ -523,10 +533,21 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
             }
             if (shouldAbortFragmentWork()) {
                 ImageMethods.recycleBitmap(replacementBitmap);
-                requireActivity().runOnUiThread(() -> dismissDialogIfShowing(alertDialog));
+                Activity activity = getActivity();
+                if (activity != null) {
+                    activity.runOnUiThread(() -> dismissDialogIfShowing(alertDialog));
+                }
                 return;
             }
-            requireActivity().runOnUiThread(() -> {
+            Activity activity = getActivity();
+            if (shouldAbortFragmentWork(activity)) {
+                ImageMethods.recycleBitmap(replacementBitmap);
+                if (activity != null) {
+                    activity.runOnUiThread(() -> dismissDialogIfShowing(alertDialog));
+                }
+                return;
+            }
+            activity.runOnUiThread(() -> {
                 if (shouldAbortFragmentWork()) {
                     ImageMethods.recycleBitmap(replacementBitmap);
                     dismissDialogIfShowing(alertDialog);
@@ -546,15 +567,17 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         if (PictureId != null) {
             ImageMethods.clearStagedReplacementImage(PictureId);
         }
-        if (!isAdded()) {
+        Activity activity = getActivity();
+        if (shouldAbortFragmentWork(activity)) {
             return;
         }
-        requireActivity().runOnUiThread(() -> {
-            if (!isAdded() || getActivity() == null) {
+        activity.runOnUiThread(() -> {
+            Activity currentActivity = getActivity();
+            if (shouldAbortFragmentWork(currentActivity)) {
                 return;
             }
             dismissDialogIfShowing(alertDialog);
-            ApplicationMethods.showToast(requireContext(), R.string.picture_settings_replace_failed);
+            ApplicationMethods.showToast(currentActivity, R.string.picture_settings_replace_failed);
         });
     }
 
@@ -768,13 +791,11 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
     }
 
     private boolean shouldAbortFragmentWork() {
-        if (fragmentClosing || !isAdded()) {
-            return true;
-        }
-        if (getActivity() == null) {
-            return true;
-        }
-        return requireActivity().isFinishing() || requireActivity().isDestroyed();
+        return shouldAbortFragmentWork(getActivity());
+    }
+
+    private boolean shouldAbortFragmentWork(@Nullable Activity activity) {
+        return fragmentClosing || !isAdded() || activity == null || activity.isFinishing() || activity.isDestroyed();
     }
 
     private void dismissDialogIfShowing(AlertDialog alertDialog) {
@@ -1002,15 +1023,17 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         AppExecutors.io().execute(() -> {
             boolean saveFailed = !PictureSettingsSaveController.saveBatch(appContext, saveRequest);
             final boolean finalSaveFailed = saveFailed;
-            if (!isAdded() || getActivity() == null) {
+            Activity activity = getActivity();
+            if (shouldAbortFragmentWork(activity)) {
                 return;
             }
-            requireActivity().runOnUiThread(() -> {
-                if (!isAdded() || getActivity() == null) {
+            activity.runOnUiThread(() -> {
+                Activity currentActivity = getActivity();
+                if (shouldAbortFragmentWork(currentActivity)) {
                     return;
                 }
                 if (finalSaveFailed) {
-                    ApplicationMethods.showToast(requireContext(), R.string.picture_settings_save_failed);
+                    ApplicationMethods.showToast(currentActivity, R.string.picture_settings_save_failed);
                     if (onFailed != null) {
                         onFailed.run();
                     }
@@ -1057,14 +1080,16 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         final Context appContext = requireContext().getApplicationContext();
         AppExecutors.io().execute(() -> {
             if (!PictureSettingsSaveController.saveSingle(appContext, saveRequest)) {
-                if (!isAdded() || getActivity() == null) {
+                Activity activity = getActivity();
+                if (shouldAbortFragmentWork(activity)) {
                     return;
                 }
-                requireActivity().runOnUiThread(() -> {
-                    if (!isAdded() || getActivity() == null) {
+                activity.runOnUiThread(() -> {
+                    Activity currentActivity = getActivity();
+                    if (shouldAbortFragmentWork(currentActivity)) {
                         return;
                     }
-                    ApplicationMethods.showToast(requireContext(), R.string.picture_settings_save_failed);
+                    ApplicationMethods.showToast(currentActivity, R.string.picture_settings_save_failed);
                     if (onFailed != null) {
                         onFailed.run();
                     }
@@ -1075,8 +1100,14 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
                 releaseSourceBitmap();
                 return;
             }
-            requireActivity().runOnUiThread(() -> {
-                if (shouldAbortFragmentWork()) {
+            Activity activity = getActivity();
+            if (shouldAbortFragmentWork(activity)) {
+                releaseSourceBitmap();
+                return;
+            }
+            activity.runOnUiThread(() -> {
+                Activity currentActivity = getActivity();
+                if (shouldAbortFragmentWork(currentActivity)) {
                     releaseSourceBitmap();
                     return;
                 }
@@ -1100,6 +1131,9 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
     }
 
     public void clearEditView() {
+        if (fragmentClosing) {
+            return;
+        }
         if (Batch_Mode) {
             if (Batch_Import_Mode && !changesSaved) {
                 clearImportedBatchPictures();
@@ -1117,6 +1151,9 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
     }
 
     public void exit() {
+        if (fragmentClosing) {
+            return;
+        }
         fragmentClosing = true;
         if (Batch_Mode) {
             return;
@@ -1124,7 +1161,6 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
         if (!Edit_Mode) {
             releaseSourceBitmap();
             OverlayRuntimeController.deletePicture(requireActivity(), PictureId);
-            ImageMethods.clearAllTemp(requireActivity(), PictureId);
         } else {
             ImageMethods.clearStagedReplacementImage(PictureId);
             ImageMethods.clearPendingReplacementImage(PictureId);
@@ -1143,10 +1179,6 @@ public class PictureSettingsFragment extends PreferenceFragmentCompat {
             if (pictureId == null || pictureId.isEmpty()) {
                 continue;
             }
-            PictureData importedPictureData = new PictureData();
-            importedPictureData.setDataControl(pictureId);
-            importedPictureData.remove();
-            ImageMethods.clearAllTemp(appContext, pictureId);
             OverlayRuntimeController.deletePicture(appContext, pictureId);
         }
     }

@@ -21,7 +21,7 @@ public class BootCompleteReceiver extends BroadcastReceiver {
                     .getBoolean(Config.PREFERENCE_BOOT_AUTO_RUN, false);
             boolean pureOverlayMode = ApplicationMethods.isPureOverlayModeEnabled(context)
                     && OverlayRuntimeStateStore.hasPureOverlayManagedPictureIds(context);
-            if ((bootAutoRun || pureOverlayMode) && PermissionMethods.hasOverlayPermission(context)) {
+            if ((bootAutoRun || pureOverlayMode) && PermissionMethods.canStartOverlayRuntime(context)) {
                 ApplicationMethods.startNotificationControl(context);
             }
         }

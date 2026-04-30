@@ -7,6 +7,7 @@ import android.graphics.Point;
 import androidx.annotation.NonNull;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 
 import tool.xfy9326.floatpicture.Methods.ImageMethods;
@@ -22,24 +23,27 @@ final class PictureSettingsSaveController {
     }
 
     static boolean saveBatch(@NonNull Context appContext, @NonNull BatchSaveRequest request) {
-        boolean saveFailed = false;
         PictureData listPictureData = new PictureData();
         LinkedHashMap<String, String> listArray = listPictureData.getListArray();
         if (listArray == null) {
             return false;
         }
 
+        LinkedHashMap<String, LinkedHashMap<String, Object>> dirtyValuesById = new LinkedHashMap<>();
+        LinkedHashMap<String, BatchDisplayCacheRequest> displayCacheRequests = new LinkedHashMap<>();
+        ArrayList<String> positionResetIds = new ArrayList<>();
+        ArrayList<String> syncPictureIds = new ArrayList<>();
         for (String pictureId : request.pictureIds) {
             if (pictureId == null || !listArray.containsKey(pictureId)) {
                 continue;
             }
             PictureData itemPictureData = new PictureData();
             itemPictureData.setDataControl(pictureId);
-            float itemDefaultZoom = itemPictureData.getFloat(
-                    Config.DATA_PICTURE_DEFAULT_ZOOM,
-                    ImageMethods.getDefaultZoom(appContext, pictureId, false)
-            );
-            float itemZoom = itemPictureData.getFloat(Config.DATA_PICTURE_ZOOM, itemDefaultZoom);
+            LinkedHashMap<String, Object> dirtyValues = new LinkedHashMap<>();
+            boolean needsDisplayCacheRebuild = request.needsDisplayCacheRebuild();
+            float itemZoom = (request.zoomChanged || request.fitScreenHeightChanged || !needsDisplayCacheRebuild)
+                    ? 1f
+                    : resolveItemZoom(appContext, itemPictureData, pictureId);
             float itemDegree = itemPictureData.getFloat(Config.DATA_PICTURE_DEGREE, Config.DATA_DEFAULT_PICTURE_DEGREE);
             float itemAlpha = itemPictureData.getFloat(Config.DATA_PICTURE_ALPHA, Config.DATA_DEFAULT_PICTURE_ALPHA);
             float itemCornerRadiusRatio = itemPictureData.getFloat(Config.DATA_PICTURE_CORNER_RADIUS_RATIO, Config.DATA_DEFAULT_PICTURE_CORNER_RADIUS_RATIO);
@@ -51,61 +55,63 @@ final class PictureSettingsSaveController {
 
             if (request.degreeChanged) {
                 itemDegree = request.degree;
-                itemPictureData.put(Config.DATA_PICTURE_DEGREE, itemDegree);
+                dirtyValues.put(Config.DATA_PICTURE_DEGREE, itemDegree);
             }
             if (request.zoomChanged) {
                 itemZoom = request.zoom;
-                itemPictureData.put(Config.DATA_PICTURE_ZOOM, itemZoom);
+                dirtyValues.put(Config.DATA_PICTURE_ZOOM, itemZoom);
             }
             if (request.fitScreenHeightChanged) {
-                Bitmap sourceBitmap = ImageMethods.getEditSourceBitmap(appContext, pictureId);
-                if (sourceBitmap == null || sourceBitmap.isRecycled()) {
-                    saveFailed = true;
+                Point sourceSize = ImageMethods.getSourceBitmapSize(pictureId);
+                if (sourceSize == null || sourceSize.x <= 0 || sourceSize.y <= 0) {
+                    return false;
+                }
+                float fittedZoom = resolveScreenHeightZoom(sourceSize, itemDegree, request.windowSize);
+                if (fittedZoom > 0f) {
+                    itemZoom = fittedZoom;
+                    itemPositionY = 0;
+                    dirtyValues.put(Config.DATA_PICTURE_ZOOM, itemZoom);
+                    dirtyValues.put(Config.DATA_PICTURE_POSITION_Y, itemPositionY);
                 } else {
-                    float fittedZoom = resolveScreenHeightZoom(sourceBitmap, itemDegree, request.windowSize);
-                    ImageMethods.recycleBitmap(sourceBitmap);
-                    if (fittedZoom > 0f) {
-                        itemZoom = fittedZoom;
-                        itemPositionY = 0;
-                        itemPictureData.put(Config.DATA_PICTURE_ZOOM, itemZoom);
-                        itemPictureData.put(Config.DATA_PICTURE_POSITION_Y, itemPositionY);
-                    } else {
-                        saveFailed = true;
-                    }
+                    return false;
                 }
             }
             if (request.alphaChanged) {
                 itemAlpha = request.alpha;
-                itemPictureData.put(Config.DATA_PICTURE_ALPHA, itemAlpha);
+                dirtyValues.put(Config.DATA_PICTURE_ALPHA, itemAlpha);
             }
             if (request.cornerRadiusChanged) {
                 itemCornerRadiusRatio = request.cornerRadiusRatio;
                 itemCornerRadiusMask = request.cornerRadiusMask;
-                itemPictureData.put(Config.DATA_PICTURE_CORNER_RADIUS_RATIO, itemCornerRadiusRatio);
-                itemPictureData.put(Config.DATA_PICTURE_CORNER_RADIUS_MASK, itemCornerRadiusMask);
+                dirtyValues.put(Config.DATA_PICTURE_CORNER_RADIUS_RATIO, itemCornerRadiusRatio);
+                dirtyValues.put(Config.DATA_PICTURE_CORNER_RADIUS_MASK, itemCornerRadiusMask);
             }
             if (request.edgeFeatherChanged) {
                 itemEdgeFeatherRatio = request.edgeFeatherRatio;
                 itemEdgeFeatherMask = request.edgeFeatherMask;
-                itemPictureData.put(Config.DATA_PICTURE_EDGE_FEATHER_RATIO, itemEdgeFeatherRatio);
-                itemPictureData.put(Config.DATA_PICTURE_EDGE_FEATHER_MASK, itemEdgeFeatherMask);
+                dirtyValues.put(Config.DATA_PICTURE_EDGE_FEATHER_RATIO, itemEdgeFeatherRatio);
+                dirtyValues.put(Config.DATA_PICTURE_EDGE_FEATHER_MASK, itemEdgeFeatherMask);
             }
             if (request.positionChanged) {
                 itemPositionX = request.positionX;
                 itemPositionY = request.positionY;
-                itemPictureData.put(Config.DATA_PICTURE_POSITION_X, itemPositionX);
-                itemPictureData.put(Config.DATA_PICTURE_POSITION_Y, itemPositionY);
+                dirtyValues.put(Config.DATA_PICTURE_POSITION_X, itemPositionX);
+                dirtyValues.put(Config.DATA_PICTURE_POSITION_Y, itemPositionY);
             }
             if (request.touchAndMoveChanged) {
-                itemPictureData.put(Config.DATA_PICTURE_TOUCH_AND_MOVE, request.touchAndMove);
+                dirtyValues.put(Config.DATA_PICTURE_TOUCH_AND_MOVE, request.touchAndMove);
             }
             if (request.overLayoutChanged) {
-                itemPictureData.put(Config.DATA_ALLOW_PICTURE_OVER_LAYOUT, request.overLayout);
+                dirtyValues.put(Config.DATA_ALLOW_PICTURE_OVER_LAYOUT, request.overLayout);
             }
-            itemPictureData.commit(null);
-
-            if (request.needsDisplayCacheRebuild()) {
-                Bitmap displayBitmap = ImageMethods.createAndSaveDisplayBitmap(
+            if (!dirtyValues.isEmpty()) {
+                dirtyValuesById.put(pictureId, dirtyValues);
+            }
+            if (needsDisplayCacheRebuild) {
+                if (!request.fitScreenHeightChanged && ImageMethods.getSourceBitmapSize(pictureId) == null) {
+                    return false;
+                }
+                displayCacheRequests.put(pictureId, new BatchDisplayCacheRequest(
                         pictureId,
                         itemZoom,
                         itemDegree,
@@ -113,25 +119,42 @@ final class PictureSettingsSaveController {
                         itemCornerRadiusMask,
                         itemEdgeFeatherRatio,
                         itemEdgeFeatherMask
-                );
-                ImageMethods.recycleBitmap(displayBitmap);
+                ));
             }
             if (request.positionChanged || request.fitScreenHeightChanged) {
-                OverlayRuntimeStateStore.clearWindowPosition(appContext, pictureId);
+                positionResetIds.add(pictureId);
             }
-            OverlayRuntimeController.syncPicture(appContext, pictureId, false);
+            syncPictureIds.add(pictureId);
         }
-        return !saveFailed;
+
+        if (!clearDisplayCaches(displayCacheRequests.values())) {
+            return false;
+        }
+        if (!PictureData.updatePictureValues(dirtyValuesById)) {
+            return false;
+        }
+
+        for (String pictureId : positionResetIds) {
+            OverlayRuntimeStateStore.clearWindowPosition(appContext, pictureId);
+        }
+        if (displayCacheRequests.isEmpty()) {
+            OverlayRuntimeController.syncPictures(appContext, syncPictureIds, false);
+        } else {
+            scheduleDisplayCacheRebuilds(appContext, displayCacheRequests.values());
+        }
+        return true;
     }
 
     static boolean saveSingle(@NonNull Context appContext, @NonNull SingleSaveRequest request) {
+        if (ImageMethods.hasPendingReplacementImage(request.pictureId)) {
+            Bitmap pendingBitmap = ImageMethods.getPendingEditSourceBitmap(request.pictureId);
+            if (pendingBitmap == null) {
+                return false;
+            }
+            ImageMethods.recycleBitmap(pendingBitmap);
+        }
         if (!ImageMethods.commitPendingReplacementImage(request.pictureId)) {
             return false;
-        }
-        request.applyToPictureData();
-        request.pictureData.commit(request.pictureName);
-        if (request.positionChanged) {
-            OverlayRuntimeStateStore.clearWindowPosition(appContext, request.pictureId);
         }
         Bitmap displayBitmap = ImageMethods.createAndSaveDisplayBitmap(
                 request.pictureId,
@@ -142,18 +165,43 @@ final class PictureSettingsSaveController {
                 request.edgeFeatherRatio,
                 request.edgeFeatherMask
         );
-        ImageMethods.recycleBitmap(displayBitmap);
-        OverlayRuntimeController.finishPreview(appContext, request.pictureId);
-        return true;
+        if (displayBitmap == null) {
+            return false;
+        }
+        try {
+            request.applyToPictureData();
+            if (!request.pictureData.commit(request.pictureName)) {
+                ImageMethods.clearDisplayBitmapCache(request.pictureId);
+                return false;
+            }
+            if (request.positionChanged) {
+                OverlayRuntimeStateStore.clearWindowPosition(appContext, request.pictureId);
+            }
+            OverlayRuntimeController.finishPreview(appContext, request.pictureId);
+            return true;
+        } finally {
+            ImageMethods.recycleBitmap(displayBitmap);
+        }
     }
 
     static float resolveScreenHeightZoom(@NonNull Bitmap sourceBitmap, float degreeValue, @NonNull Point windowSize) {
+        return resolveScreenHeightZoom(sourceBitmap.getWidth(), sourceBitmap.getHeight(), degreeValue, windowSize);
+    }
+
+    static float resolveScreenHeightZoom(@NonNull Point sourceSize, float degreeValue, @NonNull Point windowSize) {
+        return resolveScreenHeightZoom(sourceSize.x, sourceSize.y, degreeValue, windowSize);
+    }
+
+    private static float resolveScreenHeightZoom(int sourceWidth,
+                                                 int sourceHeight,
+                                                 float degreeValue,
+                                                 @NonNull Point windowSize) {
         if (windowSize.y <= 0) {
             return 0f;
         }
         double radians = Math.toRadians(degreeValue);
-        double rotatedBaseHeight = (Math.abs(sourceBitmap.getHeight() * Math.cos(radians))
-                + Math.abs(sourceBitmap.getWidth() * Math.sin(radians)));
+        double rotatedBaseHeight = (Math.abs(sourceHeight * Math.cos(radians))
+                + Math.abs(sourceWidth * Math.sin(radians)));
         if (rotatedBaseHeight <= 0d) {
             return 0f;
         }
@@ -162,6 +210,66 @@ final class PictureSettingsSaveController {
 
     private static float roundToThreeDecimals(float value) {
         return Math.round(value * THREE_DECIMAL_SCALE) / (float) THREE_DECIMAL_SCALE;
+    }
+
+    private static float resolveItemZoom(@NonNull Context appContext,
+                                         @NonNull PictureData itemPictureData,
+                                         @NonNull String pictureId) {
+        float itemDefaultZoom = itemPictureData.has(Config.DATA_PICTURE_DEFAULT_ZOOM)
+                ? itemPictureData.getFloat(Config.DATA_PICTURE_DEFAULT_ZOOM, 1f)
+                : ImageMethods.getDefaultZoom(appContext, pictureId, false);
+        return itemPictureData.getFloat(Config.DATA_PICTURE_ZOOM, itemDefaultZoom);
+    }
+
+    private static boolean clearDisplayCaches(Collection<BatchDisplayCacheRequest> displayCacheRequests) {
+        for (BatchDisplayCacheRequest displayCacheRequest : displayCacheRequests) {
+            if (!ImageMethods.clearDisplayBitmapCache(displayCacheRequest.pictureId)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static void scheduleDisplayCacheRebuilds(@NonNull Context appContext,
+                                                     Collection<BatchDisplayCacheRequest> displayCacheRequests) {
+        for (BatchDisplayCacheRequest displayCacheRequest : displayCacheRequests) {
+            ImageMethods.rebuildDisplayBitmapAsync(
+                    appContext,
+                    displayCacheRequest.pictureId,
+                    displayCacheRequest.zoom,
+                    displayCacheRequest.degree,
+                    displayCacheRequest.cornerRadiusRatio,
+                    displayCacheRequest.cornerRadiusMask,
+                    displayCacheRequest.edgeFeatherRatio,
+                    displayCacheRequest.edgeFeatherMask
+            );
+        }
+    }
+
+    private static final class BatchDisplayCacheRequest {
+        private final String pictureId;
+        private final float zoom;
+        private final float degree;
+        private final float cornerRadiusRatio;
+        private final int cornerRadiusMask;
+        private final float edgeFeatherRatio;
+        private final int edgeFeatherMask;
+
+        private BatchDisplayCacheRequest(String pictureId,
+                                         float zoom,
+                                         float degree,
+                                         float cornerRadiusRatio,
+                                         int cornerRadiusMask,
+                                         float edgeFeatherRatio,
+                                         int edgeFeatherMask) {
+            this.pictureId = pictureId;
+            this.zoom = zoom;
+            this.degree = degree;
+            this.cornerRadiusRatio = cornerRadiusRatio;
+            this.cornerRadiusMask = cornerRadiusMask;
+            this.edgeFeatherRatio = edgeFeatherRatio;
+            this.edgeFeatherMask = edgeFeatherMask;
+        }
     }
 
     static final class BatchSaveRequest {

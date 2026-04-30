@@ -27,12 +27,40 @@ final class PictureFileStore {
         return new File(Config.getOriginalPictureDir() + id + ".pending.new");
     }
 
+    private static File getPendingReplacementBackupFile(String id) {
+        return new File(Config.getOriginalPictureDir() + id + ".pending.backup");
+    }
+
+    private static File getPendingReplacementTransactionFile(String id) {
+        return new File(Config.getOriginalPictureDir() + id + ".pending.transaction");
+    }
+
+    private static File getOriginalBackupFile(String id) {
+        return new File(Config.getOriginalPictureDir() + id + ".backup");
+    }
+
+    private static File getOriginalReplacementTransactionFile(String id) {
+        return new File(Config.getOriginalPictureDir() + id + ".commit.transaction");
+    }
+
     static File getLegacyFile(String id) {
         return new File(Config.getPictureDir() + id);
     }
 
     static File getDisplayFile(String id) {
         return new File(Config.getPictureTempDir() + id);
+    }
+
+    private static File getPendingDisplayFile(String id) {
+        return new File(Config.getPictureTempDir() + id + ".pending");
+    }
+
+    private static File getDisplayBackupFile(String id) {
+        return new File(Config.getPictureTempDir() + id + ".backup");
+    }
+
+    private static File getDisplayReplacementTransactionFile(String id) {
+        return new File(Config.getPictureTempDir() + id + ".transaction");
     }
 
     static File getAvailableSourceFile(String id) {
@@ -74,41 +102,19 @@ final class PictureFileStore {
 
     static boolean applyStagedReplacementImage(String id) {
         File stagedFile = getStagedPendingOriginalFile(id);
+        File pendingFile = getPendingOriginalFile(id);
+        File transactionFile = getPendingReplacementTransactionFile(id);
+        File backupFile = getPendingReplacementBackupFile(id);
+        recoverReplacementWorkFiles(stagedFile, pendingFile, transactionFile, backupFile);
         if (!stagedFile.exists()) {
             return false;
         }
-        File pendingFile = getPendingOriginalFile(id);
-        File pendingBackupFile = new File(Config.getOriginalPictureDir() + id + ".pending.backup");
-        deleteFileIfExists(pendingBackupFile);
-        boolean pendingBackedUp = false;
-        if (pendingFile.exists()) {
-            if (pendingFile.renameTo(pendingBackupFile)) {
-                pendingBackedUp = true;
-            } else {
-                if (!IOMethods.copyFile(pendingFile, pendingBackupFile)) {
-                    return false;
-                }
-                pendingBackedUp = true;
-                deleteFileIfExists(pendingFile);
-                if (pendingFile.exists()) {
-                    deleteFileIfExists(pendingBackupFile);
-                    return false;
-                }
-            }
-        }
-        boolean replaced = stagedFile.renameTo(pendingFile) || IOMethods.copyFile(stagedFile, pendingFile);
-        if (!replaced || !pendingFile.exists()) {
-            deleteFileIfExists(pendingFile);
-            if (pendingBackedUp) {
-                if (!pendingBackupFile.renameTo(pendingFile)) {
-                    IOMethods.copyFile(pendingBackupFile, pendingFile);
-                }
-            }
-            return false;
-        }
-        deleteFileIfExists(stagedFile);
-        deleteFileIfExists(pendingBackupFile);
-        return pendingFile.exists();
+        return replaceFileTransactionally(
+                stagedFile,
+                pendingFile,
+                transactionFile,
+                backupFile
+        );
     }
 
     static boolean hasPendingReplacementImage(String id) {
@@ -117,51 +123,45 @@ final class PictureFileStore {
 
     static boolean commitPendingReplacementImage(String id) {
         File pendingFile = getPendingOriginalFile(id);
+        File originalFile = getOriginalFile(id);
+        File transactionFile = getOriginalReplacementTransactionFile(id);
+        File backupFile = getOriginalBackupFile(id);
+        recoverReplacementWorkFiles(pendingFile, originalFile, transactionFile, backupFile);
         if (!pendingFile.exists()) {
             return true;
         }
-        File originalFile = getOriginalFile(id);
-        File backupFile = new File(Config.getOriginalPictureDir() + id + ".backup");
-        deleteFileIfExists(backupFile);
-        boolean originalBackedUp = false;
-        if (originalFile.exists()) {
-            if (originalFile.renameTo(backupFile)) {
-                originalBackedUp = true;
-            } else {
-                if (!IOMethods.copyFile(originalFile, backupFile)) {
-                    return false;
-                }
-                originalBackedUp = true;
-                deleteFileIfExists(originalFile);
-                if (originalFile.exists()) {
-                    deleteFileIfExists(backupFile);
-                    return false;
-                }
-            }
-        }
-        boolean replaced = pendingFile.renameTo(originalFile) || IOMethods.copyFile(pendingFile, originalFile);
-        if (!replaced || !originalFile.exists()) {
-            deleteFileIfExists(originalFile);
-            if (originalBackedUp) {
-                if (!backupFile.renameTo(originalFile)) {
-                    IOMethods.copyFile(backupFile, originalFile);
-                }
-            }
+        boolean committed = replaceFileTransactionally(
+                pendingFile,
+                originalFile,
+                transactionFile,
+                backupFile
+        );
+        if (!committed) {
             return false;
         }
         deleteFileIfExists(getLegacyFile(id));
         deleteFileIfExists(getDisplayFile(id));
-        deleteFileIfExists(pendingFile);
-        deleteFileIfExists(backupFile);
         return originalFile.exists() && !pendingFile.exists();
     }
 
     static void clearPendingReplacementImage(String id) {
-        deleteFileIfExists(getPendingOriginalFile(id));
+        File pendingFile = getPendingOriginalFile(id);
+        File originalFile = getOriginalFile(id);
+        File transactionFile = getOriginalReplacementTransactionFile(id);
+        File backupFile = getOriginalBackupFile(id);
+        recoverReplacementWorkFiles(pendingFile, originalFile, transactionFile, backupFile);
+        deleteFileIfExists(pendingFile);
+        deleteFileIfExists(transactionFile);
     }
 
     static void clearStagedReplacementImage(String id) {
-        deleteFileIfExists(getStagedPendingOriginalFile(id));
+        File stagedFile = getStagedPendingOriginalFile(id);
+        File pendingFile = getPendingOriginalFile(id);
+        File transactionFile = getPendingReplacementTransactionFile(id);
+        File backupFile = getPendingReplacementBackupFile(id);
+        recoverReplacementWorkFiles(stagedFile, pendingFile, transactionFile, backupFile);
+        deleteFileIfExists(stagedFile);
+        deleteFileIfExists(transactionFile);
     }
 
     static boolean isPictureFileExist(String id) {
@@ -172,16 +172,95 @@ final class PictureFileStore {
         return isPictureFileExist(id) || getDisplayFile(id).exists();
     }
 
+    static int recoverPictureWorkFiles(String id) {
+        if (id == null || id.isEmpty()) {
+            return 0;
+        }
+        int cleanedCount = 0;
+        cleanedCount += recoverReplacementWorkFiles(
+                getStagedPendingOriginalFile(id),
+                getPendingOriginalFile(id),
+                getPendingReplacementTransactionFile(id),
+                getPendingReplacementBackupFile(id)
+        );
+        cleanedCount += recoverReplacementWorkFiles(
+                getPendingOriginalFile(id),
+                getOriginalFile(id),
+                getOriginalReplacementTransactionFile(id),
+                getOriginalBackupFile(id)
+        );
+        cleanedCount += recoverReplacementWorkFiles(
+                getPendingDisplayFile(id),
+                getDisplayFile(id),
+                getDisplayReplacementTransactionFile(id),
+                getDisplayBackupFile(id)
+        );
+        return cleanedCount;
+    }
+
     static void deleteAllPictureFiles(String id) {
         deleteFileIfExists(getStagedPendingOriginalFile(id));
         deleteFileIfExists(getPendingOriginalFile(id));
         deleteFileIfExists(getOriginalFile(id));
+        deleteFileIfExists(getPendingReplacementTransactionFile(id));
+        deleteFileIfExists(getPendingReplacementBackupFile(id));
+        deleteFileIfExists(getOriginalReplacementTransactionFile(id));
+        deleteFileIfExists(getOriginalBackupFile(id));
         deleteFileIfExists(getLegacyFile(id));
         deleteFileIfExists(getDisplayFile(id));
+        deleteFileIfExists(getPendingDisplayFile(id));
+        deleteFileIfExists(getDisplayReplacementTransactionFile(id));
+        deleteFileIfExists(getDisplayBackupFile(id));
     }
 
-    static void saveDisplayBitmap(String id, Bitmap bitmap, boolean recycle) {
-        IOMethods.saveBitmapLossless(bitmap, getDisplayFile(id).getAbsolutePath(), recycle);
+    static boolean saveDisplayBitmap(String id, Bitmap bitmap, boolean recycle) {
+        if (!savePendingDisplayBitmap(id, bitmap, recycle)) {
+            return false;
+        }
+        boolean committed = commitPendingDisplayBitmap(id);
+        if (!committed) {
+            clearPendingDisplayBitmap(id);
+        }
+        return committed;
+    }
+
+    static boolean savePendingDisplayBitmap(String id, Bitmap bitmap, boolean recycle) {
+        clearPendingDisplayBitmap(id);
+        boolean saved = IOMethods.saveBitmapLossless(bitmap, getPendingDisplayFile(id).getAbsolutePath(), false);
+        if (saved && recycle && bitmap != null && !bitmap.isRecycled()) {
+            bitmap.recycle();
+        }
+        return saved;
+    }
+
+    static boolean commitPendingDisplayBitmap(String id) {
+        File pendingFile = getPendingDisplayFile(id);
+        File displayFile = getDisplayFile(id);
+        File transactionFile = getDisplayReplacementTransactionFile(id);
+        File backupFile = getDisplayBackupFile(id);
+        recoverReplacementWorkFiles(pendingFile, displayFile, transactionFile, backupFile);
+        if (!pendingFile.exists()) {
+            return false;
+        }
+        return replaceFileTransactionally(pendingFile, displayFile, transactionFile, backupFile);
+    }
+
+    static void clearPendingDisplayBitmap(String id) {
+        File pendingFile = getPendingDisplayFile(id);
+        File displayFile = getDisplayFile(id);
+        File transactionFile = getDisplayReplacementTransactionFile(id);
+        File backupFile = getDisplayBackupFile(id);
+        recoverReplacementWorkFiles(pendingFile, displayFile, transactionFile, backupFile);
+        deleteFileIfExists(pendingFile);
+        deleteFileIfExists(transactionFile);
+    }
+
+    static boolean clearDisplayBitmap(String id) {
+        clearPendingDisplayBitmap(id);
+        boolean displayCleared = deleteFileIfExists(getDisplayFile(id));
+        boolean backupCleared = deleteFileIfExists(getDisplayBackupFile(id));
+        boolean transactionCleared = deleteFileIfExists(getDisplayReplacementTransactionFile(id));
+        return displayCleared && backupCleared && transactionCleared;
     }
 
     static long buildFileVersion(File file) {
@@ -192,11 +271,119 @@ final class PictureFileStore {
         return System.currentTimeMillis() + "-" + CodeMethods.getFileMD5String(context, uri);
     }
 
-    private static void deleteFileIfExists(File file) {
-        if (file.exists()) {
-            if (!file.delete()) {
-                Log.w(TAG, "Failed to delete: " + file.getAbsolutePath());
+    private static boolean replaceFileTransactionally(File sourceFile,
+                                                      File targetFile,
+                                                      File transactionFile,
+                                                      File backupFile) {
+        if (!isRegularFile(sourceFile) || targetFile == null || transactionFile == null || backupFile == null) {
+            return false;
+        }
+        if (!deleteFileIfExists(transactionFile) || !deleteFileIfExists(backupFile)) {
+            return false;
+        }
+        if (!moveFileToAbsentTarget(sourceFile, transactionFile)) {
+            deleteFileIfExists(transactionFile);
+            return false;
+        }
+        boolean targetBackedUp = false;
+        if (targetFile.exists()) {
+            if (!targetFile.isFile() || !moveFileToAbsentTarget(targetFile, backupFile)) {
+                restoreSourceFile(transactionFile, sourceFile);
+                return false;
+            }
+            targetBackedUp = true;
+        }
+        if (!moveFileToAbsentTarget(transactionFile, targetFile) || !targetFile.exists()) {
+            deleteFileIfExists(targetFile);
+            restoreBackupFile(backupFile, targetFile, targetBackedUp);
+            restoreSourceFile(transactionFile, sourceFile);
+            return false;
+        }
+        deleteFileIfExists(transactionFile);
+        deleteFileIfExists(backupFile);
+        return targetFile.exists() && !sourceFile.exists() && !transactionFile.exists();
+    }
+
+    private static int recoverReplacementWorkFiles(File sourceFile,
+                                                   File targetFile,
+                                                   File transactionFile,
+                                                   File backupFile) {
+        int cleanedCount = 0;
+        if (backupFile.exists() && !targetFile.exists()) {
+            if (moveFileToAbsentTarget(backupFile, targetFile)) {
+                cleanedCount++;
+            } else {
+                Log.w(TAG, "Failed to restore dangling replacement backup: " + targetFile.getAbsolutePath());
             }
         }
+        if (transactionFile.exists() && !sourceFile.exists()) {
+            if (moveFileToAbsentTarget(transactionFile, sourceFile)) {
+                cleanedCount++;
+            } else {
+                Log.w(TAG, "Failed to restore dangling replacement source: " + sourceFile.getAbsolutePath());
+            }
+        }
+        if (targetFile.exists() && backupFile.exists() && deleteFileIfExists(backupFile)) {
+            cleanedCount++;
+        }
+        if (sourceFile.exists() && transactionFile.exists() && deleteFileIfExists(transactionFile)) {
+            cleanedCount++;
+        }
+        return cleanedCount;
+    }
+
+    private static boolean moveFileToAbsentTarget(File sourceFile, File targetFile) {
+        if (!isRegularFile(sourceFile) || targetFile == null || targetFile.exists()) {
+            return false;
+        }
+        if (sourceFile.renameTo(targetFile)) {
+            return targetFile.exists() && !sourceFile.exists();
+        }
+        if (!IOMethods.copyFile(sourceFile, targetFile) || !targetFile.exists()) {
+            return false;
+        }
+        if (!deleteFileIfExists(sourceFile)) {
+            deleteFileIfExists(targetFile);
+            return false;
+        }
+        return !sourceFile.exists();
+    }
+
+    private static void restoreSourceFile(File transactionFile, File sourceFile) {
+        if (transactionFile.exists() && !sourceFile.exists() && !moveFileToAbsentTarget(transactionFile, sourceFile)) {
+            Log.w(TAG, "Failed to restore replacement source: " + sourceFile.getAbsolutePath());
+        }
+    }
+
+    private static void restoreBackupFile(File backupFile, File targetFile, boolean targetBackedUp) {
+        if (!targetBackedUp) {
+            deleteFileIfExists(backupFile);
+            return;
+        }
+        if (!backupFile.exists()) {
+            Log.w(TAG, "Missing replacement backup: " + targetFile.getAbsolutePath());
+            return;
+        }
+        if (targetFile.exists()) {
+            deleteFileIfExists(targetFile);
+        }
+        if (!moveFileToAbsentTarget(backupFile, targetFile)) {
+            Log.w(TAG, "Failed to restore replacement backup: " + targetFile.getAbsolutePath());
+        }
+    }
+
+    private static boolean isRegularFile(File file) {
+        return file != null && file.exists() && file.isFile();
+    }
+
+    private static boolean deleteFileIfExists(File file) {
+        if (file == null || !file.exists()) {
+            return true;
+        }
+        if (file.delete()) {
+            return true;
+        }
+        Log.w(TAG, "Failed to delete: " + file.getAbsolutePath());
+        return false;
     }
 }

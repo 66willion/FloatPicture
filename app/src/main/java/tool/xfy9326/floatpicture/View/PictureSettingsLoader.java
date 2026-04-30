@@ -104,7 +104,7 @@ final class PictureSettingsLoader {
             return null;
         }
         pictureData.setDataControl(pictureId);
-        Bitmap bitmap = ImageMethods.getEditSourceBitmap(appContext, pictureId);
+        Bitmap bitmap = ImageMethods.getEditSourceBitmapOrNull(pictureId);
         if (bitmap == null) {
             ImageMethods.clearAllTemp(appContext, pictureId);
             return null;

@@ -14,6 +14,7 @@ import android.view.WindowManager;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
@@ -35,11 +36,11 @@ public class WindowsMethods {
         return (WindowManager) windowContext.getSystemService(Context.WINDOW_SERVICE);
     }
 
-    public static void createWindow(WindowManager windowManager, View pictureView, boolean touchable, boolean overLayout, float pictureAlpha, int layoutPositionX, int layoutPositionY) {
-        createWindow(windowManager, pictureView, touchable, overLayout, pictureAlpha, layoutPositionX, layoutPositionY, true);
+    public static boolean createWindow(WindowManager windowManager, View pictureView, boolean touchable, boolean overLayout, float pictureAlpha, int layoutPositionX, int layoutPositionY) {
+        return createWindow(windowManager, pictureView, touchable, overLayout, pictureAlpha, layoutPositionX, layoutPositionY, true);
     }
 
-    public static void createWindow(WindowManager windowManager, View pictureView, boolean touchable, boolean overLayout, float pictureAlpha, int layoutPositionX, int layoutPositionY, boolean syncAfterCreate) {
+    public static boolean createWindow(WindowManager windowManager, View pictureView, boolean touchable, boolean overLayout, float pictureAlpha, int layoutPositionX, int layoutPositionY, boolean syncAfterCreate) {
         Context safeContext = getSafeContext(pictureView.getContext());
         WindowManager activeWindowManager = getWindowManager(safeContext);
         WindowManager.LayoutParams layoutParams = getLayoutWithPerWindowAlpha(
@@ -61,13 +62,14 @@ public class WindowsMethods {
                     if (syncAfterCreate) {
                         syncAllWindows(safeContext);
                     }
-                    return;
+                    return true;
                 } catch (Exception e) {
                     Log.w("WindowsMethods", "createWindow updateViewLayout failed: " + e.getMessage());
                 }
             }
             if (!detachWindowIfAttached(activeWindowManager, pictureView)) {
-                return;
+                Log.w("WindowsMethods", "createWindow failed to detach existing window before recreation");
+                return false;
             }
         }
         if (!tryAddWindow(activeWindowManager, pictureView, layoutParams)) {
@@ -82,7 +84,7 @@ public class WindowsMethods {
                     getFallbackWindowType()
             );
             if (!tryAddWindow(activeWindowManager, pictureView, fallbackLayoutParams)) {
-                return;
+                return false;
             }
             layoutParams = fallbackLayoutParams;
         }
@@ -90,6 +92,7 @@ public class WindowsMethods {
         if (syncAfterCreate) {
             syncAllWindows(safeContext);
         }
+        return true;
     }
 
     public static WindowManager.LayoutParams getDefaultLayout(Context context, int layoutPositionX, int layoutPositionY, boolean touchable, boolean overLayout, float pictureAlpha) {
@@ -180,7 +183,10 @@ public class WindowsMethods {
     }
 
     public static void updateWindow(WindowManager windowManager, FloatImageView pictureView, Bitmap bitmap, boolean touchable, boolean overLayout, float pictureAlpha, float zoom, float degree, int layoutPositionX, int layoutPositionY) {
-        ImageMethods.setPictureBitmap(pictureView, ImageMethods.resizeBitmap(bitmap, zoom, degree));
+        Bitmap resizedBitmap = ImageMethods.resizeBitmap(bitmap, zoom, degree);
+        if (resizedBitmap != null) {
+            ImageMethods.setPictureBitmap(pictureView, resizedBitmap);
+        }
         updateWindow(windowManager, pictureView, touchable, overLayout, pictureAlpha, layoutPositionX, layoutPositionY);
     }
 
@@ -279,21 +285,17 @@ public class WindowsMethods {
             requestedBudgets[index] = alphaToObscuringBudget(passThroughWindows.get(index).desiredAlpha);
         }
 
-        for (long mask : collectCoverageMasks(passThroughWindows)) {
+        for (BitSet mask : collectCoverageMasks(passThroughWindows)) {
             double totalBudget = 0.0d;
-            for (int bit = 0; bit < passThroughWindows.size(); bit++) {
-                if ((mask & (1L << bit)) != 0L) {
-                    totalBudget += requestedBudgets[bit];
-                }
+            for (int bit = mask.nextSetBit(0); bit >= 0; bit = mask.nextSetBit(bit + 1)) {
+                totalBudget += requestedBudgets[bit];
             }
             if (totalBudget <= maxCombinedBudget + BUDGET_COMPARISON_EPSILON) {
                 continue;
             }
             double scale = maxCombinedBudget / totalBudget;
-            for (int bit = 0; bit < passThroughWindows.size(); bit++) {
-                if ((mask & (1L << bit)) != 0L) {
-                    scaleFactors[bit] = Math.min(scaleFactors[bit], scale);
-                }
+            for (int bit = mask.nextSetBit(0); bit >= 0; bit = mask.nextSetBit(bit + 1)) {
+                scaleFactors[bit] = Math.min(scaleFactors[bit], scale);
             }
         }
 
@@ -305,8 +307,8 @@ public class WindowsMethods {
         return resolvedAlphas;
     }
 
-    private static Set<Long> collectCoverageMasks(ArrayList<WindowSnapshot> windows) {
-        Set<Long> masks = new LinkedHashSet<>();
+    private static Set<BitSet> collectCoverageMasks(ArrayList<WindowSnapshot> windows) {
+        Set<BitSet> masks = new LinkedHashSet<>();
         if (windows.isEmpty()) {
             return masks;
         }
@@ -340,13 +342,13 @@ public class WindowsMethods {
                     continue;
                 }
                 double sampleY = top + ((bottom - top) / 2.0d);
-                long mask = 0L;
+                BitSet mask = new BitSet(windows.size());
                 for (int windowIndex = 0; windowIndex < windows.size(); windowIndex++) {
                     if (containsPoint(windows.get(windowIndex).bounds, sampleX, sampleY)) {
-                        mask |= 1L << windowIndex;
+                        mask.set(windowIndex);
                     }
                 }
-                if (mask != 0L) {
+                if (mask.nextSetBit(0) >= 0) {
                     masks.add(mask);
                 }
             }
@@ -488,7 +490,7 @@ public class WindowsMethods {
     private static boolean shouldUseTrustedOverlay(Context context) {
         return Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1
                 && TrustedOverlayAccessibilityService.isAuthorized(context)
-                && TrustedOverlayAccessibilityService.isActive(context);
+                && TrustedOverlayAccessibilityService.getInstance() != null;
     }
 
     private static boolean isTrustedOverlayType(int windowType) {

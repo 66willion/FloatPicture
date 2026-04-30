@@ -1,6 +1,7 @@
 package tool.xfy9326.floatpicture.Activities;
 
 import android.content.Context;
+import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
@@ -46,11 +47,16 @@ final class MainActionController {
                     continue;
                 }
                 String pictureId = ImageMethods.setNewImage(appContext, uri);
-                if (pictureId == null || importedPictureIds.contains(pictureId)) {
+                if (pictureId == null) {
                     continue;
                 }
-                initializeImportedPictureData(appContext, pictureId, defaultPictureName);
-                importedPictureIds.add(pictureId);
+                if (importedPictureIds.contains(pictureId)) {
+                    ImageMethods.clearAllTemp(appContext, pictureId);
+                    continue;
+                }
+                if (initializeImportedPicture(appContext, pictureId, defaultPictureName)) {
+                    importedPictureIds.add(pictureId);
+                }
             }
             MAIN_HANDLER.post(() -> callback.onComplete(importedPictureIds));
         });
@@ -66,35 +72,69 @@ final class MainActionController {
                 if (pictureId == null || pictureId.isEmpty()) {
                     continue;
                 }
-                PictureData importedPictureData = new PictureData();
-                importedPictureData.setDataControl(pictureId);
-                importedPictureData.remove();
-                ImageMethods.clearAllTemp(appContext, pictureId);
-                OverlayRuntimeController.deletePicture(appContext, pictureId);
+                try {
+                    OverlayRuntimeController.deletePicture(appContext, pictureId);
+                } catch (RuntimeException e) {
+                    PictureData importedPictureData = new PictureData();
+                    importedPictureData.setDataControl(pictureId);
+                    if (importedPictureData.remove()) {
+                        ImageMethods.clearAllTemp(appContext, pictureId);
+                    }
+                }
             }
         });
     }
 
     static void showRandomWindow(Context context, RandomWindowCallback callback) {
         Context appContext = getAppContext(context);
-        AppExecutors.io().execute(() -> {
-            int result = OverlayRuntimeController.showRandomWindow(appContext);
-            MAIN_HANDLER.post(() -> callback.onComplete(result));
-        });
+        OverlayRuntimeController.showRandomWindow(appContext, callback::onComplete);
     }
 
     static void releaseMemory(Context context, ReleaseMemoryCallback callback) {
         Context appContext = getAppContext(context);
-        AppExecutors.io().execute(() -> {
-            ApplicationMethods.MemoryReleaseResult result = ApplicationMethods.releaseMemory(appContext);
-            MAIN_HANDLER.post(() -> callback.onComplete(result));
-        });
+        ApplicationMethods.releaseMemory(appContext, callback::onComplete);
     }
 
-    private static void initializeImportedPictureData(Context context, String pictureId, String pictureName) {
+    private static boolean initializeImportedPicture(Context context, String pictureId, String pictureName) {
+        Bitmap sourceBitmap = null;
+        Bitmap displayBitmap = null;
+        try {
+            sourceBitmap = ImageMethods.getEditSourceBitmapOrNull(pictureId);
+            if (sourceBitmap == null) {
+                ImageMethods.clearAllTemp(context, pictureId);
+                return false;
+            }
+            float defaultZoom = ImageMethods.getDefaultZoom(context, sourceBitmap, false);
+            displayBitmap = ImageMethods.createAndSaveDisplayBitmap(
+                    pictureId,
+                    sourceBitmap,
+                    defaultZoom,
+                    Config.DATA_DEFAULT_PICTURE_DEGREE
+            );
+            if (displayBitmap == null) {
+                ImageMethods.clearAllTemp(context, pictureId);
+                return false;
+            }
+            if (initializeImportedPictureData(pictureId, pictureName, defaultZoom)) {
+                return true;
+            }
+            ImageMethods.clearAllTemp(context, pictureId);
+            return false;
+        } catch (RuntimeException e) {
+            e.printStackTrace();
+            ImageMethods.clearAllTemp(context, pictureId);
+            return false;
+        } finally {
+            if (displayBitmap != null && displayBitmap != sourceBitmap) {
+                ImageMethods.recycleBitmap(displayBitmap);
+            }
+            ImageMethods.recycleBitmap(sourceBitmap);
+        }
+    }
+
+    private static boolean initializeImportedPictureData(String pictureId, String pictureName, float defaultZoom) {
         PictureData importedPictureData = new PictureData();
         importedPictureData.setDataControl(pictureId);
-        float defaultZoom = ImageMethods.getDefaultZoom(context, pictureId, false);
         importedPictureData.put(Config.DATA_PICTURE_SHOW_ENABLED, false);
         importedPictureData.put(Config.DATA_PICTURE_POSITION_X, Config.DATA_DEFAULT_PICTURE_POSITION_X);
         importedPictureData.put(Config.DATA_PICTURE_POSITION_Y, Config.DATA_DEFAULT_PICTURE_POSITION_Y);
@@ -108,7 +148,7 @@ final class MainActionController {
         importedPictureData.put(Config.DATA_PICTURE_EDGE_FEATHER_MASK, Config.DATA_DEFAULT_PICTURE_EDGE_FEATHER_MASK);
         importedPictureData.put(Config.DATA_PICTURE_TOUCH_AND_MOVE, Config.DATA_DEFAULT_PICTURE_TOUCH_AND_MOVE);
         importedPictureData.put(Config.DATA_ALLOW_PICTURE_OVER_LAYOUT, Config.DATA_DEFAULT_ALLOW_PICTURE_OVER_LAYOUT);
-        importedPictureData.commit(pictureName);
+        return importedPictureData.commit(pictureName);
     }
 
     private static Context getAppContext(Context context) {

@@ -8,10 +8,12 @@ import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RectF;
 import android.graphics.Shader;
+import android.util.Log;
 
 import tool.xfy9326.floatpicture.Utils.Config;
 
 final class ImageAppearanceRenderer {
+    private static final String TAG = "ImageAppearanceRenderer";
     private static final float OUTLINE_OUTER_STROKE_MIN_PX = 3f;
     private static final float OUTLINE_OUTER_STROKE_MAX_PX = 8f;
     private static final float OUTLINE_INNER_STROKE_MIN_PX = 1.5f;
@@ -44,42 +46,51 @@ final class ImageAppearanceRenderer {
         matrix.mapRect(boundsRect, sourceRect);
 
         int padding = Math.max(4, (int) Math.ceil(outerStrokeWidth) + 2);
-        int bitmapWidth = Math.max((int) Math.ceil(boundsRect.width()) + (padding * 2), 1);
-        int bitmapHeight = Math.max((int) Math.ceil(boundsRect.height()) + (padding * 2), 1);
-        Bitmap outlineBitmap = Bitmap.createBitmap(bitmapWidth, bitmapHeight, Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(outlineBitmap);
-        canvas.translate(bitmapWidth / 2f, bitmapHeight / 2f);
-        if (normalizedDegree != 0f) {
-            canvas.rotate(normalizedDegree);
+        int bitmapWidth = resolveBitmapDimension(boundsRect.width(), padding);
+        int bitmapHeight = resolveBitmapDimension(boundsRect.height(), padding);
+        Bitmap outlineBitmap = createBitmapSafely(bitmapWidth, bitmapHeight, "createOutlinePreviewBitmap");
+        if (outlineBitmap == null) {
+            return null;
         }
+        try {
+            Canvas canvas = new Canvas(outlineBitmap);
+            canvas.translate(bitmapWidth / 2f, bitmapHeight / 2f);
+            if (normalizedDegree != 0f) {
+                canvas.rotate(normalizedDegree);
+            }
 
-        RectF drawRect = new RectF(
-                sourceRect.left + (outerStrokeWidth / 2f),
-                sourceRect.top + (outerStrokeWidth / 2f),
-                sourceRect.right - (outerStrokeWidth / 2f),
-                sourceRect.bottom - (outerStrokeWidth / 2f)
-        );
-        float cornerRadiusPx = clampAppearanceRatio(cornerRadiusRatio) * shortEdge;
-        float maxCornerRadius = Math.min(drawRect.width(), drawRect.height()) / 2f;
-        cornerRadiusPx = Math.min(cornerRadiusPx, maxCornerRadius);
-        float[] radii = buildCornerRadii(cornerRadiusPx, cornerRadiusMask);
+            RectF drawRect = new RectF(
+                    sourceRect.left + (outerStrokeWidth / 2f),
+                    sourceRect.top + (outerStrokeWidth / 2f),
+                    sourceRect.right - (outerStrokeWidth / 2f),
+                    sourceRect.bottom - (outerStrokeWidth / 2f)
+            );
+            float cornerRadiusPx = clampAppearanceRatio(cornerRadiusRatio) * shortEdge;
+            float maxCornerRadius = Math.min(drawRect.width(), drawRect.height()) / 2f;
+            cornerRadiusPx = Math.min(cornerRadiusPx, maxCornerRadius);
+            float[] radii = buildCornerRadii(cornerRadiusPx, cornerRadiusMask);
 
-        Paint outerPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
-        outerPaint.setStyle(Paint.Style.STROKE);
-        outerPaint.setStrokeWidth(outerStrokeWidth);
-        outerPaint.setColor(OUTLINE_OUTER_COLOR);
-        outerPaint.setStrokeJoin(Paint.Join.ROUND);
+            Paint outerPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
+            outerPaint.setStyle(Paint.Style.STROKE);
+            outerPaint.setStrokeWidth(outerStrokeWidth);
+            outerPaint.setColor(OUTLINE_OUTER_COLOR);
+            outerPaint.setStrokeJoin(Paint.Join.ROUND);
 
-        Paint innerPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
-        innerPaint.setStyle(Paint.Style.STROKE);
-        innerPaint.setStrokeWidth(innerStrokeWidth);
-        innerPaint.setColor(OUTLINE_INNER_COLOR);
-        innerPaint.setStrokeJoin(Paint.Join.ROUND);
+            Paint innerPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
+            innerPaint.setStyle(Paint.Style.STROKE);
+            innerPaint.setStrokeWidth(innerStrokeWidth);
+            innerPaint.setColor(OUTLINE_INNER_COLOR);
+            innerPaint.setStrokeJoin(Paint.Join.ROUND);
 
-        Path outlinePath = buildRoundRectPath(drawRect, radii);
-        canvas.drawPath(outlinePath, outerPaint);
-        canvas.drawPath(outlinePath, innerPaint);
-        return outlineBitmap;
+            Path outlinePath = buildRoundRectPath(drawRect, radii);
+            canvas.drawPath(outlinePath, outerPaint);
+            canvas.drawPath(outlinePath, innerPaint);
+            return outlineBitmap;
+        } catch (RuntimeException e) {
+            Log.w(TAG, "Failed to draw outline preview", e);
+            ImageMethods.recycleBitmap(outlineBitmap);
+            return null;
+        }
     }
 
     static Bitmap applyAppearanceEffects(Bitmap bitmap,
@@ -126,13 +137,22 @@ final class ImageAppearanceRenderer {
         if (!hasAnyCornerRadius(cornerRadii)) {
             return bitmap;
         }
-        Bitmap roundedBitmap = Bitmap.createBitmap(bitmap.getWidth(), bitmap.getHeight(), Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(roundedBitmap);
-        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG | Paint.DITHER_FLAG);
-        paint.setShader(new BitmapShader(bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP));
-        RectF rect = new RectF(0f, 0f, bitmap.getWidth(), bitmap.getHeight());
-        canvas.drawPath(buildRoundRectPath(rect, cornerRadii), paint);
-        return roundedBitmap;
+        Bitmap roundedBitmap = createBitmapSafely(bitmap.getWidth(), bitmap.getHeight(), "applyRoundCorners");
+        if (roundedBitmap == null) {
+            return null;
+        }
+        try {
+            Canvas canvas = new Canvas(roundedBitmap);
+            Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG | Paint.DITHER_FLAG);
+            paint.setShader(new BitmapShader(bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP));
+            RectF rect = new RectF(0f, 0f, bitmap.getWidth(), bitmap.getHeight());
+            canvas.drawPath(buildRoundRectPath(rect, cornerRadii), paint);
+            return roundedBitmap;
+        } catch (RuntimeException e) {
+            Log.w(TAG, "Failed to draw rounded bitmap", e);
+            ImageMethods.recycleBitmap(roundedBitmap);
+            return null;
+        }
     }
 
     private static Bitmap applyFeatheredShapeMask(Bitmap bitmap,
@@ -141,8 +161,22 @@ final class ImageAppearanceRenderer {
                                                   int edgeFeatherMask) {
         int width = bitmap.getWidth();
         int height = bitmap.getHeight();
-        int[] pixels = new int[width * height];
-        bitmap.getPixels(pixels, 0, width, 0, 0, width, height);
+        long pixelCount = (long) width * height;
+        if (pixelCount <= 0L || pixelCount > Integer.MAX_VALUE) {
+            Log.w(TAG, "applyFeatheredShapeMask rejected bitmap size: " + width + "x" + height);
+            return null;
+        }
+        int[] pixels;
+        try {
+            pixels = new int[(int) pixelCount];
+            bitmap.getPixels(pixels, 0, width, 0, 0, width, height);
+        } catch (OutOfMemoryError e) {
+            Log.e(TAG, "applyFeatheredShapeMask ran out of memory: " + width + "x" + height, e);
+            return null;
+        } catch (RuntimeException e) {
+            Log.w(TAG, "Failed to read bitmap pixels for feathering", e);
+            return null;
+        }
 
         int index = 0;
         for (int y = 0; y < height; y++) {
@@ -175,9 +209,18 @@ final class ImageAppearanceRenderer {
             }
         }
 
-        Bitmap featheredBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-        featheredBitmap.setPixels(pixels, 0, width, 0, 0, width, height);
-        return featheredBitmap;
+        Bitmap featheredBitmap = createBitmapSafely(width, height, "applyFeatheredShapeMask");
+        if (featheredBitmap == null) {
+            return null;
+        }
+        try {
+            featheredBitmap.setPixels(pixels, 0, width, 0, 0, width, height);
+            return featheredBitmap;
+        } catch (RuntimeException e) {
+            Log.w(TAG, "Failed to write feathered bitmap pixels", e);
+            ImageMethods.recycleBitmap(featheredBitmap);
+            return null;
+        }
     }
 
     private static float[] buildCornerRadii(float cornerRadiusPx, int cornerRadiusMask) {
@@ -308,8 +351,37 @@ final class ImageAppearanceRenderer {
     }
 
     private static int getDisplayTargetSize(int sourceSize, float zoom) {
+        if (sourceSize <= 0 || Float.isNaN(zoom)) {
+            return 1;
+        }
         float safeZoom = Math.max(zoom, 0.01f);
+        if (Float.isInfinite(safeZoom) || safeZoom > Integer.MAX_VALUE / (float) sourceSize) {
+            return Integer.MAX_VALUE;
+        }
         return Math.max(Math.round(sourceSize * safeZoom), 1);
+    }
+
+    private static int resolveBitmapDimension(float dimension, int padding) {
+        if (Float.isNaN(dimension) || dimension <= 0f) {
+            return 1;
+        }
+        double paddedDimension = Math.ceil(dimension) + ((double) padding * 2d);
+        if (Double.isInfinite(paddedDimension) || paddedDimension > Integer.MAX_VALUE) {
+            return Integer.MAX_VALUE;
+        }
+        return Math.max((int) paddedDimension, 1);
+    }
+
+    private static Bitmap createBitmapSafely(int width, int height, String operationName) {
+        try {
+            return Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        } catch (OutOfMemoryError e) {
+            Log.e(TAG, operationName + " ran out of memory: " + width + "x" + height, e);
+            return null;
+        } catch (IllegalArgumentException e) {
+            Log.w(TAG, operationName + " rejected bitmap size: " + width + "x" + height, e);
+            return null;
+        }
     }
 
     private static float smoothStep(float value) {

@@ -12,9 +12,9 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import tool.xfy9326.floatpicture.Services.NotificationService;
 
@@ -27,6 +27,7 @@ public final class OverlayRuntimeController {
     public static final String ACTION_RUNTIME_SET_ALL_WINDOWS_VISIBLE = "tool.xfy9326.floatpicture.action.RUNTIME_SET_ALL_WINDOWS_VISIBLE";
     public static final String ACTION_RUNTIME_HIDE_ALL_WINDOWS = "tool.xfy9326.floatpicture.action.RUNTIME_HIDE_ALL_WINDOWS";
     public static final String ACTION_RUNTIME_SYNC_PICTURE = "tool.xfy9326.floatpicture.action.RUNTIME_SYNC_PICTURE";
+    public static final String ACTION_RUNTIME_SYNC_PICTURES = "tool.xfy9326.floatpicture.action.RUNTIME_SYNC_PICTURES";
     public static final String ACTION_RUNTIME_DELETE_PICTURE = "tool.xfy9326.floatpicture.action.RUNTIME_DELETE_PICTURE";
     public static final String ACTION_RUNTIME_SHOW_RANDOM_WINDOW = "tool.xfy9326.floatpicture.action.RUNTIME_SHOW_RANDOM_WINDOW";
     public static final String ACTION_RUNTIME_UPDATE_PREVIEW = "tool.xfy9326.floatpicture.action.RUNTIME_UPDATE_PREVIEW";
@@ -36,6 +37,7 @@ public final class OverlayRuntimeController {
     public static final String ACTION_RUNTIME_STATE_CHANGED = "tool.xfy9326.floatpicture.action.RUNTIME_STATE_CHANGED";
 
     public static final String EXTRA_PICTURE_ID = "extra_picture_id";
+    public static final String EXTRA_PICTURE_IDS = "extra_picture_ids";
     public static final String EXTRA_VISIBLE = "extra_visible";
     public static final String EXTRA_TOUCH_AND_MOVE = "extra_touch_and_move";
     public static final String EXTRA_OVER_LAYOUT = "extra_over_layout";
@@ -54,6 +56,7 @@ public final class OverlayRuntimeController {
     public static final String EXTRA_INITIALIZE_RUNTIME = "extra_initialize_runtime";
     public static final String EXTRA_RESULT_RECEIVER = "extra_result_receiver";
     public static final String EXTRA_RELEASED_WINDOW_COUNT = "extra_released_window_count";
+    public static final String EXTRA_STARTED_AS_FOREGROUND_SERVICE = "extra_started_as_foreground_service";
 
     public static final int PREVIEW_MODE_FULL = 0;
     public static final int PREVIEW_MODE_MOVE_ONLY = 1;
@@ -65,6 +68,14 @@ public final class OverlayRuntimeController {
     public static final int RANDOM_WINDOW_RESULT_ERROR = 3;
 
     private static final long RUNTIME_RESULT_TIMEOUT_MS = 4000L;
+
+    public interface RandomWindowResultCallback {
+        void onComplete(int result);
+    }
+
+    public interface ReleaseMemoryResultCallback {
+        void onComplete(int releasedWindowCount);
+    }
 
     private OverlayRuntimeController() {
     }
@@ -105,6 +116,28 @@ public final class OverlayRuntimeController {
         dispatchCommand(getAppContext(context), intent);
     }
 
+    public static void syncPictures(@NonNull Context context,
+                                    @Nullable Collection<String> pictureIds,
+                                    boolean createIfVisible) {
+        if (pictureIds == null || pictureIds.isEmpty()) {
+            return;
+        }
+        ArrayList<String> pictureIdSnapshot = new ArrayList<>(pictureIds.size());
+        for (String pictureId : pictureIds) {
+            if (pictureId == null || pictureId.isEmpty() || pictureIdSnapshot.contains(pictureId)) {
+                continue;
+            }
+            pictureIdSnapshot.add(pictureId);
+        }
+        if (pictureIdSnapshot.isEmpty()) {
+            return;
+        }
+        Intent intent = createIntent(context, ACTION_RUNTIME_SYNC_PICTURES);
+        intent.putStringArrayListExtra(EXTRA_PICTURE_IDS, pictureIdSnapshot);
+        intent.putExtra(EXTRA_CREATE_IF_VISIBLE, createIfVisible);
+        dispatchCommand(getAppContext(context), intent);
+    }
+
     public static void deletePicture(@NonNull Context context, @Nullable String pictureId) {
         if (pictureId == null || pictureId.isEmpty()) {
             return;
@@ -134,25 +167,32 @@ public final class OverlayRuntimeController {
         dispatchCommand(getAppContext(context), createIntent(context, ACTION_RUNTIME_HIDE_ALL_WINDOWS));
     }
 
-    public static int showRandomWindow(@NonNull Context context) {
-        AtomicInteger resultCode = new AtomicInteger(RANDOM_WINDOW_RESULT_ERROR);
-        CountDownLatch countDownLatch = new CountDownLatch(1);
-        ResultReceiver receiver = new ResultReceiver(new Handler(Looper.getMainLooper())) {
+    public static void showRandomWindow(@NonNull Context context, @NonNull RandomWindowResultCallback callback) {
+        Context appContext = getAppContext(context);
+        Handler resultHandler = new Handler(Looper.getMainLooper());
+        AtomicBoolean resultDelivered = new AtomicBoolean(false);
+        Runnable timeoutRunnable = () -> completeRandomWindowResult(
+                resultHandler,
+                resultDelivered,
+                callback,
+                RANDOM_WINDOW_RESULT_ERROR
+        );
+        ResultReceiver receiver = new ResultReceiver(resultHandler) {
             @Override
             protected void onReceiveResult(int code, Bundle resultData) {
-                resultCode.set(code);
-                countDownLatch.countDown();
+                resultHandler.removeCallbacks(timeoutRunnable);
+                completeRandomWindowResult(resultHandler, resultDelivered, callback, code);
             }
         };
-        Intent intent = createIntent(context, ACTION_RUNTIME_SHOW_RANDOM_WINDOW);
+        Intent intent = createIntent(appContext, ACTION_RUNTIME_SHOW_RANDOM_WINDOW);
         intent.putExtra(EXTRA_RESULT_RECEIVER, receiver);
-        dispatchCommand(getAppContext(context), intent);
+        resultHandler.postDelayed(timeoutRunnable, RUNTIME_RESULT_TIMEOUT_MS);
         try {
-            countDownLatch.await(RUNTIME_RESULT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+            dispatchCommand(appContext, intent);
+        } catch (IllegalStateException e) {
+            resultHandler.removeCallbacks(timeoutRunnable);
+            completeRandomWindowResult(resultHandler, resultDelivered, callback, RANDOM_WINDOW_RESULT_ERROR);
         }
-        return resultCode.get();
     }
 
     public static void updatePreview(@NonNull Context context,
@@ -209,27 +249,33 @@ public final class OverlayRuntimeController {
         dispatchCommand(getAppContext(context), intent);
     }
 
-    public static int releaseMemory(@NonNull Context context) {
-        AtomicInteger releasedWindowCount = new AtomicInteger(0);
-        CountDownLatch countDownLatch = new CountDownLatch(1);
-        ResultReceiver receiver = new ResultReceiver(new Handler(Looper.getMainLooper())) {
+    public static void releaseMemory(@NonNull Context context, @NonNull ReleaseMemoryResultCallback callback) {
+        Context appContext = getAppContext(context);
+        Handler resultHandler = new Handler(Looper.getMainLooper());
+        AtomicBoolean resultDelivered = new AtomicBoolean(false);
+        Runnable timeoutRunnable = () -> completeReleaseMemoryResult(
+                resultHandler,
+                resultDelivered,
+                callback,
+                0
+        );
+        ResultReceiver receiver = new ResultReceiver(resultHandler) {
             @Override
             protected void onReceiveResult(int resultCode, Bundle resultData) {
-                if (resultData != null) {
-                    releasedWindowCount.set(resultData.getInt(EXTRA_RELEASED_WINDOW_COUNT, 0));
-                }
-                countDownLatch.countDown();
+                int releasedWindowCount = resultData != null ? resultData.getInt(EXTRA_RELEASED_WINDOW_COUNT, 0) : 0;
+                resultHandler.removeCallbacks(timeoutRunnable);
+                completeReleaseMemoryResult(resultHandler, resultDelivered, callback, releasedWindowCount);
             }
         };
-        Intent intent = createIntent(context, ACTION_RUNTIME_RELEASE_MEMORY);
+        Intent intent = createIntent(appContext, ACTION_RUNTIME_RELEASE_MEMORY);
         intent.putExtra(EXTRA_RESULT_RECEIVER, receiver);
-        dispatchCommand(getAppContext(context), intent);
+        resultHandler.postDelayed(timeoutRunnable, RUNTIME_RESULT_TIMEOUT_MS);
         try {
-            countDownLatch.await(RUNTIME_RESULT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+            dispatchCommand(appContext, intent);
+        } catch (IllegalStateException e) {
+            resultHandler.removeCallbacks(timeoutRunnable);
+            completeReleaseMemoryResult(resultHandler, resultDelivered, callback, 0);
         }
-        return releasedWindowCount.get();
     }
 
     public static void notifyRuntimeStateChanged(@NonNull Context context) {
@@ -264,6 +310,34 @@ public final class OverlayRuntimeController {
         return appContext != null ? appContext : context;
     }
 
+    private static void completeRandomWindowResult(@NonNull Handler resultHandler,
+                                                   @NonNull AtomicBoolean resultDelivered,
+                                                   @NonNull RandomWindowResultCallback callback,
+                                                   int resultCode) {
+        if (!resultDelivered.compareAndSet(false, true)) {
+            return;
+        }
+        if (Looper.myLooper() == resultHandler.getLooper()) {
+            callback.onComplete(resultCode);
+        } else {
+            resultHandler.post(() -> callback.onComplete(resultCode));
+        }
+    }
+
+    private static void completeReleaseMemoryResult(@NonNull Handler resultHandler,
+                                                    @NonNull AtomicBoolean resultDelivered,
+                                                    @NonNull ReleaseMemoryResultCallback callback,
+                                                    int releasedWindowCount) {
+        if (!resultDelivered.compareAndSet(false, true)) {
+            return;
+        }
+        if (Looper.myLooper() == resultHandler.getLooper()) {
+            callback.onComplete(releasedWindowCount);
+        } else {
+            resultHandler.post(() -> callback.onComplete(releasedWindowCount));
+        }
+    }
+
     private static void dispatchForeground(@NonNull Context context, @NonNull Intent intent) {
         ContextCompat.startForegroundService(context, intent);
     }
@@ -272,6 +346,7 @@ public final class OverlayRuntimeController {
         try {
             context.startService(intent);
         } catch (IllegalStateException e) {
+            intent.putExtra(EXTRA_STARTED_AS_FOREGROUND_SERVICE, true);
             ContextCompat.startForegroundService(context, intent);
         }
     }

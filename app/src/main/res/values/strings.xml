@@ -126,6 +126,8 @@
     <string name="loading">Loading &#8230; &#8230;</string>
     <string name="main_random_window">Random show one picture</string>
     <string name="main_close_all_windows">Close all pictures</string>
+    <string name="main_preview_list">Preview</string>
+    <string name="main_close_preview_list">Close preview list</string>
     <string name="main_fast_scroll_to_top">Scroll to top</string>
     <string name="main_fast_scroll_to_bottom">Scroll to bottom</string>
     <string name="dialog_close_all_windows_title">Close all picture windows?</string>

@@ -15,11 +15,13 @@
         android:orientation="vertical">
 
         <FrameLayout
+            android:id="@+id/main_manage_list_panel"
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
             android:clipChildren="false"
-            android:clipToPadding="false">
+            android:clipToPadding="false"
+            android:visibility="gone">
 
             <tool.xfy9326.floatpicture.View.AdvancedRecyclerView
                 android:id="@+id/main_list_manage"
@@ -48,6 +50,39 @@
         </FrameLayout>
 
     </LinearLayout>
+
+    <FrameLayout
+        android:id="@+id/main_preview_button_container"
+        android:layout_width="220dp"
+        android:layout_height="96dp"
+        android:layout_gravity="center"
+        android:background="@drawable/bg_home_black_double_stroke"
+        android:clipToOutline="true"
+        android:elevation="16dp"
+        android:translationZ="16dp">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/main_button_preview_list"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:contentDescription="@string/main_preview_list"
+            android:fontFamily="sans-serif-medium"
+            android:insetLeft="0dp"
+            android:insetTop="0dp"
+            android:insetRight="0dp"
+            android:insetBottom="0dp"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:padding="0dp"
+            android:text="@string/main_preview_list"
+            android:textAllCaps="false"
+            android:textColor="@color/colorPromptText"
+            android:textSize="32sp"
+            app:backgroundTint="@android:color/transparent"
+            app:cornerRadius="48dp"
+            app:strokeWidth="0dp" />
+
+    </FrameLayout>
 
     <FrameLayout
         android:id="@+id/main_button_drawer_container"
@@ -251,25 +286,5 @@
         </GridLayout>
 
     </com.google.android.material.card.MaterialCardView>
-
-    <FrameLayout
-        android:id="@+id/main_splash_overlay"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="@android:color/black"
-        android:clickable="true"
-        android:elevation="64dp"
-        android:focusable="true"
-        android:translationZ="64dp">
-
-        <tool.xfy9326.floatpicture.View.StartupSplashImageView
-            android:id="@+id/main_splash_image"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:contentDescription="@null"
-            android:importantForAccessibility="no"
-            android:src="@drawable/splash_start" />
-
-    </FrameLayout>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

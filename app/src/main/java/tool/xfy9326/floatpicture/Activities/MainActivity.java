@@ -17,6 +17,7 @@ import android.net.Uri;
 import android.provider.Settings;
 import android.view.View;
 import android.widget.CheckBox;
+import android.widget.ImageView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -59,8 +60,6 @@ import java.util.Set;
 public class MainActivity extends AppCompatActivity {
     private static final int MAIN_LIST_VIEW_CACHE_SIZE = 8;
     private static final long PURE_OVERLAY_BUTTON_REENABLE_DELAY_MS = 300L;
-    private static final long STARTUP_SPLASH_MAX_WAIT_MS = 1500L;
-    private static final long STARTUP_SPLASH_FADE_MS = 180L;
     private static final int OPERATION_SNACKBAR_DURATION_MS = 200;
     private static final int MANAGE_LIST_LANDSCAPE_SPAN_COUNT = 2;
     private static final int MANAGE_LIST_LANDSCAPE_ITEM_GAP_DP = 8;
@@ -77,12 +76,14 @@ public class MainActivity extends AppCompatActivity {
     private FloatingActionButton trustedOverlayButton;
     private MaterialButton drawerButton;
     private MaterialButton closeAllButton;
+    private MaterialButton previewListButton;
+    private View manageListPanel;
+    private View previewButtonContainer;
     private View batchSelectAllContainer;
     private CheckBox batchSelectAllCheckBox;
-    private View startupSplashOverlay;
     private RecyclerView.ItemDecoration manageListSpacingDecoration;
     private boolean pureOverlayToggleInProgress = false;
-    private boolean startupSplashDismissed = false;
+    private boolean manageListVisible = false;
     private boolean batchEditMode = false;
     private boolean updatingBatchSelectAllState = false;
     private long BackClickTime;
@@ -95,11 +96,12 @@ public class MainActivity extends AppCompatActivity {
     private ActivityResultLauncher<Intent> trustedOverlaySettingsLauncher;
     private ActivityResultLauncher<String> notificationPermissionLauncher;
     private final Runnable trustedOverlayStateUpdater = this::updateTrustedOverlayButtonState;
-    private final Runnable startupSplashTimeoutRunnable = this::dismissStartupSplash;
     private final BroadcastReceiver overlayRuntimeStateReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(android.content.Context context, Intent intent) {
-            refreshManageListData();
+            if (manageListVisible) {
+                refreshManageListData();
+            }
             updatePureOverlayButtonState();
             refreshTrustedOverlayButtonState();
         }
@@ -134,10 +136,8 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         deactivatePureOverlayModeIfNeeded();
-        if (startupSplashDismissed) {
+        if (manageListVisible) {
             refreshManageListData();
-        } else {
-            refreshManageListData(this::dismissStartupSplash);
         }
         updatePureOverlayButtonState();
         refreshTrustedOverlayButtonState();
@@ -160,22 +160,7 @@ public class MainActivity extends AppCompatActivity {
         if (trustedOverlayButton != null) {
             trustedOverlayButton.removeCallbacks(trustedOverlayStateUpdater);
         }
-        if (startupSplashOverlay != null) {
-            startupSplashOverlay.removeCallbacks(startupSplashTimeoutRunnable);
-            startupSplashOverlay.animate().cancel();
-        }
-        if (manageListPreviewController != null) {
-            manageListPreviewController.detach();
-            manageListPreviewController = null;
-        }
-        if (recyclerView != null) {
-            recyclerView.setAdapter(null);
-        }
-        if (fastScrollerView != null) {
-            fastScrollerView.attachToRecyclerView(null);
-        }
-        manageListAdapter = null;
-        manageListPreviewController = null;
+        closeManageList(false);
         recyclerView = null;
         fastScrollerView = null;
         randomWindowButton = null;
@@ -184,9 +169,11 @@ public class MainActivity extends AppCompatActivity {
         trustedOverlayButton = null;
         drawerButton = null;
         closeAllButton = null;
+        previewListButton = null;
+        manageListPanel = null;
+        previewButtonContainer = null;
         batchSelectAllContainer = null;
         batchSelectAllCheckBox = null;
-        startupSplashOverlay = null;
         mainDrawerController = null;
         super.onDestroy();
     }
@@ -209,24 +196,20 @@ public class MainActivity extends AppCompatActivity {
         actionsLayout.setTranslationZ(18f);
         applyFloatingBackgroundBlur(findViewById(R.id.main_layout_actions_blur));
 
-        manageListAdapter = new ManageListAdapter(this, this::launchPictureSettingsForEdit);
-        manageListAdapter.setBatchSelectionListener(this::onBatchSelectionChanged);
-        recyclerView = findViewById(R.id.main_list_manage);
-        recyclerView.setLayoutManager(createManageListLayoutManager());
-        applyManageListSpacingDecoration();
-        recyclerView.setAdapter(manageListAdapter);
-        recyclerView.setItemAnimator(null);
-        recyclerView.setItemViewCacheSize(MAIN_LIST_VIEW_CACHE_SIZE);
-        recyclerView.setEmptyView(findViewById(R.id.layout_widget_empty_view));
-        fastScrollerView = findViewById(R.id.main_fast_scroller);
-        if (fastScrollerView != null) {
-            fastScrollerView.attachToRecyclerView(recyclerView);
-            fastScrollerView.bringToFront();
-            fastScrollerView.setTranslationZ(getResources().getDisplayMetrics().density * 18f);
+        manageListPanel = findViewById(R.id.main_manage_list_panel);
+        previewButtonContainer = findViewById(R.id.main_preview_button_container);
+        previewListButton = findViewById(R.id.main_button_preview_list);
+        if (previewButtonContainer != null) {
+            previewButtonContainer.bringToFront();
+            previewButtonContainer.setTranslationZ(16f);
         }
-        manageListPreviewController = new ManageListPreviewController(manageListAdapter, recyclerView, fastScrollerView);
-        manageListPreviewController.attach();
-        setupStartupSplash();
+        if (previewListButton != null) {
+            previewListButton.setOnClickListener(view -> openManageList());
+        }
+
+        recyclerView = findViewById(R.id.main_list_manage);
+        fastScrollerView = findViewById(R.id.main_fast_scroller);
+        setManageListVisible(false);
 
         randomWindowButton = findViewById(R.id.main_button_random_window);
         if (randomWindowButton != null) {
@@ -272,7 +255,7 @@ public class MainActivity extends AppCompatActivity {
         if (closeAllButton != null) {
             closeAllButton.bringToFront();
             closeAllButton.setTranslationZ(18f);
-            closeAllButton.setOnClickListener(view -> hideAllWindowsSafely());
+            closeAllButton.setOnClickListener(view -> handleTopRightButtonClick());
         }
         applyFloatingBackgroundBlur(findViewById(R.id.main_button_close_all_blur));
         batchSelectAllContainer = findViewById(R.id.main_batch_select_all_container);
@@ -305,6 +288,7 @@ public class MainActivity extends AppCompatActivity {
                 this::launchBatchImportPicker
         );
         mainDrawerController.setup();
+        updateCloseAllButtonMode();
     }
 
     private RecyclerView.LayoutManager createManageListLayoutManager() {
@@ -344,42 +328,6 @@ public class MainActivity extends AppCompatActivity {
         }
         float radius = FLOATING_BLUR_RADIUS_DP * getResources().getDisplayMetrics().density;
         backgroundView.setRenderEffect(RenderEffect.createBlurEffect(radius, radius, Shader.TileMode.CLAMP));
-    }
-
-    private void setupStartupSplash() {
-        startupSplashOverlay = findViewById(R.id.main_splash_overlay);
-        if (startupSplashOverlay == null) {
-            startupSplashDismissed = true;
-            return;
-        }
-        startupSplashOverlay.bringToFront();
-        startupSplashOverlay.setAlpha(1f);
-        startupSplashOverlay.setVisibility(View.VISIBLE);
-        startupSplashOverlay.setClickable(true);
-        startupSplashOverlay.removeCallbacks(startupSplashTimeoutRunnable);
-        startupSplashOverlay.postDelayed(startupSplashTimeoutRunnable, STARTUP_SPLASH_MAX_WAIT_MS);
-    }
-
-    private void dismissStartupSplash() {
-        if (startupSplashDismissed) {
-            return;
-        }
-        startupSplashDismissed = true;
-        if (startupSplashOverlay == null) {
-            return;
-        }
-        startupSplashOverlay.removeCallbacks(startupSplashTimeoutRunnable);
-        startupSplashOverlay.animate()
-                .alpha(0f)
-                .setDuration(STARTUP_SPLASH_FADE_MS)
-                .withEndAction(() -> {
-                    if (startupSplashOverlay == null) {
-                        return;
-                    }
-                    startupSplashOverlay.setVisibility(View.GONE);
-                    startupSplashOverlay.setClickable(false);
-                })
-                .start();
     }
 
     private void registerLaunchers() {
@@ -471,9 +419,8 @@ public class MainActivity extends AppCompatActivity {
         if (result.getResultCode() != RESULT_OK) {
             return;
         }
-        manageListAdapter.refreshData();
-        if (manageListPreviewController != null) {
-            manageListPreviewController.refreshViewportWhenReady();
+        if (manageListVisible) {
+            refreshManageListData();
         }
         SnackShow(this, R.string.action_add_window);
         OverlayRuntimeController.refreshNotification(this);
@@ -483,9 +430,8 @@ public class MainActivity extends AppCompatActivity {
         if (result.getResultCode() != RESULT_OK || result.getData() == null) {
             return;
         }
-        manageListAdapter.refreshData();
-        if (manageListPreviewController != null) {
-            manageListPreviewController.refreshViewportWhenReady();
+        if (manageListVisible) {
+            refreshManageListData();
         }
     }
 
@@ -510,7 +456,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void launchBatchPictureSettings() {
-        if (manageListAdapter == null) {
+        if (!ensureManageListOpen() || manageListAdapter == null) {
             return;
         }
         launchBatchPictureSettings(manageListAdapter.getSelectedPictureIds(), false);
@@ -582,6 +528,14 @@ public class MainActivity extends AppCompatActivity {
         hideAllWindows();
     }
 
+    private void handleTopRightButtonClick() {
+        if (manageListVisible) {
+            closeManageList(true);
+            return;
+        }
+        hideAllWindowsSafely();
+    }
+
     private void hideAllWindows() {
         OverlayRuntimeController.hideAllWindows(getApplicationContext());
         SnackShow(this, R.string.action_close_all_windows_success);
@@ -618,13 +572,25 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void trimRecyclerPreviewCache() {
-        if (recyclerView == null) {
-            return;
+        RecyclerView currentRecyclerView = recyclerView;
+        if (currentRecyclerView != null) {
+            for (int index = 0; index < currentRecyclerView.getChildCount(); index++) {
+                View child = currentRecyclerView.getChildAt(index);
+                ImageView previewImageView = child.findViewById(R.id.adapter_picture_preview);
+                if (previewImageView != null) {
+                    previewImageView.setTag(null);
+                    ImageMethods.releaseImageBitmap(previewImageView);
+                }
+            }
+            currentRecyclerView.setItemViewCacheSize(0);
+            currentRecyclerView.getRecycledViewPool().clear();
+            currentRecyclerView.post(() -> {
+                if (recyclerView == currentRecyclerView && !isFinishing() && !isDestroyed()) {
+                    currentRecyclerView.setItemViewCacheSize(MAIN_LIST_VIEW_CACHE_SIZE);
+                }
+            });
         }
         ImageMethods.clearManagePreviewCache();
-        recyclerView.setItemViewCacheSize(0);
-        recyclerView.getRecycledViewPool().clear();
-        recyclerView.post(() -> recyclerView.setItemViewCacheSize(MAIN_LIST_VIEW_CACHE_SIZE));
     }
 
     private void refreshTrustedOverlayButtonState() {
@@ -724,10 +690,111 @@ public class MainActivity extends AppCompatActivity {
                 updatePureOverlayButtonState();
                 pureOverlayButton.post(() -> {
                     pureOverlayToggleInProgress = false;
+                    trimRecyclerPreviewCache();
                     ApplicationMethods.CloseMainUi(this);
                 });
             });
         });
+    }
+
+    private boolean ensureManageListOpen() {
+        if (manageListVisible && manageListAdapter != null) {
+            return true;
+        }
+        openManageList();
+        return manageListVisible && manageListAdapter != null;
+    }
+
+    private void openManageList() {
+        if (manageListVisible) {
+            refreshManageListData();
+            return;
+        }
+        setupManageListIfNeeded();
+        if (manageListAdapter == null) {
+            return;
+        }
+        manageListVisible = true;
+        setManageListVisible(true);
+        updateCloseAllButtonMode();
+        refreshManageListData();
+    }
+
+    private void closeManageList(boolean showPreviewButton) {
+        if (batchEditMode) {
+            exitBatchEditMode();
+        }
+        if (manageListPreviewController != null) {
+            manageListPreviewController.detach();
+            manageListPreviewController = null;
+        }
+        trimRecyclerPreviewCache();
+        if (recyclerView != null) {
+            recyclerView.setAdapter(null);
+            recyclerView.setEmptyView(null);
+        }
+        if (fastScrollerView != null) {
+            fastScrollerView.attachToRecyclerView(null);
+        }
+        if (manageListSpacingDecoration != null && recyclerView != null) {
+            recyclerView.removeItemDecoration(manageListSpacingDecoration);
+            manageListSpacingDecoration = null;
+        }
+        manageListAdapter = null;
+        manageListVisible = false;
+        setManageListVisible(false);
+        if (showPreviewButton) {
+            updateCloseAllButtonMode();
+        }
+    }
+
+    private void setupManageListIfNeeded() {
+        if (manageListAdapter != null || recyclerView == null) {
+            return;
+        }
+        manageListAdapter = new ManageListAdapter(this, this::launchPictureSettingsForEdit);
+        manageListAdapter.setBatchSelectionListener(this::onBatchSelectionChanged);
+        recyclerView.setLayoutManager(createManageListLayoutManager());
+        applyManageListSpacingDecoration();
+        recyclerView.setAdapter(manageListAdapter);
+        recyclerView.setItemAnimator(null);
+        recyclerView.setItemViewCacheSize(MAIN_LIST_VIEW_CACHE_SIZE);
+        recyclerView.setEmptyView(findViewById(R.id.layout_widget_empty_view));
+        if (fastScrollerView != null) {
+            fastScrollerView.attachToRecyclerView(recyclerView);
+            fastScrollerView.bringToFront();
+            fastScrollerView.setTranslationZ(getResources().getDisplayMetrics().density * 18f);
+        }
+        manageListPreviewController = new ManageListPreviewController(manageListAdapter, recyclerView, fastScrollerView);
+        manageListPreviewController.attach();
+    }
+
+    private void setManageListVisible(boolean visible) {
+        if (manageListPanel != null) {
+            manageListPanel.setVisibility(visible ? View.VISIBLE : View.GONE);
+        }
+        if (recyclerView != null) {
+            recyclerView.setVisibility(visible ? View.VISIBLE : View.GONE);
+        }
+        View emptyView = findViewById(R.id.layout_widget_empty_view);
+        if (!visible && emptyView != null) {
+            emptyView.setVisibility(View.GONE);
+        }
+        if (fastScrollerView != null) {
+            fastScrollerView.setVisibility(visible ? View.VISIBLE : View.GONE);
+        }
+        if (previewButtonContainer != null) {
+            previewButtonContainer.setVisibility(visible ? View.GONE : View.VISIBLE);
+        }
+    }
+
+    private void updateCloseAllButtonMode() {
+        if (closeAllButton == null) {
+            return;
+        }
+        closeAllButton.setContentDescription(getString(
+                manageListVisible ? R.string.main_close_preview_list : R.string.main_close_all_windows
+        ));
     }
 
     private void updatePureOverlayButtonState() {
@@ -791,7 +858,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void enterBatchEditMode() {
-        if (batchEditMode || manageListAdapter == null) {
+        if (batchEditMode || !ensureManageListOpen() || manageListAdapter == null) {
             return;
         }
         batchEditMode = true;

@@ -559,6 +559,7 @@ public class ManageMethods {
 
         PictureData pictureData = new PictureData();
         LinkedHashMap<String, Boolean> visibilityChanges = new LinkedHashMap<>();
+        boolean pureOverlayMode = ApplicationMethods.isPureOverlayModeEnabled(context);
         for (String visiblePictureId : visiblePictureIds) {
             if (visiblePictureId == null || visiblePictureId.isEmpty()) {
                 continue;
@@ -570,7 +571,10 @@ public class ManageMethods {
             if (!pictureData.getBoolean(Config.DATA_PICTURE_SHOW_ENABLED, Config.DATA_DEFAULT_PICTURE_SHOW_ENABLED)) {
                 continue;
             }
-            if (detachWindowById(context, visiblePictureId, false)) {
+            boolean hidden = pureOverlayMode
+                    ? releaseWindowById(context, visiblePictureId, false)
+                    : detachWindowById(context, visiblePictureId, false);
+            if (hidden) {
                 visibilityChanges.put(visiblePictureId, false);
             }
         }
@@ -599,6 +603,9 @@ public class ManageMethods {
             updateGlobalVisibleState(context);
         } else {
             finishVisibilityChangesAsync(context, visibilityChanges);
+        }
+        if (pureOverlayMode) {
+            releaseAllWindowsExcept(context, targetPictureId, false);
         }
         return targetPictureId;
     }
@@ -1294,6 +1301,29 @@ public class ManageMethods {
             WindowsMethods.syncAllWindows(context);
         }
         return true;
+    }
+
+    private static void releaseAllWindowsExcept(Context context, String keepId, boolean syncAllWindows) {
+        MainApplication mainApplication = (MainApplication) context.getApplicationContext();
+        Map<String, View> registeredViews = mainApplication.getRegisteredViewsSnapshot();
+        if (registeredViews.isEmpty()) {
+            return;
+        }
+        boolean releasedAny = false;
+        for (Map.Entry<String, View> entry : registeredViews.entrySet()) {
+            String id = entry.getKey();
+            if (id == null || id.equals(keepId)) {
+                continue;
+            }
+            if (entry.getValue() instanceof FloatImageView) {
+                releasedAny |= releaseWindowById(context, id, false);
+            } else {
+                releasedAny |= mainApplication.unregisterView(id);
+            }
+        }
+        if (releasedAny && syncAllWindows) {
+            WindowsMethods.syncAllWindows(context);
+        }
     }
 
     private static void scheduleDetachedWindowCleanup(Context context,
